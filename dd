@@ -11,7 +11,14 @@ INSERT INTO etl.ETL_ERROR_LOG
 VALUES
 (?, ?, 'ERROR', ?, ?, NULL, NULL);
 
-
+	
+User::ExecutionId
+1
+JobTableId (that container)
+2
+TableName (that container) → TASK_NAME
+3
+System::ErrorDescription
 
 SELECT CASE WHEN EXISTS (
            SELECT 1 FROM etl.ETL_ERROR_LOG
