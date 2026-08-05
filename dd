@@ -1,33 +1,110 @@
-INSERT INTO etl.ETL_ERROR_LOG
-(
-    EXECUTION_ID,
-    JOB_TABLE_ID,
-    SEVERITY,
-    TASK_NAME,
-    ERROR_MESSAGE,
-    SOURCE_KEY,
-    ROW_DATA
-)
-VALUES
-(?, ?, 'ERROR', ?, ?, NULL, NULL);
+-- =============================================
+-- 1. Reporting Unit (location)
+-- =============================================
+CREATE TABLE dbo.RU_LEAF (
+    OBJECT_ID   INT             NOT NULL PRIMARY KEY,
+    CODE        VARCHAR(50)     NOT NULL,
+    NAME        VARCHAR(100)    NULL
+);
 
-	
-User::ExecutionId
-1
-JobTableId (that container)
-2
-TableName (that container) → TASK_NAME
-3
-System::ErrorDescription
+-- =============================================
+-- 2. User Category (security group)
+-- =============================================
+CREATE TABLE dbo.USER_CATEGORY (
+    OBJECT_ID   INT             NOT NULL PRIMARY KEY,
+    NAME        VARCHAR(100)    NOT NULL
+);
 
-SELECT CASE WHEN EXISTS (
-           SELECT 1 FROM etl.ETL_ERROR_LOG
-           WHERE EXECUTION_ID = ? AND SEVERITY = 'ERROR'
-       ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS PACKAGE_FAILED;
+-- =============================================
+-- 3. Users
+-- =============================================
+CREATE TABLE dbo.CNU_USER (
+    OBJECT_ID   INT             NOT NULL PRIMARY KEY,
+    USER_ID     VARCHAR(50)     NOT NULL,          -- login
+    FIRSTNAME   VARCHAR(100)    NULL,
+    LASTNAME    VARCHAR(100)    NULL,
+    SHORTNAME   VARCHAR(20)     NULL,          -- initials
+    IS_ACTIVE   CHAR(1)         NULL DEFAULT 'Y', -- 'Y' / 'N'
+    FK_RU       INT             NULL,          -- → RU_LEAF.OBJECT_ID
+    CONSTRAINT FK_CNU_USER_RU FOREIGN KEY (FK_RU) REFERENCES dbo.RU_LEAF(OBJECT_ID)
+);
+
+-- =============================================
+-- 4. Junction: User ↔ Category
+-- =============================================
+CREATE TABLE dbo.USER_USERCATEGORY (
+    OBJECT_ID       INT             NOT NULL PRIMARY KEY,  -- optional surrogate
+    FK_USER         INT             NOT NULL,              -- → CNU_USER.OBJECT_ID
+    FK_USERCATEGORY INT             NOT NULL,              -- → USER_CATEGORY.OBJECT_ID
+    CONSTRAINT FK_UUC_USER FOREIGN KEY (FK_USER) REFERENCES dbo.CNU_USER(OBJECT_ID),
+    CONSTRAINT FK_UUC_CAT  FOREIGN KEY (FK_USERCATEGORY) REFERENCES dbo.USER_CATEGORY(OBJECT_ID)
+);
+
+-- =============================================
+-- RU_LEAF (locations)
+-- =============================================
+INSERT INTO dbo.RU_LEAF (OBJECT_ID, CODE, NAME) VALUES
+(1001, 'LON', 'London'),
+(1002, 'NYC', 'New York'),
+(1003, 'SIN', 'Singapore'),
+(1004, 'ZUR', 'Zurich');
+
+-- =============================================
+-- USER_CATEGORY (groups)
+-- =============================================
+INSERT INTO dbo.USER_CATEGORY (OBJECT_ID, NAME) VALUES
+(2001, 'Underwriters'),
+(2002, 'Claims'),
+(2003, 'Actuarial'),
+(2004, 'IT Support'),
+(2005, 'Management');
+
+-- =============================================
+-- CNU_USER
+-- =============================================
+INSERT INTO dbo.CNU_USER (OBJECT_ID, USER_ID, FIRSTNAME, LASTNAME, SHORTNAME, IS_ACTIVE, FK_RU) VALUES
+(3001, 'jsmith',   'John',    'Smith',    'JS',  'Y', 1001),
+(3002, 'ajones',   'Alice',   'Jones',    'AJ',  'Y', 1002),
+(3003, 'bwong',    'Bob',     'Wong',     'BW',  'Y', 1003),
+(3004, 'mlee',     'Mary',    'Lee',      'ML',  'N', 1001),  -- deleted
+(3005, 'kpatel',   'Kiran',   'Patel',    'KP',  'Y', 1004),
+(3006, 'rgarcia',  'Rosa',    'Garcia',   'RG',  'Y', NULL),  -- no location
+(3007, 'tdavis',   'Tom',     'Davis',    'TD',  'Y', 1002);
+
+-- =============================================
+-- USER_USERCATEGORY (some users have multiple categories)
+-- =============================================
+INSERT INTO dbo.USER_USERCATEGORY (OBJECT_ID, FK_USER, FK_USERCATEGORY) VALUES
+(4001, 3001, 2001),  -- jsmith → Underwriters
+(4002, 3001, 2005),  -- jsmith also Management (TOP 1 will pick alphabetically)
+(4003, 3002, 2002),  -- ajones → Claims
+(4004, 3003, 2001),  -- bwong  → Underwriters
+(4005, 3004, 2003),  -- mlee   → Actuarial (deleted user)
+(4006, 3005, 2005),  -- kpatel → Management
+(4007, 3007, 2004),  -- tdavis → IT Support
+(4008, 3007, 2001);  -- tdavis also Underwriters
 
 
 
-SELECT *
-FROM   etl.ETL_ERROR_LOG
-WHERE  EXECUTION_ID = <your id>
-ORDER BY ERROR_ID;
+SELECT 
+    u.OBJECT_ID AS SRC_OBJECT_ID,
+    u.USER_ID AS USR_LOGIN,
+    LTRIM(RTRIM(u.FIRSTNAME)) + ' ' + LTRIM(RTRIM(u.LASTNAME)) AS USR_USER_NAME,
+    u.SHORTNAME AS USR_INITIALS,
+    CAST(NULL AS VARCHAR(20)) AS USR_SYN_NUMBER,
+    cat.USR_USER_GROUP,
+    ru.CODE AS USR_LOCATION_CODE,
+    CAST('N' AS CHAR(1)) AS USR_UNDERWRITER_IND,
+    CASE WHEN UPPER(ISNULL(u.IS_ACTIVE, 'Y')) = 'N' THEN 'Y' ELSE 'N' END AS USR_DELETED_IND
+FROM dbo.CNU_USER u
+LEFT JOIN dbo.RU_LEAF ru 
+    ON ru.OBJECT_ID = u.FK_RU
+OUTER APPLY (
+    SELECT TOP (1) c.NAME AS USR_USER_GROUP
+    FROM dbo.USER_USERCATEGORY ju
+    INNER JOIN dbo.USER_CATEGORY c 
+        ON c.OBJECT_ID = ju.FK_USERCATEGORY
+    WHERE ju.FK_USER = u.OBJECT_ID
+    ORDER BY c.NAME
+) cat;
+
