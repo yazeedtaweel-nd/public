@@ -9,15 +9,7 @@ INSERT INTO etl.ETL_ERROR_LOG
     ROW_DATA
 )
 VALUES
-(
-    ?,          -- ExecutionId
-    NULL,       -- JobTableId (OK for parallel; identify via TASK_NAME)
-    'ERROR',
-    ?,          -- SourceName
-    ?,          -- ErrorDescription
-    NULL,
-    NULL
-);
+(?, ?, 'ERROR', ?, ?, NULL, NULL);
 
 
 
