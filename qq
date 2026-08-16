@@ -1,35 +1,131 @@
-SELECT DISTINCT
-    p.IDENTIFIER AS brok_bk,
-    COALESCE(oname.NAME, p.CURR_NAME) AS brok_name,
-    rd.CODE AS category_code,
-    rd.NAME AS category_name
-FROM PARTY p
-JOIN BUS_PARTNER_CAT bpc
-  ON bpc.FK_PARTNER = p.OBJECT_ID
- AND bpc.FSK_CATEGORY = 23
-JOIN REFERENCE_DATA rd
-  ON rd.CODE = bpc.FRK_CATEGORY
- AND rd.SUBCLASS = 23
-LEFT JOIN ORGANISATION_NAME oname
-  ON oname.FK_ORGANISATION = p.OBJECT_ID
-WHERE p.SUBCLASS = 4
-  AND (
-        rd.CODE = 'BROKER'          -- confirm exact code in your env
-     OR UPPER(rd.NAME) LIKE '%BROKER%'
-      )
-ORDER BY brok_name;
+SELECT CODE, NAME, IS_ACTIVE
+FROM dbo.REFERENCE_DATA
+WHERE SUBCLASS = 23
+  AND (CODE LIKE '%BROK%' OR NAME LIKE '%Broker%')
+ORDER BY CODE;
 
 
-SELECT DISTINCT
-    p.IDENTIFIER AS oin_bk,
-    COALESCE(oname.NAME, p.CURR_NAME) AS oin_name
-FROM BUSINESS b
-JOIN BUSINESS_PRTNR_REL bpr
-  ON bpr.OBJECT_ID = b.FK_INSURED_REL
-JOIN PARTY p
-  ON p.OBJECT_ID = bpr.FK_BUS_PARTNER
- AND p.SUBCLASS = 4
-LEFT JOIN ORGANISATION_NAME oname
-  ON oname.FK_ORGANISATION = p.OBJECT_ID
-WHERE b.FK_INSURED_REL IS NOT NULL
-ORDER BY oin_name;
+/* DIM_BROKER source extract from SICS
+   Grain: one row per Business Partner used as a Broker
+   Confirm:
+     1) Broker type code(s) in REFERENCE_DATA (table #23)
+     2) ORGANISATION_NAME current vs former (SUBCLASS)
+     3) Address pick rule (main vs home)
+     4) Home country vs address country for CTRY_SRGT
+*/
+
+DECLARE @BrokerTypeCodes TABLE (CODE VARCHAR(15) PRIMARY KEY);
+-- TODO: replace with live Broker codes from REFERENCE_DATA WHERE SUBCLASS = 23
+INSERT INTO @BrokerTypeCodes (CODE) VALUES ('BROKER'); -- placeholder
+
+;WITH BrokerParty AS (
+    SELECT DISTINCT
+           p.OBJECT_ID,
+           p.IDENTIFIER,
+           p.CURR_NAME,
+           p.FK_HOME_COUNTRY,
+           p.IS_ACTIVE,
+           p.SUBCLASS
+    FROM dbo.PARTY AS p
+    INNER JOIN dbo.BUS_PARTNER_CAT AS bpc
+        ON bpc.FK_PARTNER = p.OBJECT_ID
+       AND bpc.FSK_CATEGORY = 23
+    INNER JOIN @BrokerTypeCodes AS brk
+        ON brk.CODE = bpc.FRK_CATEGORY
+    WHERE p.SUBCLASS = 4          -- SicsBusinessPartner
+      -- AND p.IS_ACTIVE = 'Y'    -- uncomment if inactive brokers should be excluded
+),
+CurrentName AS (
+    SELECT
+           n.FK_ORGANISATION,
+           n.NAME,
+           n.FULL_NAME,
+           n.SHORT_NAME,
+           n.SUBCLASS,
+           ROW_NUMBER() OVER (
+               PARTITION BY n.FK_ORGANISATION
+               ORDER BY n.SUBCLASS   -- confirm: current name subclass first
+           ) AS rn
+    FROM dbo.ORGANISATION_NAME AS n
+    INNER JOIN BrokerParty AS bp
+        ON bp.OBJECT_ID = n.FK_ORGANISATION
+),
+PickedAddress AS (
+    SELECT
+           a.FK_PARTY,
+           a.ADDR_LINE_1,
+           a.ADDR_LINE_2,
+           a.ADDR_LINE_3,
+           a.CITY_NAME,
+           a.FK_STATE,
+           a.FK_COUNTRY,
+           a.IS_MAIN_ADDR,
+           a.IS_HOME_ADDR,
+           a.IS_ACTIVE,
+           ROW_NUMBER() OVER (
+               PARTITION BY a.FK_PARTY
+               ORDER BY
+                   CASE WHEN a.IS_MAIN_ADDR = 'Y' THEN 0 ELSE 1 END,
+                   CASE WHEN a.IS_HOME_ADDR = 'Y' THEN 0 ELSE 1 END,
+                   CASE WHEN a.IS_ACTIVE = 'Y' THEN 0 ELSE 1 END,
+                   a.OBJECT_ID
+           ) AS rn
+    FROM dbo.ADDRESS AS a
+    INNER JOIN BrokerParty AS bp
+        ON bp.OBJECT_ID = a.FK_PARTY
+),
+Audit AS (
+    SELECT
+           ba.FK_PARENT,
+           ba.CREATED_WHEN,
+           ba.UPDATED_WHEN,
+           ROW_NUMBER() OVER (
+               PARTITION BY ba.FK_PARENT
+               ORDER BY ba.UPDATED_WHEN DESC
+           ) AS rn
+    FROM dbo.BASE_AUDIT AS ba
+    INNER JOIN BrokerParty AS bp
+        ON bp.OBJECT_ID = ba.FK_PARENT
+    -- AND ba.PARENT_CLASS = 'SicsBusinessPartner'  -- confirm parent class name
+)
+SELECT
+    bp.IDENTIFIER                         AS BROK_BK,
+    COALESCE(cn.NAME, bp.CURR_NAME)       AS BROK_NAME,
+    cn.FULL_NAME                          AS BROK_FULL_NAME_SRC,
+    addr.ADDR_LINE_1                      AS BROK_ADDRESS_LINE1,
+    addr.ADDR_LINE_2                      AS BROK_ADDRESS_LINE2,
+    addr.ADDR_LINE_3                      AS BROK_ADDRESS_LINE3,
+    addr.CITY_NAME                        AS BROK_ADDRESS_CITY,
+    st.NAME                               AS BROK_ADDRESS_STATE,
+    st.CODE                               AS BROK_ADDRESS_STATE_CODE,
+    COALESCE(home_ctry.CODE, addr_ctry.CODE) AS CTRY_CODE_HOME_THEN_ADDR,
+    home_ctry.CODE                        AS HOME_COUNTRY_CODE,
+    home_ctry.NAME                        AS HOME_COUNTRY_NAME,
+    home_ctry.ISO_ALPHA_2                 AS HOME_COUNTRY_ISO2,
+    addr_ctry.CODE                        AS ADDR_COUNTRY_CODE,
+    addr_ctry.NAME                        AS ADDR_COUNTRY_NAME,
+    addr_ctry.ISO_ALPHA_2                 AS ADDR_COUNTRY_ISO2,
+    CONVERT(INT, CONVERT(CHAR(8), aud.CREATED_WHEN, 112)) AS CREATED_DATE_YYYYMMDD,
+    CONVERT(INT, CONVERT(CHAR(8), aud.UPDATED_WHEN, 112)) AS UPDATED_DATE_YYYYMMDD,
+    bp.OBJECT_ID                          AS PARTY_OBJECT_ID,
+    bp.IS_ACTIVE                          AS PARTY_IS_ACTIVE
+FROM BrokerParty AS bp
+LEFT JOIN CurrentName AS cn
+    ON cn.FK_ORGANISATION = bp.OBJECT_ID
+   AND cn.rn = 1
+LEFT JOIN PickedAddress AS addr
+    ON addr.FK_PARTY = bp.OBJECT_ID
+   AND addr.rn = 1
+LEFT JOIN dbo.LEGAL_AREA AS st
+    ON st.OBJECT_ID = addr.FK_STATE
+   AND st.SUBCLASS = 2            -- SicsState
+LEFT JOIN dbo.LEGAL_AREA AS home_ctry
+    ON home_ctry.OBJECT_ID = bp.FK_HOME_COUNTRY
+   AND home_ctry.SUBCLASS = 1     -- SicsCountry
+LEFT JOIN dbo.LEGAL_AREA AS addr_ctry
+    ON addr_ctry.OBJECT_ID = addr.FK_COUNTRY
+   AND addr_ctry.SUBCLASS = 1
+LEFT JOIN Audit AS aud
+    ON aud.FK_PARENT = bp.OBJECT_ID
+   AND aud.rn = 1
+ORDER BY bp.IDENTIFIER;
