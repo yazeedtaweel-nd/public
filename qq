@@ -1,102 +1,56 @@
--- Q4.1  Address flags (which address is “the” address?)
 SELECT
-    a.IS_MAIN_ADDR,
-    a.IS_HOME_ADDR,
-    a.IS_ACTIVE,
-    COUNT(*)                         AS addr_rows,
-    COUNT(DISTINCT p.OBJECT_ID)      AS parties
+    p.IDENTIFIER                         AS COMP_BK,
+    p.CURR_NAME                          AS COMP_NAME,
+    rd_type.NAME                         AS COMP_TYPE,
+    ISNULL(rd_rating.NAME, 'NA')         AS COMP_SECURITY_RATING,
+    addr.ADDR_LINE_1                     AS COMP_ADDRESS_LINE1,
+    addr.ADDR_LINE_2                     AS COMP_ADDRESS_LINE2,
+    addr.ADDR_LINE_3                     AS COMP_ADDRESS_LINE3,
+    addr.CITY_NAME                       AS COMP_ADDRESS_CITY,
+    st.NAME                              AS COMP_ADDRESS_STATE,
+    p.FK_HOME_COUNTRY                    AS HOME_COUNTRY_OBJECT_ID,  -- lookup DIM_COUNTRY / CTRY_SRGT
+    hc.ISO_ALPHA_2                       AS HOME_COUNTRY_ISO2,
+    hc.CODE                              AS HOME_COUNTRY_CODE,
+    hc.NAME                              AS HOME_COUNTRY_NAME,
+    p.OBJECT_ID                          AS PARTY_OBJECT_ID          -- audit only; not COMP_SRGT
 FROM PARTY p
-JOIN ADDRESS a
-  ON a.FK_PARTY = p.OBJECT_ID
-WHERE p.SUBCLASS = 4
-GROUP BY a.IS_MAIN_ADDR, a.IS_HOME_ADDR, a.IS_ACTIVE
-ORDER BY parties DESC;
--- Q4.2  How many addresses per company?
-SELECT addr_cnt, COUNT(*) AS parties
-FROM (
-    SELECT p.OBJECT_ID, COUNT(a.OBJECT_ID) AS addr_cnt
-    FROM PARTY p
-    LEFT JOIN ADDRESS a ON a.FK_PARTY = p.OBJECT_ID
-    WHERE p.SUBCLASS = 4
-    GROUP BY p.OBJECT_ID
-) x
-GROUP BY addr_cnt
-ORDER BY addr_cnt;
--- Q4.3  Home country vs MAIN address country  (this closes Q4)
-SELECT
-    CASE
-        WHEN p.FK_HOME_COUNTRY IS NULL AND a.FK_COUNTRY IS NULL THEN 'BOTH_NULL'
-        WHEN p.FK_HOME_COUNTRY IS NULL THEN 'HOME_NULL_ADDR_SET'
-        WHEN a.FK_COUNTRY IS NULL THEN 'ADDR_NULL_HOME_SET'
-        WHEN p.FK_HOME_COUNTRY = a.FK_COUNTRY THEN 'SAME'
-        ELSE 'DIFFERENT'
-    END                              AS country_compare,
-    COUNT(*)                         AS parties
-FROM PARTY p
+JOIN BUS_PARTNER_CAT cat
+  ON cat.FK_PARTNER = p.OBJECT_ID
+LEFT JOIN REFERENCE_DATA rd_type
+  ON rd_type.CODE     = cat.FRK_CATEGORY
+ AND rd_type.SUBCLASS = cat.FSK_CATEGORY          -- 23
 OUTER APPLY (
-    SELECT TOP (1) ad.*
-    FROM ADDRESS ad
-    WHERE ad.FK_PARTY = p.OBJECT_ID
+    SELECT TOP (1)
+           a.ADDR_LINE_1,
+           a.ADDR_LINE_2,
+           a.ADDR_LINE_3,
+           a.CITY_NAME,
+           a.FK_STATE
+    FROM ADDRESS a
+    WHERE a.FK_PARTY   = p.OBJECT_ID
+      AND a.IS_ACTIVE  = 'Y'
     ORDER BY
-        CASE WHEN ad.IS_MAIN_ADDR = 'Y' THEN 0 ELSE 1 END,
-        CASE WHEN ad.IS_HOME_ADDR = 'Y' THEN 0 ELSE 1 END,
-        CASE WHEN ad.IS_ACTIVE    = 'Y' THEN 0 ELSE 1 END
-) a
-WHERE p.SUBCLASS = 4
-GROUP BY
-    CASE
-        WHEN p.FK_HOME_COUNTRY IS NULL AND a.FK_COUNTRY IS NULL THEN 'BOTH_NULL'
-        WHEN p.FK_HOME_COUNTRY IS NULL THEN 'HOME_NULL_ADDR_SET'
-        WHEN a.FK_COUNTRY IS NULL THEN 'ADDR_NULL_HOME_SET'
-        WHEN p.FK_HOME_COUNTRY = a.FK_COUNTRY THEN 'SAME'
-        ELSE 'DIFFERENT'
-    END
-ORDER BY parties DESC;
--- Q4.4  Mismatch detail (only if Q4.3 shows DIFFERENT)
-SELECT
-    p.IDENTIFIER                     AS COMP_BK,
-    p.CURR_NAME,
-    hc.ISO_ALPHA_2                   AS home_iso2,
-    hc.NAME                          AS home_country,
-    ac.ISO_ALPHA_2                   AS addr_iso2,
-    ac.NAME                          AS addr_country,
-    a.IS_MAIN_ADDR,
-    a.IS_HOME_ADDR,
-    a.ADDR_LINE_1,
-    a.CITY_NAME
-FROM PARTY p
+        CASE WHEN a.IS_MAIN_ADDR = 'Y' THEN 0 ELSE 1 END,
+        CASE WHEN a.IS_HOME_ADDR = 'Y' THEN 0 ELSE 1 END,
+        a.OBJECT_ID
+) addr
+LEFT JOIN LEGAL_AREA st
+  ON st.OBJECT_ID = addr.FK_STATE
 LEFT JOIN LEGAL_AREA hc
   ON hc.OBJECT_ID = p.FK_HOME_COUNTRY
 OUTER APPLY (
-    SELECT TOP (1) ad.*
-    FROM ADDRESS ad
-    WHERE ad.FK_PARTY = p.OBJECT_ID
-    ORDER BY
-        CASE WHEN ad.IS_MAIN_ADDR = 'Y' THEN 0 ELSE 1 END,
-        CASE WHEN ad.IS_HOME_ADDR = 'Y' THEN 0 ELSE 1 END,
-        CASE WHEN ad.IS_ACTIVE    = 'Y' THEN 0 ELSE 1 END
-) a
-LEFT JOIN LEGAL_AREA ac
-  ON ac.OBJECT_ID = a.FK_COUNTRY
+    SELECT TOP (1)
+           r.FRK_RATING,
+           r.FSK_RATING
+    FROM BP_DETAIL bpd
+    JOIN BP_RATING r
+      ON r.FK_BP_RTNG_CNTNR = bpd.OBJECT_ID
+    WHERE bpd.FK_BUS_PARTNER = p.OBJECT_ID
+      AND bpd.SUBCLASS = 3
+    ORDER BY r.VALID_FROM DESC, r.OBJECT_ID
+) rat
+LEFT JOIN REFERENCE_DATA rd_rating
+  ON rd_rating.CODE     = rat.FRK_RATING
+ AND rd_rating.SUBCLASS = rat.FSK_RATING          -- 21
 WHERE p.SUBCLASS = 4
-  AND ISNULL(p.FK_HOME_COUNTRY, '') <> ISNULL(a.FK_COUNTRY, '')
 ORDER BY p.IDENTIFIER;
--- Q4.5  City / state fill (explains empty DWH city/state)
-SELECT
-    SUM(CASE WHEN NULLIF(LTRIM(RTRIM(a.CITY_NAME)), '') IS NULL THEN 1 ELSE 0 END) AS city_empty,
-    SUM(CASE WHEN NULLIF(LTRIM(RTRIM(a.CITY_NAME)), '') IS NOT NULL THEN 1 ELSE 0 END) AS city_filled,
-    SUM(CASE WHEN a.FK_STATE IS NULL THEN 1 ELSE 0 END) AS state_empty,
-    SUM(CASE WHEN a.FK_STATE IS NOT NULL THEN 1 ELSE 0 END) AS state_filled,
-    COUNT(*) AS addr_rows_used
-FROM PARTY p
-OUTER APPLY (
-    SELECT TOP (1) ad.*
-    FROM ADDRESS ad
-    WHERE ad.FK_PARTY = p.OBJECT_ID
-    ORDER BY
-        CASE WHEN ad.IS_MAIN_ADDR = 'Y' THEN 0 ELSE 1 END,
-        CASE WHEN ad.IS_HOME_ADDR = 'Y' THEN 0 ELSE 1 END,
-        CASE WHEN ad.IS_ACTIVE    = 'Y' THEN 0 ELSE 1 END
-) a
-WHERE p.SUBCLASS = 4
-  AND a.OBJECT_ID IS NOT NULL;
