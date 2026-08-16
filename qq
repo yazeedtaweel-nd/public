@@ -1,13 +1,14 @@
-SELECT
-    c.OBJECT_ID                         AS sics_object_id,      -- SICS UUID, not CTRY_SRGT
-    c.ISO_ALPHA_2                       AS iso_alpha_2,         -- CTRY_COUNTRY_CODE candidate
-    c.ISO_ALPHA_3                       AS iso_alpha_3,
-    c.CODE                              AS country_code,        -- CTRY_COUNTRY_CODE candidate
-    c.UNIQUE_CODE                       AS unique_code,
-    c.ALTERNATE_ID                      AS alternate_id,
-    c.SHORT_NAME                        AS short_name,
-    c.NAME                              AS country_name,        -- CTRY_COUNTRY_NAME
-    c.IS_ACTIVE                         AS is_active
-FROM dbo.LEGAL_AREA AS c
-WHERE c.SUBCLASS = 1                    -- SicsCountry only
-ORDER BY COALESCE(c.ISO_ALPHA_2, c.CODE), c.NAME;
+SELECT OBJECT_ID, ISO_ALPHA_2, ISO_ALPHA_3, CODE, NAME, IS_ACTIVE
+FROM dbo.LEGAL_AREA
+WHERE SUBCLASS = 1
+  AND (
+        ISO_ALPHA_2 IN ('00', 'WW')
+     OR CODE IN ('00', 'WW')
+     OR NAME LIKE '%WORLD%'
+      );
+
+-- Q7: inactive counts
+SELECT IS_ACTIVE, COUNT(*) AS cnt
+FROM dbo.LEGAL_AREA
+WHERE SUBCLASS = 1
+GROUP BY IS_ACTIVE;
