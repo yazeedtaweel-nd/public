@@ -5,7 +5,7 @@ SELECT
     a.ADDR_LINE_2                   AS BROK_ADDRESS_LINE2,
     a.ADDR_LINE_3                   AS BROK_ADDRESS_LINE3,
     a.CITY_NAME                     AS BROK_ADDRESS_CITY,
-    st.NAME                         AS BROK_ADDRESS_STATE,
+    CAST(NULL AS VARCHAR(45))       AS BROK_ADDRESS_STATE,
     ctry.ISO_ALPHA_2                AS CTRY_CODE,
     ctry.NAME                       AS CTRY_NAME
 FROM PARTY AS p
@@ -27,24 +27,21 @@ LEFT JOIN (
         ADDR_LINE_2,
         ADDR_LINE_3,
         CITY_NAME,
-        FK_STATE,
         ROW_NUMBER() OVER (
             PARTITION BY FK_PARTY
             ORDER BY
-                CASE WHEN FK_STATE IS NOT NULL THEN 0 ELSE 1 END,
+                CASE WHEN IS_MAIN_ADDR = 'Y' THEN 0 ELSE 1 END,
+                CASE WHEN IS_HOME_ADDR = 'Y' THEN 0 ELSE 1 END,
+                CASE WHEN ISNULL(ADDR_LINE_1, '') + ISNULL(ADDR_LINE_2, '') + ISNULL(ADDR_LINE_3, '')
+                          LIKE N'%[ا-ي]%' THEN 1 ELSE 0 END,
                 CASE WHEN NULLIF(LTRIM(RTRIM(CITY_NAME)), '') IS NOT NULL THEN 0 ELSE 1 END,
                 CASE WHEN NULLIF(LTRIM(RTRIM(POSTAL_CODE)), '') IS NOT NULL THEN 0 ELSE 1 END,
-             
-       
                 OBJECT_ID
         ) AS RN
     FROM ADDRESS
 ) AS a
     ON a.FK_PARTY = p.OBJECT_ID
    AND a.RN = 1
-LEFT JOIN LEGAL_AREA AS st
-    ON st.OBJECT_ID = a.FK_STATE
-   AND st.SUBCLASS = 2
 LEFT JOIN LEGAL_AREA AS ctry
     ON ctry.OBJECT_ID = p.FK_HOME_COUNTRY
    AND ctry.SUBCLASS = 1
