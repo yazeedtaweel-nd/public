@@ -1,78 +1,43 @@
 SELECT
-    p.IDENTIFIER                    AS OIN_BK,
-    COALESCE(n.NAME, p.CURR_NAME)   AS OIN_NAME,
-    p.OBJECT_ID                     AS PARTY_OBJECT_ID,
-    p.IS_INSURED
-FROM PARTY AS p
-INNER JOIN (
-    SELECT DISTINCT rel.FK_BUS_PARTNER
-    FROM BUSINESS AS b
-    INNER JOIN BUSINESS_PRTNR_REL AS rel
-        ON rel.OBJECT_ID = b.FK_ORG_CDNT_RL
-    WHERE rel.FK_BUS_PARTNER IS NOT NULL
-) AS oin
-    ON oin.FK_BUS_PARTNER = p.OBJECT_ID
-LEFT JOIN (
-    SELECT
-        FK_ORGANISATION,
-        NAME,
-        ROW_NUMBER() OVER (PARTITION BY FK_ORGANISATION ORDER BY OBJECT_ID) AS RN
-    FROM ORGANISATION_NAME
-) AS n
-    ON n.FK_ORGANISATION = p.OBJECT_ID
-   AND n.RN = 1
+    p.IDENTIFIER                                            AS COMP_BK,
+    p.CURR_NAME                                             AS party_curr_name,
+    org.SUBCLASS                                            AS org_name_subclass,
+    org.NAME                                                AS org_name,
+    org.FULL_NAME                                           AS org_full_name,
+    org.SHORT_NAME                                          AS org_short_name,
+    CASE WHEN p.CURR_NAME = org.NAME      THEN 1 ELSE 0 END AS curr_eq_name,
+    CASE WHEN p.CURR_NAME = org.FULL_NAME THEN 1 ELSE 0 END AS curr_eq_full_name,
+    LEN(p.CURR_NAME)                                        AS curr_len,
+    LEN(org.NAME)                                           AS name_len,
+    LEN(org.FULL_NAME)                                      AS full_name_len
+FROM dbo.PARTY p
+LEFT JOIN dbo.ORGANISATION_NAME org
+       ON org.FK_ORGANISATION = p.OBJECT_ID
 WHERE p.SUBCLASS = 4
-ORDER BY p.IDENTIFIER;
-
-
-
-
-
+ORDER BY p.IDENTIFIER, org.SUBCLASS, org.NAME;
+-- Q1 summary: which name column matches CURR_NAME, and how many name rows per BP
 SELECT
-    p.IDENTIFIER                    AS OIN_BK,
-    COALESCE(n.NAME, p.CURR_NAME)   AS OIN_NAME,
-    p.OBJECT_ID                     AS PARTY_OBJECT_ID,
-    p.IS_INSURED
-FROM PARTY AS p
-LEFT JOIN (
-    SELECT
-        FK_ORGANISATION,
-        NAME,
-        ROW_NUMBER() OVER (PARTITION BY FK_ORGANISATION ORDER BY OBJECT_ID) AS RN
-    FROM ORGANISATION_NAME
-) AS n
-    ON n.FK_ORGANISATION = p.OBJECT_ID
-   AND n.RN = 1
+    org.SUBCLASS,
+    COUNT(*)                                                    AS org_rows,
+    SUM(CASE WHEN p.CURR_NAME = org.NAME      THEN 1 ELSE 0 END) AS curr_eq_name,
+    SUM(CASE WHEN p.CURR_NAME = org.FULL_NAME THEN 1 ELSE 0 END) AS curr_eq_full_name,
+    SUM(CASE WHEN p.CURR_NAME = org.SHORT_NAME THEN 1 ELSE 0 END) AS curr_eq_short_name,
+    COUNT(DISTINCT p.OBJECT_ID)                                 AS distinct_parties
+FROM dbo.PARTY p
+JOIN dbo.ORGANISATION_NAME org
+  ON org.FK_ORGANISATION = p.OBJECT_ID
 WHERE p.SUBCLASS = 4
-  AND p.IS_INSURED = 'Y'
-ORDER BY p.IDENTIFIER;
-
-
-
-
-
+GROUP BY org.SUBCLASS
+ORDER BY org.SUBCLASS;
 SELECT
-    p.IDENTIFIER                    AS OIN_BK,
-    COALESCE(n.NAME, p.CURR_NAME)   AS OIN_NAME,
-    p.OBJECT_ID                     AS PARTY_OBJECT_ID
-FROM PARTY AS p
-INNER JOIN (
-    SELECT DISTINCT rel.FK_BUS_PARTNER
-    FROM BUSINESS AS b
-    INNER JOIN BUSINESS_PRTNR_REL AS rel
-        ON rel.OBJECT_ID = b.FK_INSURED_REL
-    WHERE rel.FK_BUS_PARTNER IS NOT NULL
-) AS ins
-    ON ins.FK_BUS_PARTNER = p.OBJECT_ID
-LEFT JOIN (
-    SELECT
-        FK_ORGANISATION,
-        NAME,
-        ROW_NUMBER() OVER (PARTITION BY FK_ORGANISATION ORDER BY OBJECT_ID) AS RN
-    FROM ORGANISATION_NAME
-) AS n
-    ON n.FK_ORGANISATION = p.OBJECT_ID
-   AND n.RN = 1
-WHERE p.SUBCLASS = 4
-ORDER BY p.IDENTIFIER;
-
+    name_row_cnt,
+    COUNT(*) AS parties
+FROM (
+    SELECT p.OBJECT_ID, COUNT(org.OBJECT_ID) AS name_row_cnt
+    FROM dbo.PARTY p
+    LEFT JOIN dbo.ORGANISATION_NAME org ON org.FK_ORGANISATION = p.OBJECT_ID
+    WHERE p.SUBCLASS = 4
+    GROUP BY p.OBJECT_ID
+) x
+GROUP BY name_row_cnt
+ORDER BY name_row_cnt;
