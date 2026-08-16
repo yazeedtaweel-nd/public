@@ -1,125 +1,102 @@
--- Q3.1  What rating codes/systems exist?
+-- Q4.1  Address flags (which address is “the” address?)
 SELECT
-    r.FRK_RATING_SYSTEM              AS rating_system_code,
-    rd_s.NAME                        AS rating_system_name,
-    r.FRK_RATING                     AS rating_code,
-    rd_r.NAME                        AS rating_name,
-    COUNT(*)                         AS rating_rows,
+    a.IS_MAIN_ADDR,
+    a.IS_HOME_ADDR,
+    a.IS_ACTIVE,
+    COUNT(*)                         AS addr_rows,
     COUNT(DISTINCT p.OBJECT_ID)      AS parties
 FROM PARTY p
-JOIN BP_DETAIL bpd
-  ON bpd.FK_BUS_PARTNER = p.OBJECT_ID
- AND bpd.SUBCLASS = 3
-JOIN BP_RATING r
-  ON r.FK_BP_RTNG_CNTNR = bpd.OBJECT_ID
-LEFT JOIN REFERENCE_DATA rd_r
-  ON rd_r.CODE = r.FRK_RATING AND rd_r.SUBCLASS = r.FSK_RATING
-LEFT JOIN REFERENCE_DATA rd_s
-  ON rd_s.CODE = r.FRK_RATING_SYSTEM AND rd_s.SUBCLASS = r.FSK_RATING_SYSTEM
+JOIN ADDRESS a
+  ON a.FK_PARTY = p.OBJECT_ID
 WHERE p.SUBCLASS = 4
-GROUP BY r.FRK_RATING_SYSTEM, rd_s.NAME, r.FRK_RATING, rd_r.NAME
+GROUP BY a.IS_MAIN_ADDR, a.IS_HOME_ADDR, a.IS_ACTIVE
 ORDER BY parties DESC;
--- Q3.2  How many ratings per company? (1 = simple map; >1 = need a rule)
-SELECT rating_cnt, COUNT(*) AS parties
+-- Q4.2  How many addresses per company?
+SELECT addr_cnt, COUNT(*) AS parties
 FROM (
-    SELECT p.OBJECT_ID, COUNT(*) AS rating_cnt
+    SELECT p.OBJECT_ID, COUNT(a.OBJECT_ID) AS addr_cnt
     FROM PARTY p
-    JOIN BP_DETAIL bpd
-      ON bpd.FK_BUS_PARTNER = p.OBJECT_ID AND bpd.SUBCLASS = 3
-    JOIN BP_RATING r
-      ON r.FK_BP_RTNG_CNTNR = bpd.OBJECT_ID
+    LEFT JOIN ADDRESS a ON a.FK_PARTY = p.OBJECT_ID
     WHERE p.SUBCLASS = 4
     GROUP BY p.OBJECT_ID
 ) x
-GROUP BY rating_cnt
-ORDER BY rating_cnt;
--- Q3.3  Coverage: rated vs unrated, by COMP_TYPE
-SELECT
-    cat.FRK_CATEGORY                 AS comp_type_code,
-    rd_t.NAME                        AS comp_type_name,
-    COUNT(DISTINCT p.OBJECT_ID)      AS parties,
-    COUNT(DISTINCT CASE WHEN r.OBJECT_ID IS NOT NULL THEN p.OBJECT_ID END) AS parties_with_rating,
-    COUNT(DISTINCT CASE WHEN r.OBJECT_ID IS NULL     THEN p.OBJECT_ID END) AS parties_without_rating
-FROM PARTY p
-LEFT JOIN BUS_PARTNER_CAT cat
-  ON cat.FK_PARTNER = p.OBJECT_ID
-LEFT JOIN REFERENCE_DATA rd_t
-  ON rd_t.CODE = cat.FRK_CATEGORY AND rd_t.SUBCLASS = cat.FSK_CATEGORY
-LEFT JOIN BP_DETAIL bpd
-  ON bpd.FK_BUS_PARTNER = p.OBJECT_ID AND bpd.SUBCLASS = 3
-LEFT JOIN BP_RATING r
-  ON r.FK_BP_RTNG_CNTNR = bpd.OBJECT_ID
-WHERE p.SUBCLASS = 4
-GROUP BY cat.FRK_CATEGORY, rd_t.NAME
-ORDER BY parties DESC;
--- Q3.4  Current vs expired (needed if Q3.2 shows rating_cnt > 1)
+GROUP BY addr_cnt
+ORDER BY addr_cnt;
+-- Q4.3  Home country vs MAIN address country  (this closes Q4)
 SELECT
     CASE
-        WHEN r.VALID_FROM IS NULL AND r.VALID_TO IS NULL THEN 'NO_DATES'
-        WHEN CAST(GETDATE() AS DATE) >= ISNULL(r.VALID_FROM, '19000101')
-         AND CAST(GETDATE() AS DATE) <= ISNULL(r.VALID_TO,   '99991231')
-            THEN 'CURRENT'
-        ELSE 'NOT_CURRENT'
-    END                              AS validity_flag,
-    COUNT(*)                         AS rating_rows,
-    COUNT(DISTINCT p.OBJECT_ID)      AS parties
+        WHEN p.FK_HOME_COUNTRY IS NULL AND a.FK_COUNTRY IS NULL THEN 'BOTH_NULL'
+        WHEN p.FK_HOME_COUNTRY IS NULL THEN 'HOME_NULL_ADDR_SET'
+        WHEN a.FK_COUNTRY IS NULL THEN 'ADDR_NULL_HOME_SET'
+        WHEN p.FK_HOME_COUNTRY = a.FK_COUNTRY THEN 'SAME'
+        ELSE 'DIFFERENT'
+    END                              AS country_compare,
+    COUNT(*)                         AS parties
 FROM PARTY p
-JOIN BP_DETAIL bpd
-  ON bpd.FK_BUS_PARTNER = p.OBJECT_ID AND bpd.SUBCLASS = 3
-JOIN BP_RATING r
-  ON r.FK_BP_RTNG_CNTNR = bpd.OBJECT_ID
+OUTER APPLY (
+    SELECT TOP (1) ad.*
+    FROM ADDRESS ad
+    WHERE ad.FK_PARTY = p.OBJECT_ID
+    ORDER BY
+        CASE WHEN ad.IS_MAIN_ADDR = 'Y' THEN 0 ELSE 1 END,
+        CASE WHEN ad.IS_HOME_ADDR = 'Y' THEN 0 ELSE 1 END,
+        CASE WHEN ad.IS_ACTIVE    = 'Y' THEN 0 ELSE 1 END
+) a
 WHERE p.SUBCLASS = 4
 GROUP BY
     CASE
-        WHEN r.VALID_FROM IS NULL AND r.VALID_TO IS NULL THEN 'NO_DATES'
-        WHEN CAST(GETDATE() AS DATE) >= ISNULL(r.VALID_FROM, '19000101')
-         AND CAST(GETDATE() AS DATE) <= ISNULL(r.VALID_TO,   '99991231')
-            THEN 'CURRENT'
-        ELSE 'NOT_CURRENT'
-    END;
--- Q3.5  Does 0 / NA exist in SICS ratings? (DWH samples)
-SELECT
-    r.FRK_RATING,
-    rd_r.NAME,
-    COUNT(*) AS rating_rows,
-    COUNT(DISTINCT p.OBJECT_ID) AS parties
-FROM PARTY p
-JOIN BP_DETAIL bpd
-  ON bpd.FK_BUS_PARTNER = p.OBJECT_ID AND bpd.SUBCLASS = 3
-JOIN BP_RATING r
-  ON r.FK_BP_RTNG_CNTNR = bpd.OBJECT_ID
-LEFT JOIN REFERENCE_DATA rd_r
-  ON rd_r.CODE = r.FRK_RATING AND rd_r.SUBCLASS = r.FSK_RATING
-WHERE p.SUBCLASS = 4
-  AND (
-        r.FRK_RATING IN ('0','00','NA','N/A','N.A.','NR','NSA')
-     OR ISNULL(rd_r.NAME,'') IN ('0','NA','N/A','Not applicable','Not rated')
-     OR r.FRK_RATING LIKE '%NA%'
-     OR ISNULL(rd_r.NAME,'') LIKE '%NA%'
-      )
-GROUP BY r.FRK_RATING, rd_r.NAME
+        WHEN p.FK_HOME_COUNTRY IS NULL AND a.FK_COUNTRY IS NULL THEN 'BOTH_NULL'
+        WHEN p.FK_HOME_COUNTRY IS NULL THEN 'HOME_NULL_ADDR_SET'
+        WHEN a.FK_COUNTRY IS NULL THEN 'ADDR_NULL_HOME_SET'
+        WHEN p.FK_HOME_COUNTRY = a.FK_COUNTRY THEN 'SAME'
+        ELSE 'DIFFERENT'
+    END
 ORDER BY parties DESC;
--- Q3.6  Detail sample (inspect a few companies)
-SELECT TOP 200
+-- Q4.4  Mismatch detail (only if Q4.3 shows DIFFERENT)
+SELECT
     p.IDENTIFIER                     AS COMP_BK,
     p.CURR_NAME,
-    cat.FRK_CATEGORY                 AS comp_type,
-    r.FRK_RATING_SYSTEM              AS rating_system_code,
-    rd_s.NAME                        AS rating_system_name,
-    r.FRK_RATING                     AS rating_code,
-    rd_r.NAME                        AS rating_name,
-    r.VALID_FROM,
-    r.VALID_TO
+    hc.ISO_ALPHA_2                   AS home_iso2,
+    hc.NAME                          AS home_country,
+    ac.ISO_ALPHA_2                   AS addr_iso2,
+    ac.NAME                          AS addr_country,
+    a.IS_MAIN_ADDR,
+    a.IS_HOME_ADDR,
+    a.ADDR_LINE_1,
+    a.CITY_NAME
 FROM PARTY p
-LEFT JOIN BUS_PARTNER_CAT cat
-  ON cat.FK_PARTNER = p.OBJECT_ID
-LEFT JOIN BP_DETAIL bpd
-  ON bpd.FK_BUS_PARTNER = p.OBJECT_ID AND bpd.SUBCLASS = 3
-LEFT JOIN BP_RATING r
-  ON r.FK_BP_RTNG_CNTNR = bpd.OBJECT_ID
-LEFT JOIN REFERENCE_DATA rd_r
-  ON rd_r.CODE = r.FRK_RATING AND rd_r.SUBCLASS = r.FSK_RATING
-LEFT JOIN REFERENCE_DATA rd_s
-  ON rd_s.CODE = r.FRK_RATING_SYSTEM AND rd_s.SUBCLASS = r.FSK_RATING_SYSTEM
+LEFT JOIN LEGAL_AREA hc
+  ON hc.OBJECT_ID = p.FK_HOME_COUNTRY
+OUTER APPLY (
+    SELECT TOP (1) ad.*
+    FROM ADDRESS ad
+    WHERE ad.FK_PARTY = p.OBJECT_ID
+    ORDER BY
+        CASE WHEN ad.IS_MAIN_ADDR = 'Y' THEN 0 ELSE 1 END,
+        CASE WHEN ad.IS_HOME_ADDR = 'Y' THEN 0 ELSE 1 END,
+        CASE WHEN ad.IS_ACTIVE    = 'Y' THEN 0 ELSE 1 END
+) a
+LEFT JOIN LEGAL_AREA ac
+  ON ac.OBJECT_ID = a.FK_COUNTRY
 WHERE p.SUBCLASS = 4
-ORDER BY p.IDENTIFIER, r.VALID_FROM DESC;
+  AND ISNULL(p.FK_HOME_COUNTRY, '') <> ISNULL(a.FK_COUNTRY, '')
+ORDER BY p.IDENTIFIER;
+-- Q4.5  City / state fill (explains empty DWH city/state)
+SELECT
+    SUM(CASE WHEN NULLIF(LTRIM(RTRIM(a.CITY_NAME)), '') IS NULL THEN 1 ELSE 0 END) AS city_empty,
+    SUM(CASE WHEN NULLIF(LTRIM(RTRIM(a.CITY_NAME)), '') IS NOT NULL THEN 1 ELSE 0 END) AS city_filled,
+    SUM(CASE WHEN a.FK_STATE IS NULL THEN 1 ELSE 0 END) AS state_empty,
+    SUM(CASE WHEN a.FK_STATE IS NOT NULL THEN 1 ELSE 0 END) AS state_filled,
+    COUNT(*) AS addr_rows_used
+FROM PARTY p
+OUTER APPLY (
+    SELECT TOP (1) ad.*
+    FROM ADDRESS ad
+    WHERE ad.FK_PARTY = p.OBJECT_ID
+    ORDER BY
+        CASE WHEN ad.IS_MAIN_ADDR = 'Y' THEN 0 ELSE 1 END,
+        CASE WHEN ad.IS_HOME_ADDR = 'Y' THEN 0 ELSE 1 END,
+        CASE WHEN ad.IS_ACTIVE    = 'Y' THEN 0 ELSE 1 END
+) a
+WHERE p.SUBCLASS = 4
+  AND a.OBJECT_ID IS NOT NULL;
