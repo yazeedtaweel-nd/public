@@ -1,8 +1,3 @@
-/* ============================================================
-   Q3 – COMP_SECURITY_RATING
-   Source path: PARTY → BP_DETAIL (SUBCLASS=3) → BP_RATING
-   ============================================================ */
-
 -- Q3.1  What rating codes/systems exist?
 SELECT
     r.FRK_RATING_SYSTEM              AS rating_system_code,
@@ -11,37 +6,33 @@ SELECT
     rd_r.NAME                        AS rating_name,
     COUNT(*)                         AS rating_rows,
     COUNT(DISTINCT p.OBJECT_ID)      AS parties
-FROM dbo.PARTY p
-JOIN dbo.BP_DETAIL bpd
+FROM PARTY p
+JOIN BP_DETAIL bpd
   ON bpd.FK_BUS_PARTNER = p.OBJECT_ID
  AND bpd.SUBCLASS = 3
-JOIN dbo.BP_RATING r
+JOIN BP_RATING r
   ON r.FK_BP_RTNG_CNTNR = bpd.OBJECT_ID
-LEFT JOIN dbo.REFERENCE_DATA rd_r
+LEFT JOIN REFERENCE_DATA rd_r
   ON rd_r.CODE = r.FRK_RATING AND rd_r.SUBCLASS = r.FSK_RATING
-LEFT JOIN dbo.REFERENCE_DATA rd_s
+LEFT JOIN REFERENCE_DATA rd_s
   ON rd_s.CODE = r.FRK_RATING_SYSTEM AND rd_s.SUBCLASS = r.FSK_RATING_SYSTEM
 WHERE p.SUBCLASS = 4
 GROUP BY r.FRK_RATING_SYSTEM, rd_s.NAME, r.FRK_RATING, rd_r.NAME
 ORDER BY parties DESC;
-
-
 -- Q3.2  How many ratings per company? (1 = simple map; >1 = need a rule)
 SELECT rating_cnt, COUNT(*) AS parties
 FROM (
     SELECT p.OBJECT_ID, COUNT(*) AS rating_cnt
-    FROM dbo.PARTY p
-    JOIN dbo.BP_DETAIL bpd
+    FROM PARTY p
+    JOIN BP_DETAIL bpd
       ON bpd.FK_BUS_PARTNER = p.OBJECT_ID AND bpd.SUBCLASS = 3
-    JOIN dbo.BP_RATING r
+    JOIN BP_RATING r
       ON r.FK_BP_RTNG_CNTNR = bpd.OBJECT_ID
     WHERE p.SUBCLASS = 4
     GROUP BY p.OBJECT_ID
 ) x
 GROUP BY rating_cnt
 ORDER BY rating_cnt;
-
-
 -- Q3.3  Coverage: rated vs unrated, by COMP_TYPE
 SELECT
     cat.FRK_CATEGORY                 AS comp_type_code,
@@ -49,20 +40,18 @@ SELECT
     COUNT(DISTINCT p.OBJECT_ID)      AS parties,
     COUNT(DISTINCT CASE WHEN r.OBJECT_ID IS NOT NULL THEN p.OBJECT_ID END) AS parties_with_rating,
     COUNT(DISTINCT CASE WHEN r.OBJECT_ID IS NULL     THEN p.OBJECT_ID END) AS parties_without_rating
-FROM dbo.PARTY p
-LEFT JOIN dbo.BUS_PARTNER_CAT cat
+FROM PARTY p
+LEFT JOIN BUS_PARTNER_CAT cat
   ON cat.FK_PARTNER = p.OBJECT_ID
-LEFT JOIN dbo.REFERENCE_DATA rd_t
+LEFT JOIN REFERENCE_DATA rd_t
   ON rd_t.CODE = cat.FRK_CATEGORY AND rd_t.SUBCLASS = cat.FSK_CATEGORY
-LEFT JOIN dbo.BP_DETAIL bpd
+LEFT JOIN BP_DETAIL bpd
   ON bpd.FK_BUS_PARTNER = p.OBJECT_ID AND bpd.SUBCLASS = 3
-LEFT JOIN dbo.BP_RATING r
+LEFT JOIN BP_RATING r
   ON r.FK_BP_RTNG_CNTNR = bpd.OBJECT_ID
 WHERE p.SUBCLASS = 4
 GROUP BY cat.FRK_CATEGORY, rd_t.NAME
 ORDER BY parties DESC;
-
-
 -- Q3.4  Current vs expired (needed if Q3.2 shows rating_cnt > 1)
 SELECT
     CASE
@@ -74,10 +63,10 @@ SELECT
     END                              AS validity_flag,
     COUNT(*)                         AS rating_rows,
     COUNT(DISTINCT p.OBJECT_ID)      AS parties
-FROM dbo.PARTY p
-JOIN dbo.BP_DETAIL bpd
+FROM PARTY p
+JOIN BP_DETAIL bpd
   ON bpd.FK_BUS_PARTNER = p.OBJECT_ID AND bpd.SUBCLASS = 3
-JOIN dbo.BP_RATING r
+JOIN BP_RATING r
   ON r.FK_BP_RTNG_CNTNR = bpd.OBJECT_ID
 WHERE p.SUBCLASS = 4
 GROUP BY
@@ -88,20 +77,18 @@ GROUP BY
             THEN 'CURRENT'
         ELSE 'NOT_CURRENT'
     END;
-
-
 -- Q3.5  Does 0 / NA exist in SICS ratings? (DWH samples)
 SELECT
     r.FRK_RATING,
     rd_r.NAME,
     COUNT(*) AS rating_rows,
     COUNT(DISTINCT p.OBJECT_ID) AS parties
-FROM dbo.PARTY p
-JOIN dbo.BP_DETAIL bpd
+FROM PARTY p
+JOIN BP_DETAIL bpd
   ON bpd.FK_BUS_PARTNER = p.OBJECT_ID AND bpd.SUBCLASS = 3
-JOIN dbo.BP_RATING r
+JOIN BP_RATING r
   ON r.FK_BP_RTNG_CNTNR = bpd.OBJECT_ID
-LEFT JOIN dbo.REFERENCE_DATA rd_r
+LEFT JOIN REFERENCE_DATA rd_r
   ON rd_r.CODE = r.FRK_RATING AND rd_r.SUBCLASS = r.FSK_RATING
 WHERE p.SUBCLASS = 4
   AND (
@@ -112,8 +99,6 @@ WHERE p.SUBCLASS = 4
       )
 GROUP BY r.FRK_RATING, rd_r.NAME
 ORDER BY parties DESC;
-
-
 -- Q3.6  Detail sample (inspect a few companies)
 SELECT TOP 200
     p.IDENTIFIER                     AS COMP_BK,
@@ -125,16 +110,16 @@ SELECT TOP 200
     rd_r.NAME                        AS rating_name,
     r.VALID_FROM,
     r.VALID_TO
-FROM dbo.PARTY p
-LEFT JOIN dbo.BUS_PARTNER_CAT cat
+FROM PARTY p
+LEFT JOIN BUS_PARTNER_CAT cat
   ON cat.FK_PARTNER = p.OBJECT_ID
-LEFT JOIN dbo.BP_DETAIL bpd
+LEFT JOIN BP_DETAIL bpd
   ON bpd.FK_BUS_PARTNER = p.OBJECT_ID AND bpd.SUBCLASS = 3
-LEFT JOIN dbo.BP_RATING r
+LEFT JOIN BP_RATING r
   ON r.FK_BP_RTNG_CNTNR = bpd.OBJECT_ID
-LEFT JOIN dbo.REFERENCE_DATA rd_r
+LEFT JOIN REFERENCE_DATA rd_r
   ON rd_r.CODE = r.FRK_RATING AND rd_r.SUBCLASS = r.FSK_RATING
-LEFT JOIN dbo.REFERENCE_DATA rd_s
+LEFT JOIN REFERENCE_DATA rd_s
   ON rd_s.CODE = r.FRK_RATING_SYSTEM AND rd_s.SUBCLASS = r.FSK_RATING_SYSTEM
 WHERE p.SUBCLASS = 4
 ORDER BY p.IDENTIFIER, r.VALID_FROM DESC;
