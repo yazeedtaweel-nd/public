@@ -1,0 +1,20 @@
+SELECT DISTINCT
+    p.IDENTIFIER AS brok_bk,
+    COALESCE(oname.NAME, p.CURR_NAME) AS brok_name,
+    rd.CODE AS category_code,
+    rd.NAME AS category_name
+FROM PARTY p
+JOIN BUS_PARTNER_CAT bpc
+  ON bpc.FK_PARTNER = p.OBJECT_ID
+ AND bpc.FSK_CATEGORY = 23
+JOIN REFERENCE_DATA rd
+  ON rd.CODE = bpc.FRK_CATEGORY
+ AND rd.SUBCLASS = 23
+LEFT JOIN ORGANISATION_NAME oname
+  ON oname.FK_ORGANISATION = p.OBJECT_ID
+WHERE p.SUBCLASS = 4
+  AND (
+        rd.CODE = 'BROKER'          -- confirm exact code in your env
+     OR UPPER(rd.NAME) LIKE '%BROKER%'
+      )
+ORDER BY brok_name;
