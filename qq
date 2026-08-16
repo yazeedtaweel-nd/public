@@ -31,8 +31,11 @@ LEFT JOIN (
         ROW_NUMBER() OVER (
             PARTITION BY FK_PARTY
             ORDER BY
-                CASE WHEN ADDRESS_IDENTIFIER LIKE '%_AR' THEN 1 ELSE 0 END,
-                CASE WHEN IS_HOME_ADDR = 'Y' THEN 0 ELSE 1 END,
+                CASE WHEN FK_STATE IS NOT NULL THEN 0 ELSE 1 END,
+                CASE WHEN NULLIF(LTRIM(RTRIM(CITY_NAME)), '') IS NOT NULL THEN 0 ELSE 1 END,
+                CASE WHEN NULLIF(LTRIM(RTRIM(POSTAL_CODE)), '') IS NOT NULL THEN 0 ELSE 1 END,
+             
+       
                 OBJECT_ID
         ) AS RN
     FROM ADDRESS
