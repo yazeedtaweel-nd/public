@@ -1,29 +1,3 @@
-1) Confirm Risk Zone ≈ CRESTA (codes / names vs your DWH samples)
--- SICS: sample risk zones that look like your CRZ_BK examples
-SELECT
-    rz.OBJECT_ID,
-    rz.CODE,
-    rz.NAME,
-    rz.SUBCLASS,
-    rz.FK_PARENT,
-    rz.FK_COUNTRY
-FROM RISK_ZONE rz
-WHERE rz.CODE IN ('0000000', '1AE00000', '1AE00100', '1AE00200', '1AE00300', '1AE00400', '1AE00500')
-   OR rz.CODE LIKE '1AE%'
-   OR UPPER(rz.NAME) LIKE '%AJMAN%'
-   OR UPPER(rz.NAME) LIKE '%ABU DHABI%'
-   OR UPPER(rz.NAME) LIKE '%WORLD%'
-ORDER BY rz.CODE;
--- Row counts / subclass mix (grain question)
-SELECT
-    rz.SUBCLASS,
-    COUNT(*) AS row_cnt,
-    COUNT(rz.FK_COUNTRY) AS with_country,
-    COUNT(rz.FK_PARENT) AS with_parent
-FROM RISK_ZONE rz
-GROUP BY rz.SUBCLASS
-ORDER BY rz.SUBCLASS;
-2) CRZ_NAME: stored as-is vs Country - Zone concatenation
 SELECT
     rz.CODE AS CRZ_BK_candidate,
     rz.NAME AS risk_zone_name,
@@ -49,13 +23,15 @@ LEFT JOIN LEGAL_AREA la
 WHERE rz.CODE IN ('0000000', '1AE00000', '1AE00100', '1AE00200', '1AE00300', '1AE00400', '1AE00500')
    OR rz.CODE LIKE '1AE%'
 ORDER BY rz.CODE;
+
 -- How often is NAME already "X - Y"?
 SELECT
     CASE WHEN rz.NAME LIKE '% - %' THEN 'has_dash_separator' ELSE 'no_dash' END AS pattern,
     COUNT(*) AS cnt
 FROM RISK_ZONE rz
 GROUP BY CASE WHEN rz.NAME LIKE '% - %' THEN 'has_dash_separator' ELSE 'no_dash' END;
-3) CTRY_COUNTRY_CODE: ISO_ALPHA_2 vs CODE (esp. 00 / WORLD WIDE)
+
+
 SELECT
     rz.CODE AS risk_zone_code,
     rz.NAME AS risk_zone_name,
@@ -76,6 +52,10 @@ WHERE rz.CODE IN ('0000000', '1AE00000')
    OR la.ISO_ALPHA_2 IS NULL
    OR UPPER(rz.NAME) LIKE '%WORLD%'
 ORDER BY rz.CODE;
+
+
+
+
 -- Distinct country code candidates used by risk zones
 SELECT
     la.ISO_ALPHA_2,
@@ -87,70 +67,3 @@ LEFT JOIN LEGAL_AREA la
    AND la.SUBCLASS = 1
 GROUP BY la.ISO_ALPHA_2, la.CODE
 ORDER BY zone_cnt DESC;
-4) Grain: all hierarchy rows vs country-level only
--- Parents vs leaves
-SELECT
-    CASE WHEN child.OBJECT_ID IS NULL THEN 'LEAF_or_unused_parent' ELSE 'HAS_CHILDREN' END AS node_type,
-    COUNT(DISTINCT parent.OBJECT_ID) AS cnt
-FROM RISK_ZONE parent
-LEFT JOIN RISK_ZONE child
-    ON child.FK_PARENT = parent.OBJECT_ID
-GROUP BY CASE WHEN child.OBJECT_ID IS NULL THEN 'LEAF_or_unused_parent' ELSE 'HAS_CHILDREN' END;
--- Country FK coverage (SicsRiskZoneCountry vs hierarchy-only nodes)
-SELECT
-    CASE WHEN rz.FK_COUNTRY IS NULL THEN 'NO_COUNTRY_FK' ELSE 'HAS_COUNTRY_FK' END AS country_fk,
-    COUNT(*) AS cnt
-FROM RISK_ZONE rz
-GROUP BY CASE WHEN rz.FK_COUNTRY IS NULL THEN 'NO_COUNTRY_FK' ELSE 'HAS_COUNTRY_FK' END;
--- Sample hierarchy for UAE-like codes
-SELECT
-    p.CODE AS parent_code,
-    p.NAME AS parent_name,
-    c.CODE AS child_code,
-    c.NAME AS child_name,
-    c.FK_COUNTRY
-FROM RISK_ZONE c
-LEFT JOIN RISK_ZONE p
-    ON p.OBJECT_ID = c.FK_PARENT
-WHERE c.CODE LIKE '1AE%'
-   OR p.CODE LIKE '1AE%'
-ORDER BY ISNULL(p.CODE, c.CODE), c.CODE;
-5) Dates on source (expect none → supports ETL date surrogates)
--- Confirm no date/audit columns on RISK_ZONE (metadata)
-SELECT c.name AS column_name, t.name AS data_type
-FROM sys.columns c
-JOIN sys.types t ON c.user_type_id = t.user_type_id
-JOIN sys.tables tb ON c.object_id = tb.object_id
-WHERE tb.name = 'RISK_ZONE'
-ORDER BY c.column_id;
-6) Optional DWH cross-check (if DIM_CRESTA_ZONE already loaded)
-SELECT TOP 50
-    CRZ_SRGT, CRZ_BK, CRZ_NAME, CTRY_COUNTRY_CODE, CTRY_SRGT,
-    CREATED_DATE_SRGT, UPDATED_DATE_SRGT
-FROM [SaudiRe_Dw].[dbo].[DIM_CRESTA_ZONE]
-ORDER BY CRZ_SRGT;
--- Match DWH business keys back to SICS
-SELECT
-    d.CRZ_BK,
-    d.CRZ_NAME AS dwh_name,
-    rz.NAME AS sics_name,
-    la.NAME AS sics_country_name,
-    la.ISO_ALPHA_2,
-    la.CODE AS la_code,
-    d.CTRY_COUNTRY_CODE AS dwh_country_code,
-    CASE WHEN d.CRZ_NAME = rz.NAME THEN 'NAME_direct'
-         WHEN d.CRZ_NAME = la.NAME + ' - ' + rz.NAME THEN 'NAME_concat'
-         ELSE 'NAME_other_rule'
-    END AS name_rule,
-    CASE WHEN d.CTRY_COUNTRY_CODE = la.ISO_ALPHA_2 THEN 'ISO_ALPHA_2'
-         WHEN d.CTRY_COUNTRY_CODE = la.CODE THEN 'LEGAL_AREA_CODE'
-         ELSE 'OTHER_or_NULL'
-    END AS country_code_rule
-FROM [SaudiRe_Dw].[dbo].[DIM_CRESTA_ZONE] d
-LEFT JOIN RISK_ZONE rz
-    ON rz.CODE = d.CRZ_BK
-LEFT JOIN LEGAL_AREA la
-    ON la.OBJECT_ID = rz.FK_COUNTRY
-   AND la.SUBCLASS = 1
-ORDER BY d.CRZ_SRGT;
-What to paste back (for high confidence)
