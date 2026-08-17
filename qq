@@ -17,3 +17,16 @@ SELECT
 FROM REFERENCE_DATA
 WHERE SUBCLASS = 51
 ORDER BY CODE;
+
+
+SELECT
+    RIGHT('000' + LTRIM(RTRIM(occ.CODE)), 3) AS OCC_BK,
+    occ.NAME                                 AS OOC_NAME,
+    RIGHT('00'  + LTRIM(RTRIM(maj.CODE)), 2) AS OCC_MAJOR_CLASS_BK,
+    maj.NAME                                 AS OCC_MAJOR_CLASS_NAME
+FROM REFERENCE_DATA AS occ
+LEFT JOIN REFERENCE_DATA AS maj
+       ON maj.SUBCLASS = 51
+      AND maj.CODE = /* parent code from dependency-values / classification link */
+WHERE occ.SUBCLASS = 52
+  AND occ.IS_ACTIVE = 'Y';
