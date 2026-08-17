@@ -1,16 +1,19 @@
+-- Occupation (52)
 SELECT
-    RIGHT('000' + LTRIM(RTRIM(occ.CODE)), 3) AS OCC_BK,
-    occ.NAME                                 AS OOC_NAME,
-    RIGHT('00'  + LTRIM(RTRIM(maj.CODE)), 2) AS OCC_MAJOR_CLASS_BK,
-    maj.NAME                                 AS OCC_MAJOR_CLASS_NAME
-FROM dbo.REFERENCE_DATA AS occ
-LEFT JOIN REF_DATA_DEP_TYPE AS dep
-       ON dep.FK_CHILD = '52'   -- confirm join keys against your SICS version
-      AND dep.FK_PARENT = '51'
--- Prefer value-level dependency if available; until then major class may need
--- a dependency-values table or ACC_CLASSIFIC co-occurrence. Validate join.
-LEFT JOIN REFERENCE_DATA AS maj
-       ON maj.SUBCLASS = 51
-      AND maj.CODE = /* parent code from dependency-values / classification link */
-WHERE occ.SUBCLASS = 52
-  AND occ.IS_ACTIVE = 'Y';
+    CODE,
+    NAME,
+    IS_ACTIVE,
+    RIGHT('000' + LTRIM(RTRIM(CODE)), 3) AS OCC_BK_PADDED
+FROM REFERENCE_DATA
+WHERE SUBCLASS = 52
+ORDER BY CODE;
+
+-- Major class (51)
+SELECT
+    CODE,
+    NAME,
+    IS_ACTIVE,
+    RIGHT('00' + LTRIM(RTRIM(CODE)), 2) AS MAJOR_CLASS_BK_PADDED
+FROM REFERENCE_DATA
+WHERE SUBCLASS = 51
+ORDER BY CODE;
