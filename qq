@@ -1,32 +1,16 @@
--- Occupation (52)
-SELECT
-    CODE,
-    NAME,
-    IS_ACTIVE,
-    RIGHT('000' + LTRIM(RTRIM(CODE)), 3) AS OCC_BK_PADDED
-FROM REFERENCE_DATA
-WHERE SUBCLASS = 52
-ORDER BY CODE;
-
--- Major class (51)
-SELECT
-    CODE,
-    NAME,
-    IS_ACTIVE,
-    RIGHT('00' + LTRIM(RTRIM(CODE)), 2) AS MAJOR_CLASS_BK_PADDED
-FROM REFERENCE_DATA
-WHERE SUBCLASS = 51
-ORDER BY CODE;
-
-
 SELECT
     RIGHT('000' + LTRIM(RTRIM(occ.CODE)), 3) AS OCC_BK,
     occ.NAME                                 AS OOC_NAME,
     RIGHT('00'  + LTRIM(RTRIM(maj.CODE)), 2) AS OCC_MAJOR_CLASS_BK,
     maj.NAME                                 AS OCC_MAJOR_CLASS_NAME
 FROM REFERENCE_DATA AS occ
+LEFT JOIN REF_TO_REF AS link
+       ON link.FSK_CHILD  = 52
+      AND link.FRK_CHILD  = occ.CODE
+      AND link.FSK_PARENT = 51
 LEFT JOIN REFERENCE_DATA AS maj
        ON maj.SUBCLASS = 51
-      AND maj.CODE = /* parent code from dependency-values / classification link */
+      AND maj.CODE     = link.FRK_PARENT
 WHERE occ.SUBCLASS = 52
-  AND occ.IS_ACTIVE = 'Y';
+  AND occ.IS_ACTIVE = 'Y'
+ORDER BY occ.CODE;
