@@ -1,9 +1,266 @@
+-- What CESSION subtypes exist, and how many have INS_PERIL?
 SELECT
-    rd.CODE              AS PRMQ_BK,
-    rd.NAME              AS PRMQ_NAME,
-    rd.IS_ACTIVE,
-    ROW_NUMBER() OVER (ORDER BY rd.NAME, rd.CODE) AS PRMQ_SEQ
-FROM REFERENCE_DATA rd
-WHERE rd.SUBCLASS = 134
-ORDER BY
-    PRMQ_SEQ;
+    c.SUBCLASS,
+    COUNT(*) AS row_cnt,
+    SUM(CASE WHEN c.FK_INS_PERIL IS NOT NULL THEN 1 ELSE 0 END) AS with_ins_peril,
+    SUM(CASE WHEN c.OUR_EXPOSURE IS NOT NULL THEN 1 ELSE 0 END) AS with_our_exposure,
+    SUM(CASE WHEN c.EXPOSURE IS NOT NULL THEN 1 ELSE 0 END) AS with_exposure,
+    SUM(CASE WHEN c.CEDENT_EXPOSURE IS NOT NULL THEN 1 ELSE 0 END) AS with_cedent_exposure
+FROM dbo.CESSION c
+GROUP BY c.SUBCLASS
+ORDER BY c.SUBCLASS;
+
+-- What CESSION_PERIL_DETL subtypes exist, and how often LIMIT_AMOUNT is filled?
+SELECT
+    d.SUBCLASS,
+    COUNT(*) AS row_cnt,
+    SUM(CASE WHEN d.LIMIT_AMOUNT IS NOT NULL THEN 1 ELSE 0 END) AS with_limit_amount,
+    MIN(d.LIMIT_AMOUNT) AS min_limit_amount,
+    MAX(d.LIMIT_AMOUNT) AS max_limit_amount
+FROM dbo.CESSION_PERIL_DETL d
+GROUP BY d.SUBCLASS
+ORDER BY d.SUBCLASS;
+
+
+
+
+--------------------------------------------------------------------------------------------------------
+SELECT TOP (100)
+    /* Policy keys */
+    b.IDENTIFIER                         AS business_id,
+    ip.BUS_INS_PER_ID                    AS insured_period_id,
+    ip.UNDERWR_YEAR                      AS uw_year,
+    ip.OBJECT_ID                         AS insured_period_oid,
+    b.OBJECT_ID                          AS business_oid,
+
+    /* Dimensions → CTRY / CRZ / PRL */
+    la.ISO_ALPHA_2                       AS country_iso2,
+    la.CODE                              AS country_code,
+    la.NAME                              AS country_name,
+    rz.CODE                              AS risk_zone_code,      -- CRZ_BK candidate
+    rz.NAME                              AS risk_zone_name,
+    peril_rd.CODE                        AS peril_code,          -- PRL BK candidate
+    peril_rd.NAME                        AS peril_name,
+    peril_rd.SUBCLASS                    AS peril_ref_subclass,  -- expect 44
+
+    /* Currencies */
+    c.FK_CURRENCY                        AS orig_ccy,            -- PAG_ORIGINAL_CCY
+    b.FK_FUNCTIONAL_CCY                  AS func_ccy1,           -- base candidate
+    b.FK_FUNCTIONAL_CCY2                 AS func_ccy2,           -- base candidate
+
+    /* Amount candidates for PAG_AMOUNT_ORIGINAL */
+    c.OUR_EXPOSURE                       AS our_exposure,
+    c.EXPOSURE                           AS total_exposure,
+    c.CEDENT_EXPOSURE                    AS cedent_exposure,
+    c.OUR_GROSS_LIAB                     AS our_gross_liab,
+    c.GROSS_LIABILITY                    AS gross_liability,
+    d.LIMIT_AMOUNT                       AS peril_limit_amount,
+    d.SUBCLASS                           AS peril_detl_subclass,
+
+    /* PML */
+    iper.PML_FACTOR                      AS pml_factor,          -- PAG_PML_PERCENT
+    CASE
+        WHEN c.OUR_EXPOSURE IS NOT NULL AND iper.PML_FACTOR IS NOT NULL
+        THEN c.OUR_EXPOSURE * iper.PML_FACTOR / 100.0
+    END                                  AS pml_amt_from_our_exp_div100,
+    CASE
+        WHEN c.OUR_EXPOSURE IS NOT NULL AND iper.PML_FACTOR IS NOT NULL
+        THEN c.OUR_EXPOSURE * iper.PML_FACTOR
+    END                                  AS pml_amt_from_our_exp_raw,
+
+    /* Policy-level annual aggregate (DIM_POLICY.PAG_AMOUNT path) — same on every peril row if present */
+    lim.AMOUNT                           AS ann_agg_limit_amount,
+    lpc.FK_MAIN_CURRENCY                 AS ann_agg_main_ccy,
+
+    /* Technical */
+    c.OBJECT_ID                          AS cession_oid,
+    c.SUBCLASS                           AS cession_subclass,
+    iper.OBJECT_ID                       AS ins_peril_oid,
+    soc.OBJECT_ID                        AS soc_oid
+FROM dbo.CESSION c
+INNER JOIN dbo.INS_PERIL iper
+    ON iper.OBJECT_ID = c.FK_INS_PERIL
+LEFT JOIN dbo.RISK_ZONE rz
+    ON rz.OBJECT_ID = iper.FK_RISKZONE
+LEFT JOIN dbo.LEGAL_AREA la
+    ON la.OBJECT_ID = rz.FK_COUNTRY
+LEFT JOIN dbo.REFERENCE_DATA peril_rd
+    ON peril_rd.OBJECT_ID = iper.FRK_PERIL_TYPE   -- if this fails, try CODE+SUBCLASS join below
+LEFT JOIN dbo.CESSION_PERIL_DETL d
+    ON d.FK_CESSION = c.OBJECT_ID
+LEFT JOIN dbo.SCOPE_OF_COVER soc
+    ON soc.OBJECT_ID = c.FK_SOC
+LEFT JOIN dbo.LIFE_CYCLE_PHASE lcp
+    ON lcp.OBJECT_ID = soc.FK_LIFECYCLEP
+LEFT JOIN dbo.INSURED_PERIOD ip
+    ON ip.OBJECT_ID = lcp.FK_INS_PRD
+LEFT JOIN dbo.BUSINESS b
+    ON b.OBJECT_ID = ip.FK_BUSINESS
+OUTER APPLY (
+    SELECT TOP (1) lpc0.*
+    FROM dbo.LPC_LIM_PREM_COND lpc0
+    WHERE lpc0.FK_INSURED_PERIOD = ip.OBJECT_ID
+      AND lpc0.FK_ANN_AGG_LIMIT IS NOT NULL
+      AND (lpc0.IS_CURRENT_OF_IP = 'Y' OR lpc0.IS_CURRENT_OF_IP IS NULL)
+    ORDER BY lpc0.OBJECT_ID
+) lpc
+LEFT JOIN dbo.LPC_LIMIT lim
+    ON lim.OBJECT_ID = lpc.FK_ANN_AGG_LIMIT
+WHERE c.FK_INS_PERIL IS NOT NULL
+  -- AND c.SUBCLASS = 3   -- enable after Query 0 confirms
+ORDER BY b.IDENTIFIER, ip.UNDERWR_YEAR, rz.CODE, peril_rd.CODE;
+--------------------------------------------------------------------------------------------------------
+SELECT TOP (50)
+    b.IDENTIFIER                AS business_id,
+    iper.PML_FACTOR             AS pml_factor,
+    c.OUR_EXPOSURE              AS our_exposure,
+    c.OUR_EXPOSURE * iper.PML_FACTOR / 100.0 AS pml_div_100,
+    c.OUR_EXPOSURE * iper.PML_FACTOR        AS pml_times_raw,
+    d.LIMIT_AMOUNT              AS limit_amount,
+    d.LIMIT_AMOUNT * iper.PML_FACTOR / 100.0 AS limit_pml_div_100
+FROM dbo.CESSION c
+INNER JOIN dbo.INS_PERIL iper
+    ON iper.OBJECT_ID = c.FK_INS_PERIL
+LEFT JOIN dbo.CESSION_PERIL_DETL d
+    ON d.FK_CESSION = c.OBJECT_ID
+LEFT JOIN dbo.SCOPE_OF_COVER soc
+    ON soc.OBJECT_ID = c.FK_SOC
+LEFT JOIN dbo.LIFE_CYCLE_PHASE lcp
+    ON lcp.OBJECT_ID = soc.FK_LIFECYCLEP
+LEFT JOIN dbo.INSURED_PERIOD ip
+    ON ip.OBJECT_ID = lcp.FK_INS_PRD
+LEFT JOIN dbo.BUSINESS b
+    ON b.OBJECT_ID = ip.FK_BUSINESS
+WHERE iper.PML_FACTOR IS NOT NULL
+  AND c.OUR_EXPOSURE IS NOT NULL
+ORDER BY iper.PML_FACTOR DESC;
+
+--------------------------------------------------------------------------------------------------------
+
+SELECT
+    MIN(PML_FACTOR) AS min_pml,
+    MAX(PML_FACTOR) AS max_pml,
+    AVG(PML_FACTOR) AS avg_pml,
+    COUNT(*) AS n
+FROM dbo.INS_PERIL
+WHERE PML_FACTOR IS NOT NULL;
+--------------------------------------------------------------------------------------------------------
+SELECT TOP (50)
+    b.IDENTIFIER            AS business_id,
+    c.FK_CURRENCY           AS cession_orig_ccy,
+    curr_o.ISO_ALPHA        AS orig_iso,
+    curr_o.DESCRIPTION      AS orig_name,
+    b.FK_FUNCTIONAL_CCY     AS business_func_ccy,
+    curr_f.ISO_ALPHA        AS func_iso,
+    b.FK_FUNCTIONAL_CCY2    AS business_func_ccy2,
+    curr_f2.ISO_ALPHA       AS func2_iso,
+    c.OUR_EXPOSURE          AS our_exposure
+FROM dbo.CESSION c
+INNER JOIN dbo.INS_PERIL iper
+    ON iper.OBJECT_ID = c.FK_INS_PERIL
+LEFT JOIN dbo.CNU_CURRENCY curr_o
+    ON curr_o.ISO_ALPHA = c.FK_CURRENCY
+LEFT JOIN dbo.SCOPE_OF_COVER soc
+    ON soc.OBJECT_ID = c.FK_SOC
+LEFT JOIN dbo.LIFE_CYCLE_PHASE lcp
+    ON lcp.OBJECT_ID = soc.FK_LIFECYCLEP
+LEFT JOIN dbo.INSURED_PERIOD ip
+    ON ip.OBJECT_ID = lcp.FK_INS_PRD
+LEFT JOIN dbo.BUSINESS b
+    ON b.OBJECT_ID = ip.FK_BUSINESS
+LEFT JOIN dbo.CNU_CURRENCY curr_f
+    ON curr_f.ISO_ALPHA = b.FK_FUNCTIONAL_CCY
+LEFT JOIN dbo.CNU_CURRENCY curr_f2
+    ON curr_f2.ISO_ALPHA = b.FK_FUNCTIONAL_CCY2
+WHERE c.FK_INS_PERIL IS NOT NULL
+ORDER BY b.IDENTIFIER;
+
+
+--------------------------------------------------------------------------------------------------------
+SELECT TOP (100)
+    rd.SUBCLASS,
+    rd.CODE,
+    rd.NAME,
+    COUNT(*) AS used_by_ins_peril_rows
+FROM dbo.INS_PERIL iper
+INNER JOIN dbo.REFERENCE_DATA rd
+    ON rd.OBJECT_ID = iper.FRK_PERIL_TYPE
+GROUP BY rd.SUBCLASS, rd.CODE, rd.NAME
+ORDER BY used_by_ins_peril_rows DESC;
+
+-- If the join above is empty, try CODE join:
+SELECT TOP (100)
+    iper.FRK_PERIL_TYPE,
+    iper.FSK_PERIL_TYPE,
+    rd.SUBCLASS,
+    rd.CODE,
+    rd.NAME
+FROM dbo.INS_PERIL iper
+LEFT JOIN dbo.REFERENCE_DATA rd
+    ON rd.CODE = iper.FRK_PERIL_TYPE
+   AND (rd.SUBCLASS = 44 OR rd.SUBCLASS = iper.FSK_PERIL_TYPE)
+WHERE iper.FRK_PERIL_TYPE IS NOT NULL;
+
+--------------------------------------------------------------------------------------------------------
+SELECT TOP (50)
+    b.IDENTIFIER,
+    ip.BUS_INS_PER_ID,
+    lim.AMOUNT AS ann_agg_amount,
+    peril_cnt.n_peril_cessions
+FROM dbo.INSURED_PERIOD ip
+INNER JOIN dbo.BUSINESS b
+    ON b.OBJECT_ID = ip.FK_BUSINESS
+INNER JOIN dbo.LPC_LIM_PREM_COND lpc
+    ON lpc.FK_INSURED_PERIOD = ip.OBJECT_ID
+   AND lpc.FK_ANN_AGG_LIMIT IS NOT NULL
+INNER JOIN dbo.LPC_LIMIT lim
+    ON lim.OBJECT_ID = lpc.FK_ANN_AGG_LIMIT
+OUTER APPLY (
+    SELECT COUNT(*) AS n_peril_cessions
+    FROM dbo.LIFE_CYCLE_PHASE lcp
+    INNER JOIN dbo.SCOPE_OF_COVER soc
+        ON soc.FK_LIFECYCLEP = lcp.OBJECT_ID
+    INNER JOIN dbo.CESSION c
+        ON c.FK_SOC = soc.OBJECT_ID
+       AND c.FK_INS_PERIL IS NOT NULL
+    WHERE lcp.FK_INS_PRD = ip.OBJECT_ID
+) peril_cnt
+WHERE lim.AMOUNT IS NOT NULL
+ORDER BY peril_cnt.n_peril_cessions ASC, b.IDENTIFIER;
+
+
+--------------------------------------------------------------------------------------------------------
+
+
+SELECT
+    COUNT(*) AS peril_cession_rows,
+    SUM(CASE WHEN c.OUR_EXPOSURE IS NOT NULL THEN 1 ELSE 0 END) AS n_our_exposure,
+    SUM(CASE WHEN c.EXPOSURE IS NOT NULL THEN 1 ELSE 0 END) AS n_exposure,
+    SUM(CASE WHEN c.CEDENT_EXPOSURE IS NOT NULL THEN 1 ELSE 0 END) AS n_cedent_exposure,
+    SUM(CASE WHEN d.LIMIT_AMOUNT IS NOT NULL THEN 1 ELSE 0 END) AS n_limit_amount,
+    SUM(CASE WHEN lim.AMOUNT IS NOT NULL THEN 1 ELSE 0 END) AS n_ann_agg_amount,
+    SUM(CASE WHEN iper.PML_FACTOR IS NOT NULL THEN 1 ELSE 0 END) AS n_pml_factor,
+    SUM(CASE WHEN rz.FK_COUNTRY IS NOT NULL THEN 1 ELSE 0 END) AS n_with_country,
+    SUM(CASE WHEN iper.FK_RISKZONE IS NOT NULL THEN 1 ELSE 0 END) AS n_with_risk_zone,
+    SUM(CASE WHEN iper.FRK_PERIL_TYPE IS NOT NULL THEN 1 ELSE 0 END) AS n_with_peril
+FROM dbo.CESSION c
+INNER JOIN dbo.INS_PERIL iper
+    ON iper.OBJECT_ID = c.FK_INS_PERIL
+LEFT JOIN dbo.RISK_ZONE rz
+    ON rz.OBJECT_ID = iper.FK_RISKZONE
+LEFT JOIN dbo.CESSION_PERIL_DETL d
+    ON d.FK_CESSION = c.OBJECT_ID
+   AND d.LIMIT_AMOUNT IS NOT NULL
+LEFT JOIN dbo.SCOPE_OF_COVER soc
+    ON soc.OBJECT_ID = c.FK_SOC
+LEFT JOIN dbo.LIFE_CYCLE_PHASE lcp
+    ON lcp.OBJECT_ID = soc.FK_LIFECYCLEP
+LEFT JOIN dbo.INSURED_PERIOD ip
+    ON ip.OBJECT_ID = lcp.FK_INS_PRD
+LEFT JOIN dbo.LPC_LIM_PREM_COND lpc
+    ON lpc.FK_INSURED_PERIOD = ip.OBJECT_ID
+   AND lpc.FK_ANN_AGG_LIMIT IS NOT NULL
+LEFT JOIN dbo.LPC_LIMIT lim
+    ON lim.OBJECT_ID = lpc.FK_ANN_AGG_LIMIT
+WHERE c.FK_INS_PERIL IS NOT NULL;
+-- AND c.SUBCLASS = 3
