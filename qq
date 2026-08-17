@@ -1,9 +1,11 @@
-SELECT TOP (100)
-    t.name AS table_name,
-    c.name AS column_name
-FROM sys.tables t
-JOIN sys.columns c ON c.object_id = t.object_id
-WHERE c.name LIKE '%DEP%'
-   OR t.name LIKE '%REF_DATA%DEP%'
-   OR t.name LIKE '%DEP%REF%'
-ORDER BY t.name, c.name;
+SELECT 'REFERENCE_DATA' AS SRC, SUBCLASS, CODE, NAME
+FROM dbo.REFERENCE_DATA
+WHERE NAME LIKE '%ABATTOIR%'
+   OR NAME LIKE '%BAKERY%'
+   OR NAME LIKE '%AERATED WATER%'
+   OR CODE IN ('001','000','09','FOOD')
+UNION ALL
+SELECT 'REF_DATA_NAME', NULL, FRK_REF_DATA, NAME
+FROM dbo.REF_DATA_NAME
+WHERE NAME LIKE '%ABATTOIR%'
+   OR NAME LIKE '%BAKERY%';
