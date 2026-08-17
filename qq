@@ -1,5 +1,60 @@
-/* Q1–Q3: Agreement LC Status (90) vs Basic (89) vs Sub-Status (91)
-   + match to DIM_QUOTE_STATUS sample codes */
+/* Q4 (fixed): which status field is populated, with which codes.
+   Sub-status is NOT on BUS_STRUCT_REP - it lives on LIFE_CYCLE_STATUS. */
+SELECT
+    'BUS_STRUCT_REP.FRK_LC_STAT_CURR (90)' AS STATUS_FIELD,
+    b.FRK_LC_STAT_CURR                     AS STATUS_CODE,
+    rd.NAME                                AS STATUS_NAME,
+    rd.IS_ACTIVE,
+    COUNT(*)                               AS ROW_CNT
+FROM BUS_STRUCT_REP b
+LEFT JOIN REFERENCE_DATA rd
+       ON rd.SUBCLASS = 90
+      AND rd.CODE     = b.FRK_LC_STAT_CURR
+WHERE b.FRK_LC_STAT_CURR IS NOT NULL
+GROUP BY b.FRK_LC_STAT_CURR, rd.NAME, rd.IS_ACTIVE
+
+UNION ALL
+
+SELECT
+    'BUS_STRUCT_REP.FRK_BASICSTAT_CURR (89)',
+    b.FRK_BASICSTAT_CURR,
+    rd.NAME,
+    rd.IS_ACTIVE,
+    COUNT(*)
+FROM BUS_STRUCT_REP b
+LEFT JOIN REFERENCE_DATA rd
+       ON rd.SUBCLASS = 89
+      AND rd.CODE     = b.FRK_BASICSTAT_CURR
+WHERE b.FRK_BASICSTAT_CURR IS NOT NULL
+GROUP BY b.FRK_BASICSTAT_CURR, rd.NAME, rd.IS_ACTIVE
+
+UNION ALL
+
+SELECT
+    'LIFE_CYCLE_STATUS.FRK_AGRLCYCSTAT (90)',
+    s.FRK_AGRLCYCSTAT,
+    rd.NAME,
+    rd.IS_ACTIVE,
+    COUNT(*)
+FROM LIFE_CYCLE_STATUS s
+LEFT JOIN REFERENCE_DATA rd
+       ON rd.SUBCLASS = 90
+      AND rd.CODE     = s.FRK_AGRLCYCSTAT
+WHERE s.FRK_AGRLCYCSTAT IS NOT NULL
+GROUP BY s.FRK_AGRLCYCSTAT, rd.NAME, rd.IS_ACTIVE
+
+UNION ALL
+
+SELECT
+    'LIFE_CYCLE_STATUS.FRK_AGRLCYCSUBST (91)',
+    s.FRK_AGRLCYCSUBST,
+    rd.NAME,
+    rd.I
+
+
+
+
+/* Candidate domains ranked by how many DW rows they explain */
 WITH dw_quote_status AS (
     SELECT *
     FROM (VALUES
@@ -16,109 +71,14 @@ WITH dw_quote_status AS (
 )
 SELECT
     rd.SUBCLASS,
-    CASE rd.SUBCLASS
-        WHEN 89 THEN 'Agreement Basic Status'
-        WHEN 90 THEN 'Agreement Life Cycle Status'
-        WHEN 91 THEN 'Agreement Life Cycle Sub Status'
-    END AS DOMAIN_NAME,
-    rd.CODE,
-    rd.NAME,
-    rd.EXTERNAL_CODE,
-    rd.IS_ACTIVE,
-    rd.IS_STATIC,
-    rd.IS_USER_DEFINED,
-    dw.QSTS_BK AS DW_BK,
-    dw.QSTS_NAME AS DW_NAME,
-    CASE
-        WHEN dw.QSTS_BK IS NULL THEN 'Not in DW sample'
-        WHEN rd.NAME = dw.QSTS_NAME THEN 'Exact CODE+NAME match'
-        ELSE 'CODE match, NAME differs'
-    END AS MATCH_STATUS
+    rdt.NAME AS DOMAIN_NAME,
+    SUM(CASE WHEN UPPER(rd.NAME) = dw.QSTS_NAME THEN 1 ELSE 0 END) AS CODE_AND_NAME_MATCHES,
+    COUNT(dw.QSTS_BK)                                              AS CODE_MATCHES,
+    COUNT(*)                                                       AS DOMAIN_ROWS_TOUCHED
 FROM REFERENCE_DATA rd
-LEFT JOIN dw_quote_status dw
-    ON dw.QSTS_BK = rd.CODE
-   AND rd.SUBCLASS = 90
-WHERE rd.SUBCLASS IN (89, 90, 91)
-ORDER BY
-    rd.SUBCLASS,
-    rd.IS_ACTIVE DESC,
-    rd.CODE;
-
-
-/* DW codes that do NOT exist in REFERENCE_DATA SUBCLASS = 90 */
-WITH dw_quote_status AS (
-    SELECT *
-    FROM (VALUES
-        ('D'), ('F'), ('L'), ('N'), ('O'), ('T'), ('3'), ('4'), ('5')
-    ) AS v(QSTS_BK)
-)
-SELECT
-    dw.QSTS_BK AS MISSING_FROM_SUBCLASS_90
-FROM dw_quote_status dw
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM REFERENCE_DATA rd
-    WHERE rd.SUBCLASS = 90
-      AND rd.CODE = dw.QSTS_BK
-);
-
-
-
-/* Q4: Which status column is populated, and with which codes? */
-SELECT
-    'FRK_LC_STAT_CURR (90)' AS STATUS_FIELD,
-    b.FRK_LC_STAT_CURR AS STATUS_CODE,
-    rd.NAME AS STATUS_NAME,
-    rd.IS_ACTIVE,
-    COUNT(*) AS ROW_CNT
-FROM BUS_STRUCT_REP b
-LEFT JOIN REFERENCE_DATA rd
-    ON rd.SUBCLASS = 90
-   AND rd.CODE = b.FRK_LC_STAT_CURR
-WHERE b.FRK_LC_STAT_CURR IS NOT NULL
-GROUP BY b.FRK_LC_STAT_CURR, rd.NAME, rd.IS_ACTIVE
-
-UNION ALL
-
-SELECT
-    'FRK_BASICSTAT_CURR (89)',
-    b.FRK_BASICSTAT_CURR,
-    rd.NAME,
-    rd.IS_ACTIVE,
-    COUNT(*)
-FROM BUS_STRUCT_REP b
-LEFT JOIN REFERENCE_DATA rd
-    ON rd.SUBCLASS = 89
-   AND rd.CODE = b.FRK_BASICSTAT_CURR
-WHERE b.FRK_BASICSTAT_CURR IS NOT NULL
-GROUP BY b.FRK_BASICSTAT_CURR, rd.NAME, rd.IS_ACTIVE
-
-UNION ALL
-
-SELECT
-    'FRK_LC_SUBSTAT_CURR (91)',   -- rename if your column differs
-    b.FRK_LC_SUBSTAT_CURR,
-    rd.NAME,
-    rd.IS_ACTIVE,
-    COUNT(*)
-FROM BUS_STRUCT_REP b
-LEFT JOIN REFERENCE_DATA rd
-    ON rd.SUBCLASS = 91
-   AND rd.CODE = b.FRK_LC_SUBSTAT_CURR
-WHERE b.FRK_LC_SUBSTAT_CURR IS NOT NULL
-GROUP BY b.FRK_LC_SUBSTAT_CURR, rd.NAME, rd.IS_ACTIVE
-
-ORDER BY STATUS_FIELD, ROW_CNT DESC;
-
-
-
-
-
-SELECT COLUMN_NAME
-FROM INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_NAME = 'BUS_STRUCT_REP'
-  AND COLUMN_NAME LIKE '%SUBSTAT%'
-   OR (TABLE_NAME = 'BUS_STRUCT_REP' AND COLUMN_NAME LIKE '%BASICSTAT%')
-   OR (TABLE_NAME = 'BUS_STRUCT_REP' AND COLUMN_NAME LIKE '%LC_STAT%');
-
-
+LEFT JOIN REF_DATA_TYPE rdt
+       ON rdt.SUBCLASS_NUMBER = rd.SUBCLASS
+JOIN dw_quote_status dw
+       ON dw.QSTS_BK = rd.CODE
+GROUP BY rd.SUBCLASS, rdt.NAME
+ORDER BY CODE_AND_NAME_MATCHES DESC, CODE_MATCHES DESC;
