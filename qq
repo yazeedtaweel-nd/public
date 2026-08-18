@@ -1,40 +1,43 @@
 SELECT TOP (1000)
-    -- Submission
     bsr.IDENTIFIER_CURR                    AS SBM_BK,
     bsr.IDENTIFIER                         AS SBM_CONTRACT_NUMBER,
     lcp.SEQUENCE_NUMBER                    AS SBM_VERSION_NO,
-    CASE WHEN bsr.IS_CRNT_STATUS = 'Y' THEN 1 ELSE 0 END AS SBM_IS_LATEST_VERSION,
 
-    -- Status
+    CASE
+        WHEN bsr.IS_CRNT_STATUS = 'Y' THEN 1
+        ELSE 0
+    END                                    AS SBM_IS_LATEST_VERSION,
+
     bsr.FRK_TYPE_OF_BUS                    AS SBM_BUSINESS_INDICATOR,
     bsr.FRK_BASICSTAT_CURR                 AS AGREEMENT_BASIC_STATUS,
     bsr.FRK_LC_STAT_CURR                   AS AGREEMENT_LC_STATUS,
+
     bsr.LAYER_NUMBER                       AS SBM_LAYER,
     bsr.AMNDMNT_NMBR                       AS SBM_END_NO,
 
-    -- Dates / description
     bsr.INCEPTION_DATE                     AS SBM_INCEPTION_DATE,
     CAST(ipt.INSRD_PERIOD_START AS date)   AS SBM_VALID_FROM,
     CAST(ipt.INSRD_PERIOD_END AS date)     AS SBM_EXPIRY_DATE,
+
     bus.EXT_IDENTIFIER                     AS SBM_EXTERNAL_REF,
     bsr.TITLE                              AS SBM_DESC,
     soc.ORIG_POLICY_ID                     AS SBM_ORIG_POL_REF,
     lcs.CHANGE_DATE                        AS SBM_ENTRY_DATE,
 
-    -- Shares
     sh.WRITTEN_SHARE                       AS SBM_WSHARED_PRCNT,
     sh.SIGNED_SHARE                        AS SBM_SSHARED_PRCNT,
 
-    -- Premium / Limit
     prem.CURRENT_AMOUNT                    AS PREMIUM_AMOUNT_CURRENT,
     prem.ANNUAL_AMOUNT                     AS PREMIUM_AMOUNT_ANNUAL,
+
     lim.AMOUNT                             AS SBM_TSI_AMOUNT,
 
-    -- Parties
     brok.IDENTIFIER                        AS BROKER_BK,
     brok.CURR_NAME                         AS BROKER_NAME,
+
     ced.IDENTIFIER                         AS COMPANY_BK,
     ced.CURR_NAME                          AS COMPANY_NAME,
+
     ins.IDENTIFIER                         AS OIN_BK,
     ins.CURR_NAME                          AS OIN_NAME
 
@@ -60,7 +63,10 @@ LEFT JOIN BC_SHARE sh
     ON sh.OBJECT_ID = bsr.FK_PC_SHARE
 
 LEFT JOIN LPC_LIM_PREM_COND lpc
-    ON lpc.OBJECT_ID = COALESCE(bsr.FK_PC_LIM_PREM, bsr.FK_PC_PREM)
+    ON lpc.OBJECT_ID = COALESCE(
+        bsr.FK_PC_LIM_PREM,
+        bsr.FK_PC_PREM
+    )
 
 LEFT JOIN LPC_PREMIUM prem
     ON prem.OBJECT_ID = lpc.FK_TOT_PREM
