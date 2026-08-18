@@ -1,55 +1,27 @@
-/* ============================================================
-   Q1–Q3: OW population, join grain, broker filter
-   Run against SICS
-   ============================================================ */
-WITH broker_rel AS (
-    SELECT
-        r.OBJECT_ID,
-        r.SUBCLASS              AS REL_SUBCLASS,
-        r.FRK_RELSHIP_TYPE,
-        r.FSK_RELSHIP_TYPE,
-        r.CEASE,
-        CASE WHEN r.FK_BUSINESS  IS NOT NULL THEN 1 ELSE 0 END AS HAS_FK_BUSINESS,
-        CASE WHEN r.FK_INS_PERIOD IS NOT NULL THEN 1 ELSE 0 END AS HAS_FK_INS_PERIOD,
-        COALESCE(b_direct.OBJECT_ID, b_via_ip.OBJECT_ID) AS BUSINESS_OID,
-        COALESCE(b_direct.SUBCLASS,  b_via_ip.SUBCLASS)  AS BUS_SUBCLASS,
-        COALESCE(b_direct.FRK_TYPE_OF_BUS, b_via_ip.FRK_TYPE_OF_BUS) AS TYPE_OF_BUS,
-        COALESCE(b_direct.IDENTIFIER, b_via_ip.IDENTIFIER) AS BUSINESS_ID,
-        p.IDENTIFIER AS BROKER_ID,
-        p.CURR_NAME  AS BROKER_NAME
-    FROM dbo.BUSINESS_PRTNR_REL r
-    LEFT JOIN dbo.PARTY p
-           ON p.OBJECT_ID = r.FK_BUS_PARTNER
-    LEFT JOIN dbo.BUSINESS b_direct
-           ON b_direct.OBJECT_ID = r.FK_BUSINESS
-    LEFT JOIN dbo.INSURED_PERIOD ip
-           ON ip.OBJECT_ID = r.FK_INS_PERIOD
-    LEFT JOIN dbo.BUSINESS b_via_ip
-           ON b_via_ip.OBJECT_ID = ip.FK_BUSINESS
-    WHERE r.FSK_RELSHIP_TYPE = 55
-      AND r.FRK_RELSHIP_TYPE = 'BR'          -- broker relationship
-)
+/* 1) Profile — answers OW type, grain, broker filter, multi-broker */
 SELECT
-    BUS_SUBCLASS,                            -- Q1: is OW = 11?
-    TYPE_OF_BUS,                             -- Q1: Policy Ceded code?
-    HAS_FK_BUSINESS,                         -- Q2
-    HAS_FK_INS_PERIOD,                       -- Q2
-    REL_SUBCLASS,                            -- Q3
-    CEASE,                                   -- Q3
-    COUNT(*)                         AS REL_CNT,
-    COUNT(DISTINCT BUSINESS_OID)     AS POLICY_CNT,
-    COUNT(DISTINCT BROKER_ID)       AS BROKER_CNT,
-    AVG(1.0 * brokers_per_policy)   AS AVG_BROKERS_PER_POLICY
-FROM broker_rel br
-OUTER APPLY (
-    SELECT COUNT(*) AS brokers_per_policy
-    FROM broker_rel x
-    WHERE x.BUSINESS_OID = br.BUSINESS_OID
-) m
+    b.SUBCLASS              AS BUS_SUBCLASS,
+    b.FRK_TYPE_OF_BUS,
+    CASE WHEN r.FK_BUSINESS IS NOT NULL THEN 'BUSINESS'
+         WHEN r.FK_INS_PERIOD IS NOT NULL THEN 'INSURED_PERIOD'
+         ELSE 'NONE' END    AS JOIN_GRAIN,
+    r.SUBCLASS              AS REL_SUBCLASS,
+    r.CEASE,
+    COUNT(*)                AS REL_CNT,
+    COUNT(DISTINCT COALESCE(r.FK_BUSINESS, ip.FK_BUSINESS)) AS POLICY_CNT,
+    COUNT(DISTINCT r.FK_BUS_PARTNER) AS BROKER_CNT
+FROM BUSINESS_PRTNR_REL r
+LEFT JOIN INSURED_PERIOD ip ON ip.OBJECT_ID = r.FK_INS_PERIOD
+LEFT JOIN BUSINESS b
+       ON b.OBJECT_ID = COALESCE(r.FK_BUSINESS, ip.FK_BUSINESS)
+WHERE r.FSK_RELSHIP_TYPE = 55
+  AND r.FRK_RELSHIP_TYPE = 'BR'
 GROUP BY
-    BUS_SUBCLASS, TYPE_OF_BUS,
-    HAS_FK_BUSINESS, HAS_FK_INS_PERIOD,
-    REL_SUBCLASS, CEASE
+    b.SUBCLASS, b.FRK_TYPE_OF_BUS,
+    CASE WHEN r.FK_BUSINESS IS NOT NULL THEN 'BUSINESS'
+         WHEN r.FK_INS_PERIOD IS NOT NULL THEN 'INSURED_PERIOD'
+         ELSE 'NONE' END,
+    r.SUBCLASS, r.CEASE
 ORDER BY REL_CNT DESC;
 
 
@@ -59,49 +31,25 @@ ORDER BY REL_CNT DESC;
 /* ============================================================
    Sample link rows + BASE_AUDIT (Q4) + type-of-business names
    ============================================================ */
-SELECT TOP (100)
-    b.IDENTIFIER                         AS POLICY_BK,
-    b.SUBCLASS                            AS BUS_SUBCLASS,      -- expect 11 for OCC?
-    tob.CODE                             AS TYPE_OF_BUS_CODE,
-    tob.NAME                             AS TYPE_OF_BUS_NAME,
-    CASE
-        WHEN r.FK_BUSINESS   IS NOT NULL THEN 'BUSINESS'
-        WHEN r.FK_INS_PERIOD IS NOT NULL THEN 'INSURED_PERIOD'
-        ELSE 'NONE'
-    END                                  AS JOIN_GRAIN,        -- Q2
-    ip.UNDERWR_YEAR,
-    p.IDENTIFIER                         AS BROKER_BK,
-    p.CURR_NAME                          AS BROKER_NAME,
-    r.FRK_RELSHIP_TYPE,
-    r.SUBCLASS                            AS REL_SUBCLASS,
+/* 2) Sample rows + audit dates */
+SELECT TOP 100
+    b.IDENTIFIER            AS POLICY_BK,
+    b.SUBCLASS              AS BUS_SUBCLASS,
+    b.FRK_TYPE_OF_BUS,
+    p.IDENTIFIER            AS BROKER_BK,
+    p.CURR_NAME             AS BROKER_NAME,
     r.CEASE,
-    a.CREATED_WHEN,                                             -- Q4
-    a.UPDATED_WHEN,                                             -- Q4
-    a.PARENT_CLASS
-FROM dbo.BUSINESS_PRTNR_REL r
-JOIN dbo.PARTY p
-      ON p.OBJECT_ID = r.FK_BUS_PARTNER
-LEFT JOIN dbo.BUSINESS b_direct
-       ON b_direct.OBJECT_ID = r.FK_BUSINESS
-LEFT JOIN dbo.INSURED_PERIOD ip
-       ON ip.OBJECT_ID = r.FK_INS_PERIOD
-LEFT JOIN dbo.BUSINESS b_via_ip
-       ON b_via_ip.OBJECT_ID = ip.FK_BUSINESS
-CROSS APPLY (
-    SELECT
-        COALESCE(b_direct.OBJECT_ID, b_via_ip.OBJECT_ID) AS OBJECT_ID,
-        COALESCE(b_direct.IDENTIFIER, b_via_ip.IDENTIFIER) AS IDENTIFIER,
-        COALESCE(b_direct.SUBCLASS, b_via_ip.SUBCLASS) AS SUBCLASS,
-        COALESCE(b_direct.FRK_TYPE_OF_BUS, b_via_ip.FRK_TYPE_OF_BUS) AS FRK_TYPE_OF_BUS,
-        COALESCE(b_direct.FSK_TYPE_OF_BUS, b_via_ip.FSK_TYPE_OF_BUS) AS FSK_TYPE_OF_BUS
-) b
-LEFT JOIN dbo.REFERENCE_DATA tob
-       ON tob.SUBCLASS = 46
-      AND tob.CODE = b.FRK_TYPE_OF_BUS
-LEFT JOIN dbo.BASE_AUDIT a
-       ON a.FK_PARENT = r.OBJECT_ID
+    CASE WHEN r.FK_BUSINESS IS NOT NULL THEN 'BUSINESS'
+         WHEN r.FK_INS_PERIOD IS NOT NULL THEN 'INSURED_PERIOD'
+         ELSE 'NONE' END    AS JOIN_GRAIN,
+    a.CREATED_WHEN,
+    a.UPDATED_WHEN
+FROM BUSINESS_PRTNR_REL r
+JOIN PARTY p ON p.OBJECT_ID = r.FK_BUS_PARTNER
+LEFT JOIN INSURED_PERIOD ip ON ip.OBJECT_ID = r.FK_INS_PERIOD
+LEFT JOIN BUSINESS b
+       ON b.OBJECT_ID = COALESCE(r.FK_BUSINESS, ip.FK_BUSINESS)
+LEFT JOIN BASE_AUDIT a ON a.FK_PARENT = r.OBJECT_ID
 WHERE r.FSK_RELSHIP_TYPE = 55
   AND r.FRK_RELSHIP_TYPE = 'BR'
-  -- Uncomment once Q1 is clear:
-  -- AND b.SUBCLASS = 11
 ORDER BY b.IDENTIFIER, p.IDENTIFIER;
