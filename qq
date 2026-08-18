@@ -1,60 +1,120 @@
-SELECT
-    IDENTIFIER_CURR      AS SBM_BK,
-    IDENTIFIER           AS SBM_CONTRACT_NUMBER,
-    TITLE                AS SBM_DESC,
-    LAYER_NUMBER         AS SBM_LAYER,
-    AMNDMNT_NMBR         AS SBM_END_NO,
-    FRK_TYPE_OF_BUS      AS TYPE_OF_BUS,
-    INCEPTION_DATE       AS SBM_INCEPTION_DATE,
-    INSRD_PERIOD_START   AS SBM_VALID_FROM,
-    INSRD_PERIOD_END     AS SBM_EXPIRY_DATE,
-    IDENTIFIER_PREV      AS PREV_QUOTE_ID,
-    FRK_LC_STAT_CURR     AS LC_STATUS_CODE,
-    FRK_BASICSTAT_CURR   AS BASIC_STATUS_CODE,
-    FK_BROKER,
-    FK_CEDENT,
-    FK_INSURED,
-    FK_UNDERW_CURR,
-    FK_LC_STATUS_CURR
-FROM BUS_STRUCT_REP
-WHERE IDENTIFIER_CURR IS NOT NULL;
+/*
+  Query 2 — DIM_FAC_SUBMISSION source extract
+  Facultative FRK_TYPE_OF_BUS codes from REFERENCE_DATA (subclass 46)
+*/
+SELECT TOP (500)
+    -- Identity
+    bsr.IDENTIFIER                                              AS SBMS_BK,
+    bsr.TITLE                                                   AS SBMS_TITLE,
 
------------------------
-SELECT
-    IDENTIFIER           AS SBMS_BK,
-    TITLE                AS SBMS_TITLE,
-    IDENTIFIER_PREV      AS SBMS_TAKEN_FROM_REF,
-    IDENTIFIER_CURR      AS SBMS_TAKEN_TO_REF_ALT,
-    INCEPTION_DATE       AS SBMS_INCEPTION_DATE,
-    INSRD_PERIOD_START   AS SBMS_START_DATE,
-    INSRD_PERIOD_END     AS SBMS_EXPIRY_DATE,
-    FRK_TYPE_OF_BUS,
-    FRK_LC_STAT_CURR,
-    FRK_BASICSTAT_CURR,
-    LOB_REF_NM,
-    INSURED_COUNTRY,
-    FK_UNDERW_CURR,
-    FK_BROKER,
-    FK_CEDENT,
-    FK_INSURED,
-    FK_LC_STATUS_CURR,
-    FK_PC_LIM_PREM,
-    FK_PC_PREM
-FROM BUS_STRUCT_REP
-WHERE FRK_TYPE_OF_BUS IN ('PROPFAC', 'NONPROPFAC');
+    -- User
+    u.USER_ID                                                   AS SBMS_ENTERED_BY,
+    u.SHORTNAME                                                 AS SBMS_UDT_LOGIN,
 
+    -- Take-up refs
+    bsr.IDENTIFIER_PREV                                         AS SBMS_TAKEN_FROM_REF,
+    bsr.IDENTIFIER_CURR                                         AS IDENTIFIER_CURR,
+    bsr.IDENTIFIER                                              AS IDENTIFIER_BUSINESS,
+    COALESCE(NULLIF(bsr.IDENTIFIER_CURR, ''), bsr.IDENTIFIER)   AS SBMS_TAKEN_TO_REF_CANDIDATE,
 
----------------------
-SELECT TABLE_NAME, COLUMN_NAME
-FROM INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_NAME IN ('PARTY', 'CNU_USER', 'LIFE_CYCLE_STATUS', 'BUS_STRUCT_REP')
-  AND COLUMN_NAME LIKE '%OBJECT%'
-ORDER BY TABLE_NAME, COLUMN_NAME;
+    -- Dates
+    bsr.INCEPTION_DATE                                          AS SBMS_INCEPTION_DATE,
+    lcs.CHANGE_DATE                                             AS SBMS_ENTRY_DATE,
+    CAST(bsr.INSRD_PERIOD_START AS DATE)                        AS SBMS_START_DATE,
+    CAST(bsr.INSRD_PERIOD_END   AS DATE)                        AS SBMS_EXPIRY_DATE,
 
--------
+    -- Status
+    bsr.FRK_LC_STAT_CURR                                        AS LC_STATUS_CODE,
+    rd_lc.NAME                                                  AS SUBMS_STATUS_LC,
+    bsr.FRK_BASICSTAT_CURR                                      AS BASIC_STATUS_CODE,
+    rd_bs.NAME                                                  AS SUBMS_STATUS_BASIC,
+    bsr.FRK_LC_SUBST_CURR                                       AS LC_SUBSTATUS_CODE,
+    rd_lcs.NAME                                                 AS SUBMS_STATUS_SUB,
 
+    -- Parties
+    brk.IDENTIFIER                                              AS BROKER_BK,
+    bsr.BROKER_REF,
+    bsr.BROKER_NAME,
+    ced.IDENTIFIER                                              AS CEDENT_BK,
+    bsr.CEDENT_REF,
+    bsr.CEDENT_NAME,
+    ins.IDENTIFIER                                              AS INSURED_BK,
+    bsr.INSURED_REF,
+    bsr.INSURED_NAME,
 
-SELECT COLUMN_NAME
-FROM INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_NAME = 'PARTY'
-ORDER BY ORDINAL_POSITION;
+    -- Countries
+    bsr.INSURED_COUNTRY                                         AS CTRY_RISK_CANDIDATE,
+    bsr.CEDENT_COUNTRY                                          AS CTRY_DOMICILE_CANDIDATE,
+    bsr.BROKER_COUNTRY,
+
+    -- LOB / TOB
+    bsr.LOB_REF_NM,
+    bsr.FRK_TYPE_OF_BUS,
+    tob.NAME                                                    AS TYPE_OF_BUS_NAME,
+
+    -- EPI / TSI
+    lpc.FK_MAIN_CURRENCY                                        AS EPI_TSI_CURRENCY_FK,
+    cur.ISO_ALPHA                                               AS SBMS_EPI_CURRENCY,
+    prem.CURRENT_AMOUNT                                         AS EPI_CURRENT_AMOUNT,
+    prem.ANNUAL_AMOUNT                                          AS EPI_ANNUAL_AMOUNT,
+    prem.INSURED_AMOUNT                                         AS EPI_INSURED_AMOUNT,
+    prem.BASE_AMOUNT                                            AS SBMS_EPI_AMOUNT_BASE,
+    lim.AMOUNT                                                  AS SBMS_TSI_AMOUNT_CANDIDATE,
+    lim.IS_UNLIMITED                                            AS TSI_IS_UNLIMITED,
+
+    -- Grain / debug
+    bsr.OBJECT_ID                                               AS BUS_STRUCT_REP_OID,
+    bsr.IS_CRNT_STATUS,
+    bsr.IS_CRNT_BASIC_STAT,
+    bsr.IS_CURRENT_LCP,
+    bsr.IS_IP_LATEST
+
+FROM BUS_STRUCT_REP AS bsr
+LEFT JOIN CNU_USER AS u
+    ON u.OBJECT_ID = bsr.FK_UNDERW_CURR
+LEFT JOIN LIFE_CYCLE_STATUS AS lcs
+    ON lcs.OBJECT_ID = bsr.FK_LC_STATUS_CURR
+LEFT JOIN REFERENCE_DATA AS rd_lc
+    ON rd_lc.CODE = bsr.FRK_LC_STAT_CURR
+   AND rd_lc.SUBCLASS = 90
+LEFT JOIN REFERENCE_DATA AS rd_bs
+    ON rd_bs.CODE = bsr.FRK_BASICSTAT_CURR
+   AND rd_bs.SUBCLASS = 89
+LEFT JOIN REFERENCE_DATA AS rd_lcs
+    ON rd_lcs.CODE = bsr.FRK_LC_SUBST_CURR
+   AND rd_lcs.SUBCLASS = 91
+LEFT JOIN REFERENCE_DATA AS tob
+    ON tob.CODE = bsr.FRK_TYPE_OF_BUS
+   AND tob.SUBCLASS = 46
+LEFT JOIN PARTY AS brk
+    ON brk.OBJECT_ID = bsr.FK_BROKER
+LEFT JOIN PARTY AS ced
+    ON ced.OBJECT_ID = bsr.FK_CEDENT
+LEFT JOIN PARTY AS ins
+    ON ins.OBJECT_ID = bsr.FK_INSURED
+LEFT JOIN LPC_LIM_PREM_COND AS lpc
+    ON lpc.OBJECT_ID = COALESCE(bsr.FK_PC_LIM_PREM, bsr.FK_PC_PREM)
+LEFT JOIN CNU_CURRENCY AS cur
+    ON cur.ISO_ALPHA = lpc.FK_MAIN_CURRENCY
+LEFT JOIN LPC_PREMIUM AS prem
+    ON prem.OBJECT_ID = lpc.FK_TOT_PREM
+LEFT JOIN LPC_LIMIT AS lim
+    ON lim.OBJECT_ID = lpc.FK_MAIN_LIMIT
+WHERE bsr.FRK_TYPE_OF_BUS IN (
+    -- Facultative codes from your REFERENCE_DATA (46)
+    'PF',            -- P Fac
+    'NPF',           -- NP Fac
+    'PFO',           -- P Fac Obligatory
+    'NPFO',          -- NP Fac Obligatory
+    'PAFM',          -- P Auto: Fac May Be...
+    'PAFW',          -- P Auto: Fac Will Be...
+    'NONPROPFAC',    -- Non-Prop Facultative (if present in full list)
+    'PPFAC',         -- Facultative Program (if present in full list)
+    'PFOFM'          -- P Fac O: Fac May Be... (if present in full list)
+)
+-- Add only after you confirm flags return data:
+-- AND bsr.IS_CRNT_STATUS = 'Y'
+-- AND bsr.IS_CURRENT_LCP = 'Y'
+ORDER BY
+    bsr.IDENTIFIER,
+    lcs.CHANGE_DATE DESC;
