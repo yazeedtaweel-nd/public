@@ -1,59 +1,60 @@
-SELECT TOP (100)
-    IDENTIFIER_CURR      AS SBM_BK,
-    IDENTIFIER           AS SBM_CONTRACT_NUMBER,
-    TITLE                AS SBM_DESC,
-    LAYER_NUMBER         AS SBM_LAYER,
-    AMNDMNT_NMBR         AS SBM_END_NO,
-    INCEPTION_DATE       AS SBM_INCEPTION_DATE,
-    IS_CRNT_STATUS       AS IS_LATEST_STATUS,
-    FRK_BASICSTAT_CURR   AS BASIC_STATUS,
-    FRK_LC_STAT_CURR     AS LC_STATUS,
-    FRK_TYPE_OF_BUS      AS TYPE_OF_BUSINESS,
-    FK_BUSINESS,
-    FK_INS_PERIOD,
-    FK_LC_PHASE,
-    FK_LC_STATUS_CURR,
-    FK_SOC,
-    FK_PC_SHARE,
-    FK_BROKER,
-    FK_CEDENT
+SELECT
+    ID_PREFIX,
+    COUNT(*)                    AS ROW_COUNT,
+    COUNT(DISTINCT IDENTIFIER)  AS BUSINESS_COUNT,
+    MIN(IDENTIFIER)             AS SAMPLE_ID
 FROM BUS_STRUCT_REP
-WHERE IDENTIFIER_CURR IS NOT NULL
-ORDER BY IDENTIFIER_CURR;
+GROUP BY ID_PREFIX
+ORDER BY ROW_COUNT DESC;
 
 
-
--------------
-SELECT TOP (100)
-    bsr.IDENTIFIER_CURR                   AS SBM_BK,
-    bsr.IDENTIFIER                        AS SBM_CONTRACT_NUMBER,
+-----------
+SELECT TOP (200)
+    bsr.IDENTIFIER                        AS SBM_BK,             -- e.g. Q0101004988A
+    bsr.ID_PREFIX                         AS SBM_CONTRACT_NUMBER,-- e.g. Q0101
+    bsr.ID_SERIE_NO                       AS SBM_SERIE_NO,
+    bsr.ID_SUFFIX                         AS SBM_SUFFIX,
+    lcs.IDENTIFIER                        AS QUOTATION_ID,       -- usually NULL here
     bsr.TITLE                             AS SBM_DESC,
     bsr.LAYER_NUMBER                      AS SBM_LAYER,
+    bsr.AMNDMNT_NMBR                      AS SBM_END_NO,
     bsr.INCEPTION_DATE                    AS SBM_INCEPTION_DATE,
-    bsr.FRK_LC_STAT_CURR                  AS LC_STATUS,
-    bsr.IS_CRNT_STATUS                    AS IS_LATEST_STATUS,
 
-    bus.EXT_IDENTIFIER                    AS SBM_EXTERNAL_REF,
+    bsr.FRK_LC_STAT_CURR                  AS LC_STATUS,          -- OA, IA, ...
+    bsr.FRK_BASICSTAT_CURR                AS BASIC_STATUS,
+    CASE WHEN bsr.FRK_LC_STAT_CURR = 'OA' THEN 1 ELSE 0 END
+                                          AS SBM_IS_ACCEPTED,
+    CASE WHEN bsr.IS_CRNT_STATUS = 'Y' THEN 1 ELSE 0 END
+                                          AS SBM_IS_LATEST_VERSION,
+
     lcp.SEQUENCE_NUMBER                   AS SBM_VERSION_NO,
     lcs.CHANGE_DATE                       AS SBM_ENTRY_DATE,
     ipt.INSRD_PERIOD_START                AS SBM_VALID_FROM,
     ipt.INSRD_PERIOD_END                  AS SBM_EXPIRY_DATE,
+
+    bus.EXT_IDENTIFIER                    AS SBM_EXTERNAL_REF,
     soc.ORIG_POLICY_ID                    AS SBM_ORIG_POL_REF,
     sh.WRITTEN_SHARE                      AS SBM_WSHARED_PRCNT,
     sh.SIGNED_SHARE                       AS SBM_SSHARED_PRCNT,
 
     brok.IDENTIFIER                       AS BROKER_BK,
     ced.IDENTIFIER                        AS COMPANY_BK,
-
+    ins.IDENTIFIER                        AS OIN_BK,
     cur.ISO_ALPHA                         AS SOC_CURRENCY
+
 FROM BUS_STRUCT_REP AS bsr
 LEFT JOIN BUSINESS          AS bus  ON bus.OBJECT_ID = bsr.FK_BUSINESS
 LEFT JOIN LIFE_CYCLE_PHASE  AS lcp  ON lcp.OBJECT_ID = bsr.FK_LC_PHASE
 LEFT JOIN LIFE_CYCLE_STATUS AS lcs  ON lcs.OBJECT_ID = bsr.FK_LC_STATUS_CURR
 LEFT JOIN INS_PER_TIMESPAN  AS ipt  ON ipt.FK_LIFECYCLEPHASE = bsr.FK_LC_PHASE
+                                       AND ipt.IS_CURRENT = 'Y'
 LEFT JOIN SCOPE_OF_COVER    AS soc  ON soc.OBJECT_ID = bsr.FK_SOC
 LEFT JOIN BC_SHARE          AS sh   ON sh.OBJECT_ID  = bsr.FK_PC_SHARE
 LEFT JOIN PARTY             AS brok ON brok.OBJECT_ID = bsr.FK_BROKER
 LEFT JOIN PARTY             AS ced  ON ced.OBJECT_ID  = bsr.FK_CEDENT
+LEFT JOIN PARTY             AS ins  ON ins.OBJECT_ID  = bsr.FK_INSURED
 LEFT JOIN CNU_CURRENCY      AS cur  ON cur.ISO_ALPHA  = soc.FK_CURRENCY
-ORDER BY bsr.IDENTIFIER_CURR;
+
+WHERE bsr.IDENTIFIER LIKE 'Q%'      -- submissions/quotes only; adjust after the prefix check
+ORDER BY bsr.IDENTIFIER, lcp.SEQUENCE_NUMBER;
+
