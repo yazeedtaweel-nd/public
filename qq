@@ -1,103 +1,60 @@
--- DIM_FAC_SUBMISSION source extract (facultative / business grain)
 SELECT
-    bsr.IDENTIFIER               AS SBMS_BK,             -- S... business id
-    bsr.TITLE                    AS SBMS_TITLE,
-    bsr.IDENTIFIER_PREV          AS SBMS_TAKEN_FROM_REF, -- prior Q...
-    bsr.IDENTIFIER_CURR          AS SBMS_TAKEN_TO_REF_ALT,
-    bsr.IDENTIFIER               AS SBMS_TAKEN_TO_REF_WHEN_BOUND,
-    bsr.INCEPTION_DATE           AS SBMS_INCEPTION_DATE,
-    bsr.INSRD_PERIOD_START       AS SBMS_START_DATE,
-    bsr.INSRD_PERIOD_END         AS SBMS_EXPIRY_DATE,
-    bsr.FRK_TYPE_OF_BUS,
-    bsr.FRK_LC_STAT_CURR,
-    bsr.FRK_BASICSTAT_CURR,
-    bsr.LOB_REF_NM,
-    bsr.INSURED_COUNTRY,
+    IDENTIFIER_CURR      AS SBM_BK,
+    IDENTIFIER           AS SBM_CONTRACT_NUMBER,
+    TITLE                AS SBM_DESC,
+    LAYER_NUMBER         AS SBM_LAYER,
+    AMNDMNT_NMBR         AS SBM_END_NO,
+    FRK_TYPE_OF_BUS      AS TYPE_OF_BUS,
+    INCEPTION_DATE       AS SBM_INCEPTION_DATE,
+    INSRD_PERIOD_START   AS SBM_VALID_FROM,
+    INSRD_PERIOD_END     AS SBM_EXPIRY_DATE,
+    IDENTIFIER_PREV      AS PREV_QUOTE_ID,
+    FRK_LC_STAT_CURR     AS LC_STATUS_CODE,
+    FRK_BASICSTAT_CURR   AS BASIC_STATUS_CODE,
+    FK_BROKER,
+    FK_CEDENT,
+    FK_INSURED,
+    FK_UNDERW_CURR,
+    FK_LC_STATUS_CURR
+FROM BUS_STRUCT_REP
+WHERE IDENTIFIER_CURR IS NOT NULL;
 
-    uw.USER_ID                   AS SBMS_ENTERED_BY,
-    uw.SHORTNAME                 AS SBMS_UDT_LOGIN,
-    lcs.CHANGE_DATE              AS SBMS_ENTRY_DATE,
-
-    rd_lc.NAME                   AS SUBMS_STATUS,        -- confirm table 90 vs 89/91
-    brok.IDENTIFIER              AS BROKER_BK,
-    ced.IDENTIFIER               AS COMPANY_BK,
-    ins.IDENTIFIER               AS OIN_BK,
-
-    curr.ISO_ALPHA               AS SBMS_EPI_CURRENCY,
-    prem.BASE_AMOUNT             AS SBMS_EPI_AMOUNT_BASE,
-    prem.CURRENT_AMOUNT          AS SBMS_EPI_AMOUNT_ORIGIN_CAND,
-    lim.AMOUNT                   AS SBMS_TSI_AMOUNT_CAND
-FROM BUS_STRUCT_REP bsr
-LEFT JOIN CNU_USER uw
-       ON uw.OBJECT_ID = bsr.FK_UNDERW_CURR
-LEFT JOIN LIFE_CYCLE_STATUS lcs
-       ON lcs.OBJECT_ID = bsr.FK_LC_STATUS_CURR
-LEFT JOIN REFERENCE_DATA rd_lc
-       ON rd_lc.CODE = bsr.FRK_LC_STAT_CURR
-      AND rd_lc.TABLE_ID = 90                 -- Agreement LC status; confirm
-LEFT JOIN PARTY brok
-       ON brok.OBJECT_ID = bsr.FK_BROKER
-LEFT JOIN PARTY ced
-       ON ced.OBJECT_ID = bsr.FK_CEDENT
-LEFT JOIN PARTY ins
-       ON ins.OBJECT_ID = bsr.FK_INSURED
-LEFT JOIN LPC_LIM_PREM_COND lpc
-       ON lpc.OBJECT_ID = COALESCE(bsr.FK_PC_LIM_PREM, bsr.FK_PC_PREM)
-LEFT JOIN LPC_PREMIUM prem
-       ON prem.OBJECT_ID = lpc.FK_TOT_PREM    -- confirm premium FK
-LEFT JOIN LPC_LIMIT lim
-       ON lim.OBJECT_ID = lpc.FK_MAIN_LIMIT
-LEFT JOIN CNU_CURRENCY curr
-       ON curr.OBJECT_ID = lpc.FK_MAIN_CURRENCY
-WHERE bsr.FRK_TYPE_OF_BUS IN ('PROPFAC', 'NONPROPFAC');  -- confirm real codes
-
-
-******************************************************
-
-
--- DIM_SUBMISSION source extract (quotation / lifecycle grain)
+-----------------------
 SELECT
-    bsr.IDENTIFIER_CURR          AS SBM_BK,              -- Q... quotation id
-    bsr.IDENTIFIER               AS SBM_CONTRACT_NUMBER, -- business id
-    bsr.TITLE                    AS SBM_DESC,
-    bsr.LAYER_NUMBER             AS SBM_LAYER,
-    bsr.AMNDMNT_NMBR             AS SBM_END_NO,
-    bsr.FRK_TYPE_OF_BUS          AS SBM_BUSINESS_INDICATOR_SRC,
-    bsr.INCEPTION_DATE           AS SBM_INCEPTION_DATE,
-    bsr.INSRD_PERIOD_START       AS SBM_VALID_FROM,
-    bsr.INSRD_PERIOD_END         AS SBM_EXPIRY_DATE,
-    bsr.IDENTIFIER               AS SBM_TAKEN_TO_REF_CANDIDATE,
+    IDENTIFIER           AS SBMS_BK,
+    TITLE                AS SBMS_TITLE,
+    IDENTIFIER_PREV      AS SBMS_TAKEN_FROM_REF,
+    IDENTIFIER_CURR      AS SBMS_TAKEN_TO_REF_ALT,
+    INCEPTION_DATE       AS SBMS_INCEPTION_DATE,
+    INSRD_PERIOD_START   AS SBMS_START_DATE,
+    INSRD_PERIOD_END     AS SBMS_EXPIRY_DATE,
+    FRK_TYPE_OF_BUS,
+    FRK_LC_STAT_CURR,
+    FRK_BASICSTAT_CURR,
+    LOB_REF_NM,
+    INSURED_COUNTRY,
+    FK_UNDERW_CURR,
+    FK_BROKER,
+    FK_CEDENT,
+    FK_INSURED,
+    FK_LC_STATUS_CURR,
+    FK_PC_LIM_PREM,
+    FK_PC_PREM
+FROM BUS_STRUCT_REP
+WHERE FRK_TYPE_OF_BUS IN ('PROPFAC', 'NONPROPFAC');
 
-    lcs.IDENTIFIER               AS LCS_IDENTIFIER,
-    lcs.IS_CRNT_STATUS           AS SBM_IS_LATEST_VERSION_SRC,
-    lcs.IS_CURRENT               AS SBM_IS_CURRENT_ALT,
-    lcs.CHANGE_DATE              AS SBM_ENTRY_DATE,
-    lcs.FRK_AGRBASICSTAT         AS BASIC_STATUS_CODE,
-    lcs.FRK_AGRLCYCSTAT          AS LC_STATUS_CODE,
-    lcp.SEQUENCE_NUMBER          AS SBM_VERSION_NO,
 
-    uw.USER_ID                   AS SBM_ENTERED_BY,
-    brok.IDENTIFIER              AS BROKER_BK,
-    ced.IDENTIFIER               AS COMPANY_BK,
-    ins.IDENTIFIER               AS OIN_BK,
+---------------------
+SELECT TABLE_NAME, COLUMN_NAME
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME IN ('PARTY', 'CNU_USER', 'LIFE_CYCLE_STATUS', 'BUS_STRUCT_REP')
+  AND COLUMN_NAME LIKE '%OBJECT%'
+ORDER BY TABLE_NAME, COLUMN_NAME;
 
-    bsr.FK_BROKER,
-    bsr.FK_CEDENT,
-    bsr.FK_INSURED,
-    bsr.FRK_LC_STAT_CURR,
-    bsr.FRK_BASICSTAT_CURR
-FROM BUS_STRUCT_REP bsr
-LEFT JOIN LIFE_CYCLE_STATUS lcs
-       ON lcs.OBJECT_ID = bsr.FK_LC_STATUS_CURR
-LEFT JOIN LIFE_CYCLE_PHASE lcp
-       ON lcp.OBJECT_ID = lcs.FK_LIFECYCLEPHASE   -- confirm FK name in your SICS
-LEFT JOIN CNU_USER uw
-       ON uw.OBJECT_ID = bsr.FK_UNDERW_CURR
-LEFT JOIN PARTY brok
-       ON brok.OBJECT_ID = bsr.FK_BROKER
-LEFT JOIN PARTY ced
-       ON ced.OBJECT_ID = bsr.FK_CEDENT
-LEFT JOIN PARTY ins
-       ON ins.OBJECT_ID = bsr.FK_INSURED
-WHERE bsr.IDENTIFIER_CURR IS NOT NULL;   -- keep quotation rows
--- Optional: AND lcs.IS_CRNT_STATUS = 'Y'  -- latest version only
+-------
+
+
+SELECT COLUMN_NAME
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'PARTY'
+ORDER BY ORDINAL_POSITION;
