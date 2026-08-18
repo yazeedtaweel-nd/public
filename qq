@@ -1,27 +1,15 @@
-SELECT
-      rd.CODE,
-      rd.NAME,
-      rd.EXTERNAL_CODE,
-      rd.SUBCLASS,
-      rd.IS_ACTIVE,
-      rd.IS_DEFAULT,
-      rd.IS_STATIC,
-      rd.IS_USER_DEFINED
-FROM dbo.REFERENCE_DATA AS rd
-WHERE rd.SUBCLASS = 95
-ORDER BY rd.CODE;
+-- 1) Claim worksheet validation indicator codes (expect not I/N linked to basis 95)
+SELECT DISTINCT
+       i.FRK_CLAIM_ACC_VALIDATOR AS CODE,
+       i.FSK_CLAIM_ACC_VALIDATOR AS SUBCLASS,
+       rd.NAME
+FROM dbo.INSPER_ACC_VAL_IND i
+LEFT JOIN dbo.REFERENCE_DATA rd
+       ON rd.CODE = i.FRK_CLAIM_ACC_VALIDATOR
+      AND rd.SUBCLASS = i.FSK_CLAIM_ACC_VALIDATOR
+ORDER BY i.FSK_CLAIM_ACC_VALIDATOR, i.FRK_CLAIM_ACC_VALIDATOR;
 
-
-SELECT
-      rd.CODE,
-      rd.NAME              AS DEFAULT_NAME,
-      rdn.LANGUAGE_CODE,
-      rdn.NAME             AS LOCALIZED_NAME,
-      rd.EXTERNAL_CODE,
-      rd.IS_ACTIVE
-FROM dbo.REFERENCE_DATA AS rd
-LEFT JOIN dbo.REF_DATA_NAME AS rdn
-       ON rdn.FRK_REF_DATA = rd.CODE
-      AND rdn.FSK_REF_DATA = rd.SUBCLASS
-WHERE rd.SUBCLASS = 95
-ORDER BY rd.CODE, rdn.LANGUAGE_CODE;
+-- 2) Confirm subclass 95 still has no extra columns beyond standard ref data
+SELECT *
+FROM dbo.REFERENCE_DATA
+WHERE SUBCLASS = 95;
