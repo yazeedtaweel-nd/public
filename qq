@@ -1,55 +1,26 @@
-/* 1) Profile — answers OW type, grain, broker filter, multi-broker */
 SELECT
-    b.SUBCLASS              AS BUS_SUBCLASS,
-    b.FRK_TYPE_OF_BUS,
-    CASE WHEN r.FK_BUSINESS IS NOT NULL THEN 'BUSINESS'
-         WHEN r.FK_INS_PERIOD IS NOT NULL THEN 'INSURED_PERIOD'
-         ELSE 'NONE' END    AS JOIN_GRAIN,
-    r.SUBCLASS              AS REL_SUBCLASS,
-    r.CEASE,
-    COUNT(*)                AS REL_CNT,
-    COUNT(DISTINCT COALESCE(r.FK_BUSINESS, ip.FK_BUSINESS)) AS POLICY_CNT,
-    COUNT(DISTINCT r.FK_BUS_PARTNER) AS BROKER_CNT
-FROM BUSINESS_PRTNR_REL r
-LEFT JOIN INSURED_PERIOD ip ON ip.OBJECT_ID = r.FK_INS_PERIOD
-LEFT JOIN BUSINESS b
-       ON b.OBJECT_ID = COALESCE(r.FK_BUSINESS, ip.FK_BUSINESS)
-WHERE r.FSK_RELSHIP_TYPE = 55
-  AND r.FRK_RELSHIP_TYPE = 'BR'
-GROUP BY
-    b.SUBCLASS, b.FRK_TYPE_OF_BUS,
-    CASE WHEN r.FK_BUSINESS IS NOT NULL THEN 'BUSINESS'
-         WHEN r.FK_INS_PERIOD IS NOT NULL THEN 'INSURED_PERIOD'
-         ELSE 'NONE' END,
-    r.SUBCLASS, r.CEASE
-ORDER BY REL_CNT DESC;
-
-
-------------------------------------------------------------------------------------------------
-
-
-/* ============================================================
-   Sample link rows + BASE_AUDIT (Q4) + type-of-business names
-   ============================================================ */
-/* 2) Sample rows + audit dates */
-SELECT TOP 100
     b.IDENTIFIER            AS POLICY_BK,
+    b.OBJECT_ID             AS POLICY_OID,
     b.SUBCLASS              AS BUS_SUBCLASS,
     b.FRK_TYPE_OF_BUS,
+    ip.OBJECT_ID             AS INS_PERIOD_OID,
+    ip.UNDERWR_YEAR,
     p.IDENTIFIER            AS BROKER_BK,
+    p.OBJECT_ID             AS BROKER_OID,
     p.CURR_NAME             AS BROKER_NAME,
-    r.CEASE,
-    CASE WHEN r.FK_BUSINESS IS NOT NULL THEN 'BUSINESS'
-         WHEN r.FK_INS_PERIOD IS NOT NULL THEN 'INSURED_PERIOD'
-         ELSE 'NONE' END    AS JOIN_GRAIN,
-    a.CREATED_WHEN,
-    a.UPDATED_WHEN
-FROM BUSINESS_PRTNR_REL r
-JOIN PARTY p ON p.OBJECT_ID = r.FK_BUS_PARTNER
-LEFT JOIN INSURED_PERIOD ip ON ip.OBJECT_ID = r.FK_INS_PERIOD
-LEFT JOIN BUSINESS b
-       ON b.OBJECT_ID = COALESCE(r.FK_BUSINESS, ip.FK_BUSINESS)
-LEFT JOIN BASE_AUDIT a ON a.FK_PARENT = r.OBJECT_ID
+    r.OBJECT_ID             AS REL_OID,
+    r.FRK_RELSHIP_TYPE,
+    r.SUBCLASS              AS REL_SUBCLASS
+FROM dbo.BUSINESS_PRTNR_REL r
+JOIN dbo.INSURED_PERIOD ip
+      ON ip.OBJECT_ID = r.FK_INS_PERIOD
+JOIN dbo.BUSINESS b
+      ON b.OBJECT_ID = ip.FK_BUSINESS
+JOIN dbo.PARTY p
+      ON p.OBJECT_ID = r.FK_BUS_PARTNER
 WHERE r.FSK_RELSHIP_TYPE = 55
   AND r.FRK_RELSHIP_TYPE = 'BR'
+  AND r.SUBCLASS = 10
+  -- optional OW filter once confirmed:
+  -- AND b.SUBCLASS IN (3, 6, 8)
 ORDER BY b.IDENTIFIER, p.IDENTIFIER;
