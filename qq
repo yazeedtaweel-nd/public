@@ -1,120 +1,29 @@
-/*
-  Query 2 — DIM_FAC_SUBMISSION source extract
-  Facultative FRK_TYPE_OF_BUS codes from REFERENCE_DATA (subclass 46)
-*/
-SELECT TOP (500)
-    -- Identity
-    bsr.IDENTIFIER                                              AS SBMS_BK,
-    bsr.TITLE                                                   AS SBMS_TITLE,
-
-    -- User
-    u.USER_ID                                                   AS SBMS_ENTERED_BY,
-    u.SHORTNAME                                                 AS SBMS_UDT_LOGIN,
-
-    -- Take-up refs
-    bsr.IDENTIFIER_PREV                                         AS SBMS_TAKEN_FROM_REF,
-    bsr.IDENTIFIER_CURR                                         AS IDENTIFIER_CURR,
-    bsr.IDENTIFIER                                              AS IDENTIFIER_BUSINESS,
-    COALESCE(NULLIF(bsr.IDENTIFIER_CURR, ''), bsr.IDENTIFIER)   AS SBMS_TAKEN_TO_REF_CANDIDATE,
-
-    -- Dates
-    bsr.INCEPTION_DATE                                          AS SBMS_INCEPTION_DATE,
-    lcs.CHANGE_DATE                                             AS SBMS_ENTRY_DATE,
-    CAST(bsr.INSRD_PERIOD_START AS DATE)                        AS SBMS_START_DATE,
-    CAST(bsr.INSRD_PERIOD_END   AS DATE)                        AS SBMS_EXPIRY_DATE,
-
-    -- Status
-    bsr.FRK_LC_STAT_CURR                                        AS LC_STATUS_CODE,
-    rd_lc.NAME                                                  AS SUBMS_STATUS_LC,
-    bsr.FRK_BASICSTAT_CURR                                      AS BASIC_STATUS_CODE,
-    rd_bs.NAME                                                  AS SUBMS_STATUS_BASIC,
-    bsr.FRK_LC_SUBST_CURR                                       AS LC_SUBSTATUS_CODE,
-    rd_lcs.NAME                                                 AS SUBMS_STATUS_SUB,
-
-    -- Parties
-    brk.IDENTIFIER                                              AS BROKER_BK,
-    bsr.BROKER_REF,
-    bsr.BROKER_NAME,
-    ced.IDENTIFIER                                              AS CEDENT_BK,
-    bsr.CEDENT_REF,
-    bsr.CEDENT_NAME,
-    ins.IDENTIFIER                                              AS INSURED_BK,
-    bsr.INSURED_REF,
-    bsr.INSURED_NAME,
-
-    -- Countries
-    bsr.INSURED_COUNTRY                                         AS CTRY_RISK_CANDIDATE,
-    bsr.CEDENT_COUNTRY                                          AS CTRY_DOMICILE_CANDIDATE,
-    bsr.BROKER_COUNTRY,
-
-    -- LOB / TOB
-    bsr.LOB_REF_NM,
-    bsr.FRK_TYPE_OF_BUS,
-    tob.NAME                                                    AS TYPE_OF_BUS_NAME,
-
-    -- EPI / TSI
-    lpc.FK_MAIN_CURRENCY                                        AS EPI_TSI_CURRENCY_FK,
-    cur.ISO_ALPHA                                               AS SBMS_EPI_CURRENCY,
-    prem.CURRENT_AMOUNT                                         AS EPI_CURRENT_AMOUNT,
-    prem.ANNUAL_AMOUNT                                          AS EPI_ANNUAL_AMOUNT,
-    prem.INSURED_AMOUNT                                         AS EPI_INSURED_AMOUNT,
-    prem.BASE_AMOUNT                                            AS SBMS_EPI_AMOUNT_BASE,
-    lim.AMOUNT                                                  AS SBMS_TSI_AMOUNT_CANDIDATE,
-    lim.IS_UNLIMITED                                            AS TSI_IS_UNLIMITED,
-
-    -- Grain / debug
-    bsr.OBJECT_ID                                               AS BUS_STRUCT_REP_OID,
-    bsr.IS_CRNT_STATUS,
-    bsr.IS_CRNT_BASIC_STAT,
-    bsr.IS_CURRENT_LCP,
-    bsr.IS_IP_LATEST
-
-FROM BUS_STRUCT_REP AS bsr
-LEFT JOIN CNU_USER AS u
-    ON u.OBJECT_ID = bsr.FK_UNDERW_CURR
-LEFT JOIN LIFE_CYCLE_STATUS AS lcs
-    ON lcs.OBJECT_ID = bsr.FK_LC_STATUS_CURR
-LEFT JOIN REFERENCE_DATA AS rd_lc
-    ON rd_lc.CODE = bsr.FRK_LC_STAT_CURR
-   AND rd_lc.SUBCLASS = 90
-LEFT JOIN REFERENCE_DATA AS rd_bs
-    ON rd_bs.CODE = bsr.FRK_BASICSTAT_CURR
-   AND rd_bs.SUBCLASS = 89
-LEFT JOIN REFERENCE_DATA AS rd_lcs
-    ON rd_lcs.CODE = bsr.FRK_LC_SUBST_CURR
-   AND rd_lcs.SUBCLASS = 91
-LEFT JOIN REFERENCE_DATA AS tob
-    ON tob.CODE = bsr.FRK_TYPE_OF_BUS
-   AND tob.SUBCLASS = 46
-LEFT JOIN PARTY AS brk
-    ON brk.OBJECT_ID = bsr.FK_BROKER
-LEFT JOIN PARTY AS ced
-    ON ced.OBJECT_ID = bsr.FK_CEDENT
-LEFT JOIN PARTY AS ins
-    ON ins.OBJECT_ID = bsr.FK_INSURED
-LEFT JOIN LPC_LIM_PREM_COND AS lpc
-    ON lpc.OBJECT_ID = COALESCE(bsr.FK_PC_LIM_PREM, bsr.FK_PC_PREM)
-LEFT JOIN CNU_CURRENCY AS cur
-    ON cur.ISO_ALPHA = lpc.FK_MAIN_CURRENCY
-LEFT JOIN LPC_PREMIUM AS prem
-    ON prem.OBJECT_ID = lpc.FK_TOT_PREM
-LEFT JOIN LPC_LIMIT AS lim
-    ON lim.OBJECT_ID = lpc.FK_MAIN_LIMIT
-WHERE bsr.FRK_TYPE_OF_BUS IN (
-    -- Facultative codes from your REFERENCE_DATA (46)
-    'PF',            -- P Fac
-    'NPF',           -- NP Fac
-    'PFO',           -- P Fac Obligatory
-    'NPFO',          -- NP Fac Obligatory
-    'PAFM',          -- P Auto: Fac May Be...
-    'PAFW',          -- P Auto: Fac Will Be...
-    'NONPROPFAC',    -- Non-Prop Facultative (if present in full list)
-    'PPFAC',         -- Facultative Program (if present in full list)
-    'PFOFM'          -- P Fac O: Fac May Be... (if present in full list)
-)
--- Add only after you confirm flags return data:
--- AND bsr.IS_CRNT_STATUS = 'Y'
--- AND bsr.IS_CURRENT_LCP = 'Y'
-ORDER BY
-    bsr.IDENTIFIER,
-    lcs.CHANGE_DATE DESC;
+SELECT
+    c.CLAIM_IDENTIFIER                         AS CLGRP_BK,
+    c.SHORT_DESCR                              AS CLGRP_LOSS_DETAILS,
+    /* Confirm description transform with the team */
+    CASE
+        WHEN c.CLAIM_IDENTIFIER IS NOT NULL
+             AND LTRIM(RTRIM(c.CLAIM_IDENTIFIER)) <> ''
+        THEN c.CLAIM_IDENTIFIER + ' - ' + COALESCE(c.UPPERCASE_LOSSNAME, c.LOSS_NAME)
+        ELSE COALESCE(c.UPPERCASE_LOSSNAME, c.LOSS_NAME)
+    END                                        AS CLGRP_DESCRIPTION,
+    c.LOSS_NAME                                AS CLGRP_DESCRIPTION_RAW,
+    c.UPPERCASE_LOSSNAME                       AS CLGRP_DESCRIPTION_UPPER,
+    c.LOSS_START_DT                            AS CLGRP_LOSS_DATE_FROM,
+    c.LOSS_END_DT                              AS CLGRP_LOSS_DATE_TO,
+    /* XL date is unconfirmed — compare candidates */
+    c.ADD_CODE_DT                              AS CLGRP_XL_DATE_CANDIDATE_ADD_CODE,
+    c.FX_DATE                                  AS CLGRP_XL_DATE_CANDIDATE_FX,
+    c.IS_MARKET_LOSS                           AS CLGRP_MARKET_INDICATOR,
+    /* Market code is unconfirmed */
+    c.FRK_ADDIT_CODE                           AS CLGRP_MARKET_CODE_CANDIDATE,
+    c.OBJECT_ID,
+    c.SUBCLASS,
+    ba.CREATED_WHEN,
+    ba.UPDATED_WHEN
+FROM dbo.CLAIMS AS c
+LEFT JOIN dbo.BASE_AUDIT AS ba
+    ON ba.FK_PARENT = c.OBJECT_ID
+WHERE c.SUBCLASS = 6   -- Headline Loss (SicsClaimAbstractHeadlineLoss)
+ORDER BY c.CLAIM_IDENTIFIER;
