@@ -1,126 +1,46 @@
-/* SICS source extract for SaudiRe_DW.dbo.DIM_CLAIM
-   Grain: SOC_TO_CLAIM_REL (claim-section). Run on the SICS database. */
+/* DIM_TRANSACTION_CODE — read from SICS
+   Do NOT use ENTRY_CODE.IS_PAYABLE as TRCD_IS_CASH
+   Compare these candidates to DW TRCD_IS_CASH (1/0)
+*/
 
-SELECT TOP 1000
-    /* CLA_CLAIM_SRGT  -> DW identity, not selected */
-    c.OBJECT_ID                                     AS CLAIMS_OBJECT_ID,
-    scr.OBJECT_ID                                   AS SOC_CLAIM_OBJECT_ID,
+SELECT
+      e.CODE                                            AS TRCD_CODE_BK
+    , e.DESCRIPTION                                     AS TRCD_CODE_DESCRIPTION
+    , e.NAME                                            AS TRCD_CODE_NAME
 
-    c.CLAIM_IDENTIFIER                              AS CLA_BK,
-    c.SHORT_DESCR                                   AS CLA_DESC,
-    c.LOSS_NAME                                     AS CLA_DESC_ALT,
+    /* Candidate 1: Entry Sub Category (REFERENCE_DATA subclass 166) */
+    , e.FRK_ENTRY_SUB_CAT                               AS SUB_CAT_CODE
+    , sc.NAME                                           AS SUB_CAT_NAME
+    , sc.EXTERNAL_CODE                                  AS SUB_CAT_EXTERNAL_CODE
 
-    /* CLA_BROKER (derived) */
-    CASE WHEN ip.IS_DIRECT = 'Y' THEN 'DIRECT' ELSE brk.IDENTIFIER END AS CLA_BROKER,
-    ip.IS_DIRECT                                    AS IS_DIRECT_FLAG,
+    /* Candidate 2: Entry Code Usage (subclass 1085) — one code can have many rows */
+    , u.FRK_EC_USAGE_DATA                               AS USAGE_CODE
+    , usg.NAME                                          AS USAGE_NAME
 
-    /* Source / type */
-    c.FRK_CLM_CLASSFCTN                             AS CLA_SOURCE,        -- ref 528
-    cls.NAME                                        AS CLA_SOURCE_NAME,
-    c.PROD_TYPE                                     AS CLA_TYPE,          -- candidate
-    c.FRK_CLAIM_TYPE                                AS SICS_CLAIM_TYPE_527,
+    /* Candidate 3: Entry Code Usage Detail (subclass 1086) */
+    , d.FRK_EC_USAGE_DET                                AS USAGE_DET_CODE
+    , usd.NAME                                          AS USAGE_DET_NAME
 
-    /* Status / substatus */
-    st.NAME                                         AS CLA_STATUS_CODE,   -- e.g. OPEN
-    COALESCE(cs.FRK_STATUS, scr.FRK_STATUS_TYPE)    AS CLA_STATUS,        -- e.g. OP
-    cs.FRK_SUB_STATUS                               AS CLA_SUBSTATUS_CODE,
-    ss.NAME                                         AS CLA_SUBSTATUS_NAME,
-
-    /* Handler */
-    u.SHORTNAME                                     AS CLA_HANDLER,
-
-    /* Alt reference */
-    COALESCE(cref.REFERENCE_ID, scr.CL_REF)         AS CLA_ALT_REF,
-
-    /* CLA_IS_MOVEMENT - unconfirmed, candidates only */
-    scr.TO_BE_BOOKED                                AS TO_BE_BOOKED,
-
-    /* Dates */
-    c.LOSS_START_DT                                 AS CLA_LOSS_DATE,
-    c.OCCURRENCE_DT                                 AS LOSS_DATE_ALT,
-    open_dt.OPEN_DATE                               AS CLA_OPEN_DATE,
-    reopen_dt.REOPEN_DATE                           AS CLA_REOPEN_DATE,
-    COALESCE(scr.ADVICE_REC_DATE, scr.CLAIM_ADVISED_DT) AS CLA_REPORTED_DATE,
-    close_dt.CLOSE_DATE                             AS CLA_CLOSE_DATE,
-    scr.LAST_UPDATE_DT                              AS CLA_LAST_TRANSACTION,
-
-    /* Natural keys for DW surrogate lookups */
-    b.IDENTIFIER                                    AS POLICY_BK,          -- POLICY_SRGT
-    soc.IDENTIFIER                                  AS SECTION_IDENTIFIER,
-    hl.CLAIM_IDENTIFIER                             AS CLGRP_BK,           -- CLGRP_SRGT
-    COALESCE(cs.FRK_STATUS, scr.FRK_STATUS_TYPE)    AS CLST_BK,            -- CLST_SRGT
-    cs.FRK_SUB_STATUS                               AS CLSS_BK,            -- CLSS_SRGT
-    c.FRK_CLM_CLASSFCTN                             AS CLTP_BK,            -- CLTP_SRGT
-    c.PROD_TYPE                                     AS CLSTP_BK,           -- CLSTP_SRGT (unconfirmed)
-    c.FRK_CAUSE_OF_LOSS                             AS LSTP_BK,            -- LSTP_SRGT
-    lt.NAME                                         AS LSTP_NAME
-    /* CREATED_DATE_SRGT / UPDATED_DATE_SRGT -> ETL date keys, no SICS source */
-
-FROM CLAIMS c
-
-INNER JOIN SOC_TO_CLAIM_REL scr
-    ON scr.FK_CLAIM = c.OBJECT_ID
-
-/* Current status row */
-LEFT JOIN CLAIM_STATUS cs
-    ON cs.FK_CLAIM = scr.OBJECT_ID
-   AND cs.IS_CURRENT = 'Y'
-
-/* Reference data lookups */
-LEFT JOIN REFERENCE_DATA st
-    ON st.CODE = COALESCE(cs.FRK_STATUS, scr.FRK_STATUS_TYPE) AND st.SUBCLASS = 517
-LEFT JOIN REFERENCE_DATA ss
-    ON ss.CODE = cs.FRK_SUB_STATUS        AND ss.SUBCLASS = 518
-LEFT JOIN REFERENCE_DATA cls
-    ON cls.CODE = c.FRK_CLM_CLASSFCTN     AND cls.SUBCLASS = 528
-LEFT JOIN REFERENCE_DATA lt
-    ON lt.CODE = c.FRK_CAUSE_OF_LOSS      AND lt.SUBCLASS = 523
-
-/* Handler and headline loss */
-LEFT JOIN CNU_USER u
-    ON u.OBJECT_ID = c.FK_RES_CL_HDL
-LEFT JOIN CLAIMS hl
-    ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
-
-/* Policy path */
-LEFT JOIN SCOPE_OF_COVER soc
-    ON soc.OBJECT_ID = scr.FK_SOC
-LEFT JOIN LIFE_CYCLE_PHASE lcp
-    ON lcp.OBJECT_ID = soc.FK_LIFECYCLEP
-LEFT JOIN INSURED_PERIOD ip
-    ON ip.OBJECT_ID = lcp.FK_INS_PRD
-LEFT JOIN BUSINESS b
-    ON b.OBJECT_ID = ip.FK_BUSINESS
-
-/* Status event dates - confirm OP / RO / CL against REFERENCE_DATA 517 */
-LEFT JOIN (
-    SELECT FK_CLAIM, MIN(CHANGE_DATE) AS OPEN_DATE
-    FROM CLAIM_STATUS WHERE FRK_STATUS = 'OP' GROUP BY FK_CLAIM
-) open_dt   ON open_dt.FK_CLAIM = scr.OBJECT_ID
-
-LEFT JOIN (
-    SELECT FK_CLAIM, MAX(CHANGE_DATE) AS REOPEN_DATE
-    FROM CLAIM_STATUS WHERE FRK_STATUS = 'RO' GROUP BY FK_CLAIM
-) reopen_dt ON reopen_dt.FK_CLAIM = scr.OBJECT_ID
-
-LEFT JOIN (
-    SELECT FK_CLAIM, MAX(CHANGE_DATE) AS CLOSE_DATE
-    FROM CLAIM_STATUS WHERE FRK_STATUS = 'CL' GROUP BY FK_CLAIM
-) close_dt  ON close_dt.FK_CLAIM = scr.OBJECT_ID
-
-/* One claim reference per claim-section */
-LEFT JOIN (
-    SELECT FK_SOC_REL, MIN(REFERENCE_ID) AS REFERENCE_ID
-    FROM CLAIM_REFS GROUP BY FK_SOC_REL
-) cref      ON cref.FK_SOC_REL = scr.OBJECT_ID
-
-/* Broker party on the insured period - confirm FRK_RELSHIP_TYPE for Broker (ref 55) */
-LEFT JOIN (
-    SELECT bpr.FK_INS_PERIOD, MIN(p.IDENTIFIER) AS IDENTIFIER
-    FROM BUSINESS_PRTNR_REL bpr
-    INNER JOIN PARTY p ON p.OBJECT_ID = bpr.FK_BUS_PARTNER
-    WHERE p.SUBCLASS = 4
-    GROUP BY bpr.FK_INS_PERIOD
-) brk       ON brk.FK_INS_PERIOD = ip.OBJECT_ID
-
-ORDER BY c.CLAIM_IDENTIFIER
+    /* Candidate 4: technical / estimate flags (not cash, but often used to split cash vs non-cash) */
+    , e.IS_ALLOWED_ON_TEC                               AS IS_ALLOWED_ON_TEC
+    , e.IS_FOR_EST_ONLY                                 AS IS_FOR_EST_ONLY
+    , e.IS_ALLOWED_AS_EST                               AS IS_ALLOWED_AS_EST
+    , e.IS_ACTIVE
+FROM ENTRY_CODE AS e
+LEFT JOIN REFERENCE_DATA AS sc
+       ON sc.SUBCLASS = 166
+      AND sc.CODE     = e.FRK_ENTRY_SUB_CAT
+LEFT JOIN ENT_CODE_REF_DATA AS u
+       ON u.FK_ENT_CODE = e.OBJECT_ID
+LEFT JOIN REFERENCE_DATA AS usg
+       ON usg.SUBCLASS = 1085
+      AND usg.CODE     = u.FRK_EC_USAGE_DATA
+LEFT JOIN EC_DETAIL_REF_DATA AS d
+       ON d.FK_ENT_CODE = e.OBJECT_ID
+LEFT JOIN REFERENCE_DATA AS usd
+       ON usd.SUBCLASS = 1086
+      AND usd.CODE     = d.FRK_EC_USAGE_DET
+ORDER BY
+      e.CODE
+    , u.FRK_EC_USAGE_DATA
+    , d.FRK_EC_USAGE_DET;
