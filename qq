@@ -1,46 +1,76 @@
-/* DIM_TRANSACTION_CODE — read from SICS
-   Do NOT use ENTRY_CODE.IS_PAYABLE as TRCD_IS_CASH
-   Compare these candidates to DW TRCD_IS_CASH (1/0)
-*/
-
 SELECT
-      e.CODE                                            AS TRCD_CODE_BK
-    , e.DESCRIPTION                                     AS TRCD_CODE_DESCRIPTION
-    , e.NAME                                            AS TRCD_CODE_NAME
+      e.CODE                                          AS TRCD_CODE_BK
+    , e.DESCRIPTION
+    , COUNT(*)                                        AS detail_rows
+    , SUM(CASE WHEN d.IS_LIQUID = 'Y' THEN 1 ELSE 0 END) AS liquid_rows
+    , SUM(CASE WHEN d.IS_LIQUID = 'N' THEN 1 ELSE 0 END) AS non_liquid_rows
+    , MAX(d.IS_LIQUID)                                AS any_liquid
+    , CASE
+          WHEN MIN(d.IS_LIQUID) = MAX(d.IS_LIQUID) THEN 'CONSISTENT'
+          ELSE 'MIXED'
+      END                                             AS liquidity_consistency
+    , CASE WHEN MAX(d.IS_LIQUID) = 'Y' THEN 1 ELSE 0 END AS CANDIDATE_IS_CASH
+FROM dbo.ENTRY_CODE AS e
+JOIN dbo.AC_LEDGER_DETAIL AS d
+      ON d.FK_ENTRY_CODE = e.OBJECT_ID
+GROUP BY
+      e.CODE
+    , e.DESCRIPTION
+ORDER BY
+      e.CODE;
 
-    /* Candidate 1: Entry Sub Category (REFERENCE_DATA subclass 166) */
-    , e.FRK_ENTRY_SUB_CAT                               AS SUB_CAT_CODE
-    , sc.NAME                                           AS SUB_CAT_NAME
-    , sc.EXTERNAL_CODE                                  AS SUB_CAT_EXTERNAL_CODE
 
-    /* Candidate 2: Entry Code Usage (subclass 1085) — one code can have many rows */
-    , u.FRK_EC_USAGE_DATA                               AS USAGE_CODE
-    , usg.NAME                                          AS USAGE_NAME
 
-    /* Candidate 3: Entry Code Usage Detail (subclass 1086) */
-    , d.FRK_EC_USAGE_DET                                AS USAGE_DET_CODE
-    , usd.NAME                                          AS USAGE_DET_NAME
 
-    /* Candidate 4: technical / estimate flags (not cash, but often used to split cash vs non-cash) */
-    , e.IS_ALLOWED_ON_TEC                               AS IS_ALLOWED_ON_TEC
-    , e.IS_FOR_EST_ONLY                                 AS IS_FOR_EST_ONLY
-    , e.IS_ALLOWED_AS_EST                               AS IS_ALLOWED_AS_EST
-    , e.IS_ACTIVE
-FROM ENTRY_CODE AS e
-LEFT JOIN REFERENCE_DATA AS sc
-       ON sc.SUBCLASS = 166
-      AND sc.CODE     = e.FRK_ENTRY_SUB_CAT
-LEFT JOIN ENT_CODE_REF_DATA AS u
-       ON u.FK_ENT_CODE = e.OBJECT_ID
-LEFT JOIN REFERENCE_DATA AS usg
-       ON usg.SUBCLASS = 1085
-      AND usg.CODE     = u.FRK_EC_USAGE_DATA
-LEFT JOIN EC_DETAIL_REF_DATA AS d
-       ON d.FK_ENT_CODE = e.OBJECT_ID
-LEFT JOIN REFERENCE_DATA AS usd
-       ON usd.SUBCLASS = 1086
-      AND usd.CODE     = d.FRK_EC_USAGE_DET
+
+***********
+SELECT
+      e.CODE                    AS TRCD_CODE_BK
+    , r.FSK_REF_DATA            AS ref_subclass
+    , r.FRK_REF_DATA            AS ref_code
+    , rd.NAME                   AS ref_name
+    , rd.EXTERNAL_CODE
+FROM dbo.ENTRY_CODE AS e
+JOIN dbo.EC_REF_DATA AS r
+      ON r.FK_ENTRY_CODE = e.OBJECT_ID
+LEFT JOIN dbo.REFERENCE_DATA AS rd
+      ON rd.SUBCLASS = r.FSK_REF_DATA
+     AND rd.CODE     = r.FRK_REF_DATA
 ORDER BY
       e.CODE
-    , u.FRK_EC_USAGE_DATA
-    , d.FRK_EC_USAGE_DET;
+    , r.FSK_REF_DATA;
+
+*********
+
+
+
+SELECT
+      g.EC_CODE                 AS TRCD_CODE_BK
+    , g.EC_NAME
+    , g.D_IS_LIQUID
+    , COUNT(*)                  AS rows_cnt
+FROM dbo.GL_T_ALL AS g
+GROUP BY
+      g.EC_CODE
+    , g.EC_NAME
+    , g.D_IS_LIQUID
+ORDER BY
+      g.EC_CODE
+    , g.D_IS_LIQUID;
+*********
+
+
+SELECT
+      e.CODE                    AS TRCD_CODE_BK
+    , b.IS_LIQUID
+    , COUNT(*)                  AS rows_cnt
+FROM dbo.AC_BOOK_DTL_INFO AS b
+JOIN dbo.AC_LEDGER_DETAIL AS d ON d.OBJECT_ID     = b.OBJECT_ID
+JOIN dbo.ENTRY_CODE       AS e ON e.OBJECT_ID     = d.FK_ENTRY_CODE
+GROUP BY
+      e.CODE
+    , b.IS_LIQUID
+ORDER BY
+      e.CODE;
+
+
