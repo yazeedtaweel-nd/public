@@ -1,24 +1,21 @@
--- Combined query
--- Balance types attached to worksheets
+-- A) Detail FK (expected to be populated)
 SELECT
-    b.SUBCLASS,
-    COUNT(*) AS row_cnt
+    COUNT(*)                                      AS detail_rows,
+    SUM(CASE WHEN d.FK_WORKSHEET IS NOT NULL THEN 1 ELSE 0 END) AS with_fk_worksheet
+FROM AC_LEDGER_DETAIL AS d;
+
+-- B) Balance IDENTIFIER copied from worksheet (technical balances)
+SELECT
+    COUNT(*)                                      AS balance_rows,
+    SUM(CASE WHEN b.IDENTIFIER IS NOT NULL THEN 1 ELSE 0 END) AS with_identifier,
+    SUM(CASE WHEN b.FK_WORKSHEET IS NOT NULL THEN 1 ELSE 0 END) AS with_fk_worksheet
+FROM AC_LEDGER_BALANCE AS b;
+
+-- C) How many balances match a worksheet by IDENTIFIER
+SELECT COUNT(*) AS matched_by_identifier
 FROM AC_LEDGER_BALANCE AS b
-WHERE b.FK_WORKSHEET IS NOT NULL
-GROUP BY b.SUBCLASS
-ORDER BY row_cnt DESC;
-
--- Worksheet type codes (ref 167)
-SELECT CODE, NAME, EXTERNAL_CODE
-FROM REFERENCE_DATA
-WHERE SUBCLASS = 167
-ORDER BY CODE;
-
--- Level of business / I-O (ref 45)
-SELECT CODE, NAME, EXTERNAL_CODE
-FROM REFERENCE_DATA
-WHERE SUBCLASS = 45
-ORDER BY CODE;
+JOIN AC_WORKSHEET AS w
+  ON w.IDENTIFIER = b.IDENTIFIER;
 
 
 *********
@@ -26,64 +23,39 @@ ORDER BY CODE;
 
 SELECT TOP (1000)
     w.OBJECT_ID                         AS sics_object_id,
-    w.IDENTIFIER,
+    w.IDENTIFIER                        AS sics_worksheet_id,
+    w.SUBCLASS,
+    w.FRK_TYPE,                         -- AB / CL / TA / PB / RE ... (not WRKS_INDICATOR)
     w.BOOKING_DATE                      AS wrks_date,
+    w.ID_PREFIX,
+    w.ID_YR_PART,
     w.ID_SERIE_NO                       AS wrks_no_candidate,
     CONVERT(varchar(8), w.BOOKING_DATE, 112)
         + '|' + CAST(w.ID_SERIE_NO AS varchar(20))
                                         AS wrks_bk_candidate,
     CASE
         WHEN SUM(CASE WHEN b.IS_OUTWARD = 'Y' THEN 1 ELSE 0 END) > 0
-         AND SUM(CASE WHEN b.IS_OUTWARD = 'N' THEN 1 ELSE 0 END) = 0
-            THEN 'O'
+         AND SUM(CASE WHEN b.IS_OUTWARD = 'N' THEN 1 ELSE 0 END) = 0 THEN 'O'
         WHEN SUM(CASE WHEN b.IS_OUTWARD = 'N' THEN 1 ELSE 0 END) > 0
-         AND SUM(CASE WHEN b.IS_OUTWARD = 'Y' THEN 1 ELSE 0 END) = 0
-            THEN 'I'
-        WHEN SUM(CASE WHEN b.OBJECT_ID IS NOT NULL THEN 1 ELSE 0 END) = 0
-            THEN NULL
+         AND SUM(CASE WHEN b.IS_OUTWARD = 'Y' THEN 1 ELSE 0 END) = 0 THEN 'I'
+        WHEN COUNT(b.OBJECT_ID) = 0 THEN NULL
         ELSE 'MIXED'
-    END                                 AS wrks_indicator_candidate,  -- expect I/O; MIXED needs a rule
-    SUM(b.LEDGER_BAL_ORG_AMT)           AS cash_total_org_amt,        -- candidate A
-    SUM(b.AC_FUNC_AMT)                  AS cash_total_func_amt,       -- candidate B
-    COUNT(b.OBJECT_ID)                  AS balance_count
+    END                                 AS wrks_indicator_candidate,
+    SUM(b.LEDGER_BAL_ORG_AMT)           AS cash_total_org_amt,
+    SUM(b.AC_FUNC_AMT)                  AS cash_total_func_amt,
+    COUNT(DISTINCT b.OBJECT_ID)         AS balance_count
 FROM AC_WORKSHEET AS w
+LEFT JOIN AC_LEDGER_DETAIL AS d
+       ON d.FK_WORKSHEET = w.OBJECT_ID
 LEFT JOIN AC_LEDGER_BALANCE AS b
-       ON b.FK_WORKSHEET = w.OBJECT_ID
-      /* AND b.SUBCLASS IN (...)  -- add after Query 3 */
+       ON b.OBJECT_ID = d.FK_BALANCE
 GROUP BY
     w.OBJECT_ID,
     w.IDENTIFIER,
+    w.SUBCLASS,
+    w.FRK_TYPE,
     w.BOOKING_DATE,
-    w.ID_SERIE_NO
-ORDER BY w.BOOKING_DATE, w.ID_SERIE_NO;
-
-
-
-***********
-
-
-
-
-
-SELECT TOP (1000)
-    w.OBJECT_ID                         AS sics_object_id,
-    w.SUBCLASS,                         -- 1 = technical / business WS
-    w.IDENTIFIER,                       -- Prefix + year + sequence (SICS natural id)
     w.ID_PREFIX,
     w.ID_YR_PART,
-    w.ID_SERIE_NO,                      -- candidate for WRKS_NO
-    w.BOOKING_DATE,                     -- candidate for WRKS_DATE
-    CONVERT(varchar(8), w.BOOKING_DATE, 112)
-        + '|' + CAST(w.ID_SERIE_NO AS varchar(20))
-                                        AS wrks_bk_candidate_a,  -- date|serie (matches DW shape)
-    CONVERT(varchar(8), w.BOOKING_DATE, 112)
-        + '|' + CAST(1 AS varchar(20))  AS wrks_bk_candidate_b,  -- date|1 if DW uses daily seq
-    w.FRK_TYPE,                         -- worksheet type (ref 167) — not the DW "I" indicator
-    w.FRK_STATUS,                       -- worksheet status (ref 168)
-    w.FRK_ORIGIN,
-    w.TITLE,
-    w.SOA_CONTROL_AMT,                  -- weak cash-total candidate (summary control only)
-    w.REGIST_TIMESTAMP,
-    w.LAST_UPDATE_DT
-FROM AC_WORKSHEET AS w
+    w.ID_SERIE_NO
 ORDER BY w.BOOKING_DATE, w.ID_SERIE_NO;
