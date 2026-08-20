@@ -1,76 +1,37 @@
+SELECT 'ENTRY_CODE'        AS table_name, COUNT(*) AS row_cnt FROM dbo.ENTRY_CODE
+UNION ALL SELECT 'EC_REF_DATA',        COUNT(*) FROM dbo.EC_REF_DATA
+UNION ALL SELECT 'ENT_CODE_REF_DATA',  COUNT(*) FROM dbo.ENT_CODE_REF_DATA
+UNION ALL SELECT 'EC_DETAIL_REF_DATA', COUNT(*) FROM dbo.EC_DETAIL_REF_DATA
+UNION ALL SELECT 'ENTRY_CODE_GROUP',   COUNT(*) FROM dbo.ENTRY_CODE_GROUP
+UNION ALL SELECT 'ENTRY_CODE_USAGE',   COUNT(*) FROM dbo.ENTRY_CODE_USAGE
+UNION ALL SELECT 'AC_LEDGER_DETAIL',   COUNT(*) FROM dbo.AC_LEDGER_DETAIL
+UNION ALL SELECT 'AC_LEDGER_BALANCE',  COUNT(*) FROM dbo.AC_LEDGER_BALANCE
+UNION ALL SELECT 'GL_T_ALL',           COUNT(*) FROM dbo.GL_T_ALL
+UNION ALL SELECT 'AC_BOOK_DTL_INFO',   COUNT(*) FROM dbo.AC_BOOK_DTL_INFO
+UNION ALL SELECT 'REFERENCE_DATA',     COUNT(*) FROM dbo.REFERENCE_DATA
+ORDER BY table_name;
+*********
 SELECT
-      e.CODE                                          AS TRCD_CODE_BK
-    , e.DESCRIPTION
-    , COUNT(*)                                        AS detail_rows
-    , SUM(CASE WHEN d.IS_LIQUID = 'Y' THEN 1 ELSE 0 END) AS liquid_rows
-    , SUM(CASE WHEN d.IS_LIQUID = 'N' THEN 1 ELSE 0 END) AS non_liquid_rows
-    , MAX(d.IS_LIQUID)                                AS any_liquid
-    , CASE
-          WHEN MIN(d.IS_LIQUID) = MAX(d.IS_LIQUID) THEN 'CONSISTENT'
-          ELSE 'MIXED'
-      END                                             AS liquidity_consistency
-    , CASE WHEN MAX(d.IS_LIQUID) = 'Y' THEN 1 ELSE 0 END AS CANDIDATE_IS_CASH
-FROM ENTRY_CODE AS e
-JOIN AC_LEDGER_DETAIL AS d
-      ON d.FK_ENTRY_CODE = e.OBJECT_ID
-GROUP BY
-      e.CODE
-    , e.DESCRIPTION
-ORDER BY
-      e.CODE;
+      s.name AS schema_name
+    , t.name AS table_name
+    , c.name AS column_name
+FROM sys.columns AS c
+JOIN sys.tables  AS t ON t.object_id = c.object_id
+JOIN sys.schemas AS s ON s.schema_id = t.schema_id
+WHERE c.name LIKE '%LIQUID%'
+   OR c.name LIKE '%CASH%'
+   OR c.name LIKE '%SETTL%'
+ORDER BY s.name, t.name, c.name;
 
-
-
-
-
-***********
+********
 SELECT
-      e.CODE                    AS TRCD_CODE_BK
-    , r.FSK_REF_DATA            AS ref_subclass
-    , r.FRK_REF_DATA            AS ref_code
-    , rd.NAME                   AS ref_name
+      rd.SUBCLASS
+    , rd.CODE
+    , rd.NAME
     , rd.EXTERNAL_CODE
-FROM ENTRY_CODE AS e
-JOIN EC_REF_DATA AS r
-      ON r.FK_ENTRY_CODE = e.OBJECT_ID
-LEFT JOIN REFERENCE_DATA AS rd
-      ON rd.SUBCLASS = r.FSK_REF_DATA
-     AND rd.CODE     = r.FRK_REF_DATA
-ORDER BY
-      e.CODE
-    , r.FSK_REF_DATA;
-
-*********
-
-
-
-SELECT
-      g.EC_CODE                 AS TRCD_CODE_BK
-    , g.EC_NAME
-    , g.D_IS_LIQUID
-    , COUNT(*)                  AS rows_cnt
-FROM GL_T_ALL AS g
-GROUP BY
-      g.EC_CODE
-    , g.EC_NAME
-    , g.D_IS_LIQUID
-ORDER BY
-      g.EC_CODE
-    , g.D_IS_LIQUID;
-*********
-
-
-SELECT
-      e.CODE                    AS TRCD_CODE_BK
-    , b.IS_LIQUID
-    , COUNT(*)                  AS rows_cnt
-FROM AC_BOOK_DTL_INFO AS b
-JOIN AC_LEDGER_DETAIL AS d ON d.OBJECT_ID     = b.OBJECT_ID
-JOIN ENTRY_CODE       AS e ON e.OBJECT_ID     = d.FK_ENTRY_CODE
-GROUP BY
-      e.CODE
-    , b.IS_LIQUID
-ORDER BY
-      e.CODE;
-
-
+FROM dbo.REFERENCE_DATA AS rd
+WHERE rd.NAME LIKE '%LIQUID%'
+   OR rd.NAME LIKE '%CASH%'
+   OR rd.NAME LIKE '%TECHNICAL%'
+   OR rd.CODE IN ('CASH','LIQ','NLIQ','TECH')
+ORDER BY rd.SUBCLASS, rd.CODE;
