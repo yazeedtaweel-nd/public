@@ -10,8 +10,8 @@ SELECT
           ELSE 'MIXED'
       END                                             AS liquidity_consistency
     , CASE WHEN MAX(d.IS_LIQUID) = 'Y' THEN 1 ELSE 0 END AS CANDIDATE_IS_CASH
-FROM dbo.ENTRY_CODE AS e
-JOIN dbo.AC_LEDGER_DETAIL AS d
+FROM ENTRY_CODE AS e
+JOIN AC_LEDGER_DETAIL AS d
       ON d.FK_ENTRY_CODE = e.OBJECT_ID
 GROUP BY
       e.CODE
@@ -30,10 +30,10 @@ SELECT
     , r.FRK_REF_DATA            AS ref_code
     , rd.NAME                   AS ref_name
     , rd.EXTERNAL_CODE
-FROM dbo.ENTRY_CODE AS e
-JOIN dbo.EC_REF_DATA AS r
+FROM ENTRY_CODE AS e
+JOIN EC_REF_DATA AS r
       ON r.FK_ENTRY_CODE = e.OBJECT_ID
-LEFT JOIN dbo.REFERENCE_DATA AS rd
+LEFT JOIN REFERENCE_DATA AS rd
       ON rd.SUBCLASS = r.FSK_REF_DATA
      AND rd.CODE     = r.FRK_REF_DATA
 ORDER BY
@@ -49,7 +49,7 @@ SELECT
     , g.EC_NAME
     , g.D_IS_LIQUID
     , COUNT(*)                  AS rows_cnt
-FROM dbo.GL_T_ALL AS g
+FROM GL_T_ALL AS g
 GROUP BY
       g.EC_CODE
     , g.EC_NAME
@@ -64,9 +64,9 @@ SELECT
       e.CODE                    AS TRCD_CODE_BK
     , b.IS_LIQUID
     , COUNT(*)                  AS rows_cnt
-FROM dbo.AC_BOOK_DTL_INFO AS b
-JOIN dbo.AC_LEDGER_DETAIL AS d ON d.OBJECT_ID     = b.OBJECT_ID
-JOIN dbo.ENTRY_CODE       AS e ON e.OBJECT_ID     = d.FK_ENTRY_CODE
+FROM AC_BOOK_DTL_INFO AS b
+JOIN AC_LEDGER_DETAIL AS d ON d.OBJECT_ID     = b.OBJECT_ID
+JOIN ENTRY_CODE       AS e ON e.OBJECT_ID     = d.FK_ENTRY_CODE
 GROUP BY
       e.CODE
     , b.IS_LIQUID
