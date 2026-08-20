@@ -1,68 +1,103 @@
+-- Combined query
 SELECT
-      rd.CODE
-    , rd.NAME
-    , rd.EXTERNAL_CODE
-    , rd.IS_ACTIVE
-    , COUNT(e.OBJECT_ID) AS entry_codes_using
-FROM REFERENCE_DATA AS rd
-LEFT JOIN ENTRY_CODE AS e
-       ON e.FRK_ENTRY_SUB_CAT = rd.CODE
-      AND e.FSK_ENTRY_SUB_CAT = 166
-WHERE rd.SUBCLASS = 166
+    'LEDGER_BALANCE_SUBCLASS' AS RESULT_TYPE,
+    CAST(b.SUBCLASS AS VARCHAR(50)) AS CODE,
+    NULL AS NAME,
+    NULL AS EXTERNAL_CODE,
+    COUNT(*) AS ROW_CNT
+FROM dbo.AC_LEDGER_BALANCE AS b
+WHERE b.FK_WORKSHEET IS NOT NULL
+GROUP BY b.SUBCLASS
+
+UNION ALL
+
+SELECT
+    'WORKSHEET_TYPE' AS RESULT_TYPE,
+    CAST(CODE AS VARCHAR(50)) AS CODE,
+    NAME,
+    EXTERNAL_CODE,
+    NULL AS ROW_CNT
+FROM dbo.REFERENCE_DATA
+WHERE SUBCLASS = 167
+
+UNION ALL
+
+SELECT
+    'LEVEL_OF_BUSINESS_IO' AS RESULT_TYPE,
+    CAST(CODE AS VARCHAR(50)) AS CODE,
+    NAME,
+    EXTERNAL_CODE,
+    NULL AS ROW_CNT
+FROM dbo.REFERENCE_DATA
+WHERE SUBCLASS = 45
+
+ORDER BY RESULT_TYPE, CODE;
+
+
+
+*********
+
+
+SELECT TOP (1000)
+    w.OBJECT_ID                         AS sics_object_id,
+    w.IDENTIFIER,
+    w.BOOKING_DATE                      AS wrks_date,
+    w.ID_SERIE_NO                       AS wrks_no_candidate,
+    CONVERT(varchar(8), w.BOOKING_DATE, 112)
+        + '|' + CAST(w.ID_SERIE_NO AS varchar(20))
+                                        AS wrks_bk_candidate,
+    CASE
+        WHEN SUM(CASE WHEN b.IS_OUTWARD = 'Y' THEN 1 ELSE 0 END) > 0
+         AND SUM(CASE WHEN b.IS_OUTWARD = 'N' THEN 1 ELSE 0 END) = 0
+            THEN 'O'
+        WHEN SUM(CASE WHEN b.IS_OUTWARD = 'N' THEN 1 ELSE 0 END) > 0
+         AND SUM(CASE WHEN b.IS_OUTWARD = 'Y' THEN 1 ELSE 0 END) = 0
+            THEN 'I'
+        WHEN SUM(CASE WHEN b.OBJECT_ID IS NOT NULL THEN 1 ELSE 0 END) = 0
+            THEN NULL
+        ELSE 'MIXED'
+    END                                 AS wrks_indicator_candidate,  -- expect I/O; MIXED needs a rule
+    SUM(b.LEDGER_BAL_ORG_AMT)           AS cash_total_org_amt,        -- candidate A
+    SUM(b.AC_FUNC_AMT)                  AS cash_total_func_amt,       -- candidate B
+    COUNT(b.OBJECT_ID)                  AS balance_count
+FROM dbo.AC_WORKSHEET AS w
+LEFT JOIN dbo.AC_LEDGER_BALANCE AS b
+       ON b.FK_WORKSHEET = w.OBJECT_ID
+      /* AND b.SUBCLASS IN (...)  -- add after Query 3 */
 GROUP BY
-      rd.CODE
-    , rd.NAME
-    , rd.EXTERNAL_CODE
-    , rd.IS_ACTIVE
-ORDER BY
-      rd.CODE;
+    w.OBJECT_ID,
+    w.IDENTIFIER,
+    w.BOOKING_DATE,
+    w.ID_SERIE_NO
+ORDER BY w.BOOKING_DATE, w.ID_SERIE_NO;
 
 
 
 ***********
-SELECT
-      e.CODE                    AS TRCD_CODE_BK
-    , e.DESCRIPTION             AS TRCD_CODE_DESCRIPTION
-    , e.FRK_ENTRY_SUB_CAT       AS sub_cat_code
-    , sc.NAME                   AS sub_cat_name
-    , CASE
-          WHEN sc.NAME LIKE '%NON CASH%'
-            OR sc.NAME LIKE '%NON-CASH%'
-            OR sc.NAME LIKE '%NON LIQUID%'
-            OR sc.NAME LIKE '%NON-LIQUID%'
-            OR e.FRK_ENTRY_SUB_CAT IN ('NCLDEP','NCPDEP','NLTI')
-               THEN 0
-          ELSE 1
-      END                       AS CANDIDATE_IS_CASH
-FROM ENTRY_CODE AS e
-LEFT JOIN REFERENCE_DATA AS sc
-       ON sc.SUBCLASS = 166
-      AND sc.CODE     = e.FRK_ENTRY_SUB_CAT
-ORDER BY
-      CANDIDATE_IS_CASH
-    , e.CODE;
-
-
-********
-
-SELECT
-      e.CODE                    AS TRCD_CODE_BK
-    , e.DESCRIPTION
-    , g.CODE                    AS group_code
-    , g.NAME                    AS group_name
-    , g.FRK_GRP_CATEGORY        AS group_category
-    , gc.NAME                   AS group_category_name
-FROM ENTRY_CODE AS e
-JOIN ENTRY_CODE_USAGE AS u
-      ON u.FK_ENTRY_CODE = e.OBJECT_ID
-JOIN ENTRY_CODE_GROUP AS g
-      ON g.OBJECT_ID = u.FK_ENTRY_CODE_GRP
-LEFT JOIN REFERENCE_DATA AS gc
-       ON gc.SUBCLASS = 223
-      AND gc.CODE     = g.FRK_GRP_CATEGORY
-ORDER BY
-      e.CODE
-    , g.CODE;
 
 
 
+
+
+SELECT TOP (1000)
+    w.OBJECT_ID                         AS sics_object_id,
+    w.SUBCLASS,                         -- 1 = technical / business WS
+    w.IDENTIFIER,                       -- Prefix + year + sequence (SICS natural id)
+    w.ID_PREFIX,
+    w.ID_YR_PART,
+    w.ID_SERIE_NO,                      -- candidate for WRKS_NO
+    w.BOOKING_DATE,                     -- candidate for WRKS_DATE
+    CONVERT(varchar(8), w.BOOKING_DATE, 112)
+        + '|' + CAST(w.ID_SERIE_NO AS varchar(20))
+                                        AS wrks_bk_candidate_a,  -- date|serie (matches DW shape)
+    CONVERT(varchar(8), w.BOOKING_DATE, 112)
+        + '|' + CAST(1 AS varchar(20))  AS wrks_bk_candidate_b,  -- date|1 if DW uses daily seq
+    w.FRK_TYPE,                         -- worksheet type (ref 167) — not the DW "I" indicator
+    w.FRK_STATUS,                       -- worksheet status (ref 168)
+    w.FRK_ORIGIN,
+    w.TITLE,
+    w.SOA_CONTROL_AMT,                  -- weak cash-total candidate (summary control only)
+    w.REGIST_TIMESTAMP,
+    w.LAST_UPDATE_DT
+FROM dbo.AC_WORKSHEET AS w
+ORDER BY w.BOOKING_DATE, w.ID_SERIE_NO;
