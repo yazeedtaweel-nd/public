@@ -1,26 +1,8 @@
+/* Example: policy → PTRM lookup key from accounting condition */
 SELECT
-    b.IDENTIFIER            AS POLICY_BK,
-    b.OBJECT_ID             AS POLICY_OID,
-    b.SUBCLASS              AS BUS_SUBCLASS,
-    b.FRK_TYPE_OF_BUS,
-    ip.OBJECT_ID             AS INS_PERIOD_OID,
-    ip.UNDERWR_YEAR,
-    p.IDENTIFIER            AS BROKER_BK,
-    p.OBJECT_ID             AS BROKER_OID,
-    p.CURR_NAME             AS BROKER_NAME,
-    r.OBJECT_ID             AS REL_OID,
-    r.FRK_RELSHIP_TYPE,
-    r.SUBCLASS              AS REL_SUBCLASS
-FROM SICS.BUSINESS_PRTNR_REL r
-JOIN SICS.INSURED_PERIOD ip
-      ON ip.OBJECT_ID = r.FK_INS_PERIOD
-JOIN SICS.BUSINESS b
-      ON b.OBJECT_ID = ip.FK_BUSINESS
-JOIN SICS.PARTY p
-      ON p.OBJECT_ID = r.FK_BUS_PARTNER
-WHERE r.FSK_RELSHIP_TYPE = 55
-  AND r.FRK_RELSHIP_TYPE = 'BR'
-  AND r.SUBCLASS = 10
-  -- optional OW filter once confirmed:
-  -- AND b.SUBCLASS IN (3, 6, 8)
-ORDER BY b.IDENTIFIER, p.IDENTIFIER;
+    bca.OBJECT_ID,
+    bca.FRK_ACCT_BASIS       AS PREM_ACCT_BASIS_CODE,   -- prefer for PTRM if confirmed
+    bca.FRK_ACCT_CLAIM_BAS   AS CLAIM_ACCT_BASIS_CODE
+FROM dbo.BUS_COMMON_ACC AS bca
+WHERE ISNULL(bca.FSK_ACCT_BASIS, 65) = 65
+   OR ISNULL(bca.FSK_ACCT_CLAIM_BAS, 65) = 65;
