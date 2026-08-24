@@ -1,8 +1,10 @@
-/* Example: policy → PTRM lookup key from accounting condition */
 SELECT
-    bca.OBJECT_ID,
-    bca.FRK_ACCT_BASIS       AS PREM_ACCT_BASIS_CODE,   -- prefer for PTRM if confirmed
-    bca.FRK_ACCT_CLAIM_BAS   AS CLAIM_ACCT_BASIS_CODE
-FROM SICS.BUS_COMMON_ACC AS bca
-WHERE ISNULL(bca.FSK_ACCT_BASIS, 65) = 65
-   OR ISNULL(bca.FSK_ACCT_CLAIM_BAS, 65) = 65;
+    rd.INTEGER_ID,
+    rd.SUBCLASS,
+    rd.CODE,
+    rd.NAME,
+    rd.EXTERNAL_CODE,
+    rd.IS_ACTIVE
+FROM SICS.dbo.REFERENCE_DATA AS rd
+WHERE rd.SUBCLASS = 22
+ORDER BY rd.CODE;
