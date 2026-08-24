@@ -1,30 +1,9 @@
 SELECT
-    rl.OBJECT_ID,
-    rl.CODE,
-    rl.NAME,
-    rl.UPPERCASE_NAME,
-    rl.FRK_CATEGORY,
-    rl.FSK_CATEGORY,
-    rl.IS_ACTIVE,
-    rl.HIERARCHY_LEVEL,
-    rl.VERSION
-FROM SICS.RU_LEAF AS rl
-WHERE rl.FRK_CATEGORY = 'PC'
-  AND rl.FSK_CATEGORY = 42
-  -- AND rl.IS_ACTIVE = 'Y'   -- confirm with team before applying
-ORDER BY rl.CODE;
-
-
-
-/* DIM_QUOTE_STATUS source: Agreement Life Cycle Status (subclass 90)
-   Note: SICS CODE/NAME will differ from DW sample QSTS_BK/QSTS_NAME — expected. */
-SELECT
-    rd.CODE          AS QSTS_BK_SICS,
-    rd.NAME          AS QSTS_NAME_SICS,
-    rd.EXTERNAL_CODE,
+    rd.CODE              AS PRMQ_BK,
+    rd.NAME              AS PRMQ_NAME,
     rd.IS_ACTIVE,
-    rd.IS_STATIC,
-    rd.IS_USER_DEFINED
+    ROW_NUMBER() OVER (ORDER BY rd.NAME, rd.CODE) AS PRMQ_SEQ
 FROM SICS.REFERENCE_DATA rd
-WHERE rd.SUBCLASS = 90
-ORDER BY rd.IS_ACTIVE DESC, rd.CODE;
+WHERE rd.SUBCLASS = 134
+ORDER BY
+    PRMQ_SEQ;
