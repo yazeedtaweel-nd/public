@@ -1,26 +1,16 @@
 SELECT
-    rz.OBJECT_ID,
-    rz.INTEGER_ID,
-    rz.CODE,
-    rz.NAME AS RISK_ZONE_NAME,
-    rz.SUBCLASS,
-    rz.FK_PARENT,
-    rz.FK_COUNTRY,
-    la.NAME AS COUNTRY_NAME,
-    la.ISO_ALPHA_2,
-    la.ISO_ALPHA_3,
-    la.CODE AS LEGAL_AREA_CODE,
-    la.UNIQUE_CODE,
-    parent.CODE AS PARENT_CODE,
-    parent.NAME AS PARENT_NAME,
-    CASE
-        WHEN la.NAME IS NOT NULL THEN la.NAME + ' - ' + rz.NAME
-        ELSE rz.NAME
-    END AS CRZ_NAME_CANDIDATE
-FROM SICS.RISK_ZONE rz
-LEFT JOIN SICS.LEGAL_AREA la
-    ON la.OBJECT_ID = rz.FK_COUNTRY
-   AND la.SUBCLASS = 1
-LEFT JOIN SICS.RISK_ZONE parent
-    ON parent.OBJECT_ID = rz.FK_PARENT
-ORDER BY rz.CODE;
+    RIGHT('000' + LTRIM(RTRIM(occ.CODE)), 3) AS OCC_BK,
+    occ.NAME                                 AS OOC_NAME,
+    RIGHT('00'  + LTRIM(RTRIM(maj.CODE)), 2) AS OCC_MAJOR_CLASS_BK,
+    maj.NAME                                 AS OCC_MAJOR_CLASS_NAME
+FROM REFERENCE_DATA AS occ
+LEFT JOIN REF_TO_REF AS link
+       ON link.FSK_CHILD  = 52
+      AND link.FRK_CHILD  = occ.CODE
+      AND link.FSK_PARENT = 51
+LEFT JOIN REFERENCE_DATA AS maj
+       ON maj.SUBCLASS = 51
+      AND maj.CODE     = link.FRK_PARENT
+WHERE occ.SUBCLASS = 52
+  AND occ.IS_ACTIVE = 'Y'
+ORDER BY occ.CODE;
