@@ -1,59 +1,24 @@
 SELECT
-    p.IDENTIFIER                         AS COMP_BK,
-    p.CURR_NAME                          AS COMP_NAME,
-    rd_type.NAME                         AS COMP_TYPE,
-    ISNULL(rd_rating.NAME, 'NA')         AS COMP_SECURITY_RATING,
-    addr.ADDR_LINE_1                     AS COMP_ADDRESS_LINE1,
-    addr.ADDR_LINE_2                     AS COMP_ADDRESS_LINE2,
-    addr.ADDR_LINE_3                     AS COMP_ADDRESS_LINE3,
-    addr.CITY_NAME                       AS COMP_ADDRESS_CITY,
-    st.NAME                              AS COMP_ADDRESS_STATE,
-    p.FK_HOME_COUNTRY                    AS HOME_COUNTRY_OBJECT_ID,  -- lookup DIM_COUNTRY / CTRY_SRGT
-    hc.ISO_ALPHA_2                       AS HOME_COUNTRY_ISO2,
-    hc.CODE                              AS HOME_COUNTRY_CODE,
-    hc.NAME                              AS HOME_COUNTRY_NAME,
-    p.OBJECT_ID                          AS PARTY_OBJECT_ID          -- audit only; not COMP_SRGT
-FROM PARTY p
-JOIN BUS_PARTNER_CAT cat
-  ON cat.FK_PARTNER = p.OBJECT_ID
-LEFT JOIN REFERENCE_DATA rd_type
-  ON rd_type.CODE     = cat.FRK_CATEGORY
- AND rd_type.SUBCLASS = cat.FSK_CATEGORY          -- 23
-OUTER APPLY (
-    SELECT TOP (1)
-           a.ADDR_LINE_1,
-           a.ADDR_LINE_2,
-           a.ADDR_LINE_3,
-           a.CITY_NAME,
-           a.FK_STATE
-    FROM ADDRESS a
-    WHERE a.FK_PARTY   = p.OBJECT_ID
-      AND a.IS_ACTIVE  = 'Y'
-    ORDER BY
-        CASE WHEN a.IS_MAIN_ADDR = 'Y' THEN 0 ELSE 1 END,
-        CASE WHEN a.IS_HOME_ADDR = 'Y' THEN 0 ELSE 1 END,
-        a.OBJECT_ID
-) addr
-LEFT JOIN LEGAL_AREA st
-  ON st.OBJECT_ID = addr.FK_STATE
-LEFT JOIN LEGAL_AREA hc
-  ON hc.OBJECT_ID = p.FK_HOME_COUNTRY
-OUTER APPLY (
-    SELECT TOP (1)
-           r.FRK_RATING,
-           r.FSK_RATING
-    FROM BP_DETAIL bpd
-    JOIN BP_RATING r
-      ON r.FK_BP_RTNG_CNTNR = bpd.OBJECT_ID
-    WHERE bpd.FK_BUS_PARTNER = p.OBJECT_ID
-      AND bpd.SUBCLASS = 3
-    ORDER BY r.VALID_FROM DESC, r.OBJECT_ID
-) rat
-LEFT JOIN REFERENCE_DATA rd_rating
-  ON rd_rating.CODE     = rat.FRK_RATING
- AND rd_rating.SUBCLASS = rat.FSK_RATING          -- 21
-WHERE p.SUBCLASS = 4
-ORDER BY p.IDENTIFIER;
+    c.OBJECT_ID           AS sics_object_id,
+    c.ISO_ALPHA_2         AS ctry_country_code,
+    c.NAME                AS ctry_country_name,
+    c.IS_ACTIVE           AS is_active,
+    sre.<REGION_CODE>     AS ctry_sre_region_code,
+    sre.<REGION_NAME>     AS ctry_sre_region_name
+FROM dbo.LEGAL_AREA AS c
+LEFT JOIN sre.<SRE_REGION_TABLE> AS sre
+       ON sre.<COUNTRY_KEY> = c.OBJECT_ID
+       /* or: ON sre.<COUNTRY_KEY> = c.ISO_ALPHA_2 */
+WHERE c.SUBCLASS = 1
+ORDER BY c.ISO_ALPHA_2, c.NAME;
 
--- if you want ceded and security only
-AND cat.FRK_CATEGORY IN ('CE', 'SEC')
+
+SELECT
+    c.OBJECT_ID     AS sics_object_id,
+    c.ISO_ALPHA_2   AS ctry_country_code,
+    c.NAME          AS ctry_country_name,
+    c.IS_ACTIVE     AS is_active
+FROM dbo.LEGAL_AREA AS c
+WHERE c.SUBCLASS = 1
+  AND c.IS_ACTIVE = 'Y'      -- optional; currently all 249 are Y
+ORDER BY c.ISO_ALPHA_2, c.NAME;
