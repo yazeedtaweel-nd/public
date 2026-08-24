@@ -1,24 +1,18 @@
 SELECT
-    c.OBJECT_ID           AS sics_object_id,
-    c.ISO_ALPHA_2         AS ctry_country_code,
-    c.NAME                AS ctry_country_name,
-    c.IS_ACTIVE           AS is_active,
-    sre.<REGION_CODE>     AS ctry_sre_region_code,
-    sre.<REGION_NAME>     AS ctry_sre_region_name
-FROM dbo.LEGAL_AREA AS c
-LEFT JOIN sre.<SRE_REGION_TABLE> AS sre
-       ON sre.<COUNTRY_KEY> = c.OBJECT_ID
-       /* or: ON sre.<COUNTRY_KEY> = c.ISO_ALPHA_2 */
-WHERE c.SUBCLASS = 1
-ORDER BY c.ISO_ALPHA_2, c.NAME;
-
-
-SELECT
-    c.OBJECT_ID     AS sics_object_id,
-    c.ISO_ALPHA_2   AS ctry_country_code,
-    c.NAME          AS ctry_country_name,
-    c.IS_ACTIVE     AS is_active
-FROM dbo.LEGAL_AREA AS c
-WHERE c.SUBCLASS = 1
-  AND c.IS_ACTIVE = 'Y'      -- optional; currently all 249 are Y
-ORDER BY c.ISO_ALPHA_2, c.NAME;
+    p.IDENTIFIER                    AS OIN_BK,
+    COALESCE(n.NAME, p.CURR_NAME)   AS OIN_NAME,
+    p.OBJECT_ID                     AS PARTY_OBJECT_ID,
+    p.IS_INSURED
+FROM PARTY AS p
+LEFT JOIN (
+    SELECT
+        FK_ORGANISATION,
+        NAME,
+        ROW_NUMBER() OVER (PARTITION BY FK_ORGANISATION ORDER BY OBJECT_ID) AS RN
+    FROM ORGANISATION_NAME
+) AS n
+    ON n.FK_ORGANISATION = p.OBJECT_ID
+   AND n.RN = 1
+WHERE p.SUBCLASS = 4
+  AND p.IS_INSURED = 'Y'
+ORDER BY p.IDENTIFIER;
