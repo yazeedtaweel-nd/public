@@ -1,12 +1,26 @@
 SELECT
-      rd.CODE,
-      rd.NAME,
-      rd.EXTERNAL_CODE,
-      rd.SUBCLASS,
-      rd.IS_ACTIVE,
-      rd.IS_DEFAULT,
-      rd.IS_STATIC,
-      rd.IS_USER_DEFINED
-FROM SICS.REFERENCE_DATA AS rd
-WHERE rd.SUBCLASS = 95
-ORDER BY rd.CODE;
+    b.IDENTIFIER            AS POLICY_BK,
+    b.OBJECT_ID             AS POLICY_OID,
+    b.SUBCLASS              AS BUS_SUBCLASS,
+    b.FRK_TYPE_OF_BUS,
+    ip.OBJECT_ID             AS INS_PERIOD_OID,
+    ip.UNDERWR_YEAR,
+    p.IDENTIFIER            AS BROKER_BK,
+    p.OBJECT_ID             AS BROKER_OID,
+    p.CURR_NAME             AS BROKER_NAME,
+    r.OBJECT_ID             AS REL_OID,
+    r.FRK_RELSHIP_TYPE,
+    r.SUBCLASS              AS REL_SUBCLASS
+FROM SICS.BUSINESS_PRTNR_REL r
+JOIN SICS.INSURED_PERIOD ip
+      ON ip.OBJECT_ID = r.FK_INS_PERIOD
+JOIN SICS.BUSINESS b
+      ON b.OBJECT_ID = ip.FK_BUSINESS
+JOIN SICS.PARTY p
+      ON p.OBJECT_ID = r.FK_BUS_PARTNER
+WHERE r.FSK_RELSHIP_TYPE = 55
+  AND r.FRK_RELSHIP_TYPE = 'BR'
+  AND r.SUBCLASS = 10
+  -- optional OW filter once confirmed:
+  -- AND b.SUBCLASS IN (3, 6, 8)
+ORDER BY b.IDENTIFIER, p.IDENTIFIER;
