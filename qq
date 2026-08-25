@@ -1,14 +1,150 @@
-SELECT
-    rd.SUBCLASS,
-    rd.CODE,
-    rd.NAME,
-    rd.EXTERNAL_CODE,
-    rd.IS_ACTIVE,
-    rd.IS_DEFAULT,
-    rd.IS_STATIC,
-    rd.IS_USER_DEFINED,
-    rd.DATA_TYPE_CODE,
-    rd.FK_NOTE
-FROM SICS.REFERENCE_DATA AS rd
-WHERE rd.SUBCLASS = 517
-ORDER BY rd.CODE;
+SELECT TOP 1000
+    c.OBJECT_ID                                     AS CLAIMS_OBJECT_ID,
+    scr.OBJECT_ID                                   AS SOC_CLAIM_OBJECT_ID,
+    c.SUBCLASS                                      AS CLAIMS_SUBCLASS,
+
+    c.CLAIM_IDENTIFIER                              AS CLA_BK,
+    c.LOSS_NAME                                     AS CLA_DESC,
+    c.SHORT_DESCR                                   AS CLA_DESC_ALT,
+
+    /* Broker */
+    CASE WHEN ip.IS_DIRECT = 'Y' THEN 'DIRECT' ELSE brk.IDENTIFIER END AS CLA_BROKER,
+    ip.IS_DIRECT                                    AS IS_DIRECT_FLAG,
+
+    /* CLA_SOURCE candidates */
+    c.FRK_PRIM_SYSTEM                               AS SRC_EXT_SYSTEM_1074,
+    ps.NAME                                         AS SRC_EXT_SYSTEM_NAME,
+    c.FRK_CLM_CLASSFCTN                             AS SRC_CLASSIFICATION_528,
+
+    /* CLA_TYPE candidates */
+    c.FRK_RISK_EVNT_IND                             AS TYPE_RISK_EVENT_IND,
+    c.FRK_TYPE_OF_RISK                              AS TYPE_OF_RISK_525,
+    c.FRK_CLAIM_TYPE                                AS TYPE_CLAIM_527,
+    c.PROD_TYPE                                     AS TYPE_PROD_TYPE,
+
+    /* Status / substatus */
+    UPPER(st.NAME)                                  AS CLA_STATUS_CODE,
+    COALESCE(cs.FRK_STATUS, scr.FRK_STATUS_TYPE)    AS CLA_STATUS,
+    cs.FRK_SUB_STATUS                               AS CLSS_BK,
+    ss.NAME                                         AS CLA_SUBSTATUS_NAME,
+
+    u.SHORTNAME                                     AS CLA_HANDLER,
+    COALESCE(cref.REFERENCE_ID, scr.CL_REF)         AS CLA_ALT_REF,
+    scr.TO_BE_BOOKED                                AS TO_BE_BOOKED,
+
+    /* Dates - sentinel applied like the DW */
+    c.LOSS_START_DT                                 AS CLA_LOSS_DATE,
+    c.OCCURRENCE_DT                                 AS LOSS_DATE_ALT,
+    COALESCE(sh.OPEN_DATE,   '9999-01-01')          AS CLA_OPEN_DATE,
+    COALESCE(sh.REOPEN_DATE, '9999-01-01')          AS CLA_REOPEN_DATE,
+    COALESCE(scr.ADVICE_REC_DATE, scr.CLAIM_ADVISED_DT, '9999-01-01') AS CLA_REPORTED_DATE,
+    COALESCE(sh.CLOSE_DATE,  '9999-01-01')          AS CLA_CLOSE_DATE,
+    scr.LAST_UPDATE_DT                              AS CLA_LAST_TRANSACTION,
+
+    /* Lookup keys */
+    b.IDENTIFIER                                    AS POLICY_BK,
+    soc.IDENTIFIER                                  AS SECTION_IDENTIFIER,
+    soc.FK_PARENTSOC                                AS SECTION_PARENT,
+    hl.CLAIM_IDENTIFIER                             AS CLGRP_BK,
+    c.FRK_CAUSE_OF_LOSS                             AS LSTP_BK,
+    lt.NAME                                         AS LSTP_NAME
+
+FROM SICS.CLAIMS c
+
+INNER JOIN SICS.SOC_TO_CLAIM_REL scr
+    ON scr.FK_CLAIM = c.OBJECT_ID
+
+LEFT JOIN SICS.CLAIM_STATUS cs
+    ON cs.FK_CLAIM = scr.OBJECT_ID
+   AND cs.IS_CURRENT = 'Y'
+
+LEFT JOIN SICS.REFERENCE_DATA st
+    ON st.CODE = COALESCE(cs.FRK_STATUS, scr.FRK_STATUS_TYPE) AND st.SUBCLASS = 517
+LEFT JOIN SICS.REFERENCE_DATA ss
+    ON ss.CODE = cs.FRK_SUB_STATUS      AND ss.SUBCLASS = 518
+LEFT JOIN SICS.REFERENCE_DATA lt
+    ON lt.CODE = c.FRK_CAUSE_OF_LOSS    AND lt.SUBCLASS = 523
+LEFT JOIN SICS.REFERENCE_DATA ps
+    ON ps.CODE = c.FRK_PRIM_SYSTEM      AND ps.SUBCLASS = 1074
+
+LEFT JOIN SICS.CNU_USER u
+    ON u.OBJECT_ID = c.FK_RES_CL_HDL
+LEFT JOIN SICS.CLAIMS hl
+    ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
+
+/* Policy path - both join directions, whichever resolves */
+LEFT JOIN SICS.SCOPE_OF_COVER soc
+    ON soc.OBJECT_ID = scr.FK_SOC
+LEFT JOIN SICS.LIFE_CYCLE_PHASE lcp1
+    ON lcp1.OBJECT_ID = soc.FK_LIFECYCLEP
+LEFT JOIN SICS.LIFE_CYCLE_PHASE lcp2
+    ON lcp2.FK_SCOPE_OF_CVR = soc.OBJECT_ID
+   AND lcp2.IS_CURRENT = 'Y'
+LEFT JOIN SICS.INSURED_PERIOD ip
+    ON ip.OBJECT_ID = COALESCE(lcp1.FK_INS_PRD, lcp2.FK_INS_PRD)
+LEFT JOIN SICS.BUSINESS b
+    ON b.OBJECT_ID = ip.FK_BUSINESS
+
+/* Status history pivot keyed on reference-data NAME, not hardcoded codes */
+LEFT JOIN (
+    SELECT cs2.FK_CLAIM,
+           MIN(CASE WHEN UPPER(rd2.NAME) LIKE 'OPEN%'   THEN cs2.CHANGE_DATE END) AS OPEN_DATE,
+           MAX(CASE WHEN UPPER(rd2.NAME) LIKE 'REOPEN%' THEN cs2.CHANGE_DATE END) AS REOPEN_DATE,
+           MAX(CASE WHEN UPPER(rd2.NAME) LIKE 'CLOS%'   THEN cs2.CHANGE_DATE END) AS CLOSE_DATE
+    FROM SICS.CLAIM_STATUS cs2
+    LEFT JOIN SICS.REFERENCE_DATA rd2
+        ON rd2.CODE = cs2.FRK_STATUS AND rd2.SUBCLASS = 517
+    GROUP BY cs2.FK_CLAIM
+) sh ON sh.FK_CLAIM = scr.OBJECT_ID
+
+LEFT JOIN (
+    SELECT FK_SOC_REL, MIN(REFERENCE_ID) AS REFERENCE_ID
+    FROM SICS.CLAIM_REFS GROUP BY FK_SOC_REL
+) cref ON cref.FK_SOC_REL = scr.OBJECT_ID
+
+LEFT JOIN (
+    SELECT bpr.FK_INS_PERIOD, MIN(p.IDENTIFIER) AS IDENTIFIER
+    FROM SICS.BUSINESS_PRTNR_REL bpr
+    INNER JOIN SICS.PARTY p ON p.OBJECT_ID = bpr.FK_BUS_PARTNER
+    WHERE p.SUBCLASS = 4
+    /* AND bpr.FRK_RELSHIP_TYPE = '<broker code from REFERENCE_DATA 55>' */
+    GROUP BY bpr.FK_INS_PERIOD
+) brk ON brk.FK_INS_PERIOD = ip.OBJECT_ID
+
+ORDER BY c.CLAIM_IDENTIFIER
+
+
+
+
+
+*********************
+
+/* 1. Status / substatus / classification / source-system / relationship-type domains */
+SELECT SUBCLASS, CODE, NAME, IS_ACTIVE
+FROM SICS.REFERENCE_DATA
+WHERE SUBCLASS IN (517, 518, 528, 55, 1074)
+ORDER BY SUBCLASS, CODE;
+
+/* 2. Full status history for the two claims - shows what dates exist */
+SELECT scr.OBJECT_ID AS SOC_CLAIM, c.CLAIM_IDENTIFIER,
+       cs.SEQ_NUMBER, cs.FRK_STATUS, rd.NAME AS STATUS_NAME,
+       cs.FRK_SUB_STATUS, cs.CHANGE_DATE, cs.IS_CURRENT
+FROM SICS.CLAIMS c
+INNER JOIN SOC_TO_CLAIM_REL scr ON scr.FK_CLAIM = c.OBJECT_ID
+INNER JOIN CLAIM_STATUS cs      ON cs.FK_CLAIM  = scr.OBJECT_ID
+LEFT  JOIN SICS.REFERENCE_DATA rd    ON rd.CODE = cs.FRK_STATUS AND rd.SUBCLASS = 517
+ORDER BY c.CLAIM_IDENTIFIER, cs.SEQ_NUMBER;
+
+/* 3. All business partners on the claim's insured period - identify the real broker */
+SELECT c.CLAIM_IDENTIFIER, p.IDENTIFIER AS PARTY_ID, p.SUBCLASS AS PARTY_SUBCLASS,
+       bpr.FRK_RELSHIP_TYPE, rd.NAME AS RELATIONSHIP_NAME
+FROM SICS.CLAIMS c
+INNER JOIN SICS.SOC_TO_CLAIM_REL scr  ON scr.FK_CLAIM = c.OBJECT_ID
+LEFT  JOIN SICS.SCOPE_OF_COVER soc    ON soc.OBJECT_ID = scr.FK_SOC
+LEFT  JOIN SICS.LIFE_CYCLE_PHASE lcp  ON lcp.FK_SCOPE_OF_CVR = soc.OBJECT_ID
+LEFT  JOIN SICS.INSURED_PERIOD ip     ON ip.OBJECT_ID = COALESCE(soc.FK_LIFECYCLEP, lcp.FK_INS_PRD)
+LEFT  JOIN SICS.BUSINESS_PRTNR_REL bpr
+       ON bpr.FK_INS_PERIOD = ip.OBJECT_ID OR bpr.FK_BUSINESS = ip.FK_BUSINESS
+LEFT  JOIN SICS.PARTY p               ON p.OBJECT_ID = bpr.FK_BUS_PARTNER
+LEFT  JOIN SICS.REFERENCE_DATA rd     ON rd.CODE = bpr.FRK_RELSHIP_TYPE AND rd.SUBCLASS = 55
+ORDER BY c.CLAIM_IDENTIFIER;
