@@ -1,9 +1,12 @@
 SELECT
-    rd.CODE              AS PRMQ_BK,
-    rd.NAME              AS PRMQ_NAME,
+    rd.CODE              AS DCLR_BK,
+    rd.NAME              AS DCLR_NAME,
+    rd.EXTERNAL_CODE,
+    rd.SUBCLASS,
     rd.IS_ACTIVE,
-    ROW_NUMBER() OVER (ORDER BY rd.NAME, rd.CODE) AS PRMQ_SEQ
-FROM SICS.REFERENCE_DATA rd
-WHERE rd.SUBCLASS = 134
-ORDER BY
-    PRMQ_SEQ;
+    rd.IS_DEFAULT,
+    rd.IS_STATIC,
+    rd.IS_USER_DEFINED
+FROM dbo.REFERENCE_DATA AS rd
+WHERE rd.SUBCLASS = 106
+ORDER BY rd.CODE;
