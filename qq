@@ -1,4 +1,5 @@
 SELECT
+    ROW_NUMBER() OVER (ORDER BY CODE) AS EntryNo,
     rd.CODE              AS ENTS_BK,
     rd.NAME              AS ENTS_NAME,
     rd.EXTERNAL_CODE,
