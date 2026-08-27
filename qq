@@ -1,9 +1,5 @@
 SELECT
-      e.CODE            AS TRCD_CODE_BK
-    , e.DESCRIPTION     AS TRCD_CODE_DESCRIPTION
-    , e.NAME            AS TRCD_CODE_NAME          -- compare vs DESCRIPTION
-    , e.IS_ACTIVE
-    , e.FRK_SICSNT_SYSTEM
-FROM dbo.ENTRY_CODE AS e
-ORDER BY
-      e.CODE;
+    ISO_ALPHA   AS curr_bk,
+    DESCRIPTION AS curr_name
+FROM SICS.CNU_CURRENCY
+ORDER BY ISO_ALPHA;
