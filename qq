@@ -1,14 +1,9 @@
 SELECT
-    rd.SUBCLASS,
-    rd.CODE,
-    rd.NAME,
-    rd.EXTERNAL_CODE,
-    rd.IS_ACTIVE,
-    rd.IS_DEFAULT,
-    rd.IS_STATIC,
-    rd.IS_USER_DEFINED,
-    rd.DATA_TYPE_CODE,
-    rd.FK_NOTE
-FROM SICS.REFERENCE_DATA AS rd
-WHERE rd.SUBCLASS = 517
-ORDER BY rd.CODE;
+      e.CODE            AS TRCD_CODE_BK
+    , e.DESCRIPTION     AS TRCD_CODE_DESCRIPTION
+    , e.NAME            AS TRCD_CODE_NAME          -- compare vs DESCRIPTION
+    , e.IS_ACTIVE
+    , e.FRK_SICSNT_SYSTEM
+FROM dbo.ENTRY_CODE AS e
+ORDER BY
+      e.CODE;
