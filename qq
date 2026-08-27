@@ -1,5 +1,12 @@
 SELECT
-    ISO_ALPHA   AS curr_bk,
-    DESCRIPTION AS curr_name
-FROM SICS.CNU_CURRENCY
-ORDER BY ISO_ALPHA;
+    rd.CODE              AS ENTS_BK,
+    rd.NAME              AS ENTS_NAME,
+    rd.EXTERNAL_CODE,
+    rd.SUBCLASS,
+    rd.IS_ACTIVE,
+    rd.IS_DEFAULT,
+    rd.IS_STATIC,
+    rd.IS_USER_DEFINED
+FROM dbo.REFERENCE_DATA AS rd
+WHERE rd.SUBCLASS = 220
+ORDER BY rd.CODE;
