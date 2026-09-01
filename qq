@@ -1,106 +1,40 @@
-/* ============================================================
-   004_seed_provision_package.sql — Provision Package registration
-
-   Seeds audit.ETL_PACKAGE + audit.ETL_PACKAGE_TABLE for the
-   Provision Package (DimProvision.dtsx) and its nine loads.
-
-   Re-runnable: inserts the package if missing, then MERGE-upserts
-   the table rows. Does not touch execution / error history.
-
-   Apply after 001 control DDL, 002 Party seed, and 003 Claim seed.
-   ============================================================ */
-
-SET NOCOUNT ON;
-GO
-
-IF NOT EXISTS (
-    SELECT 1
-    FROM   audit.ETL_PACKAGE
-    WHERE  PACKAGE_NAME = N'PROVISION_PACKAGE'
+WITH ws_balance AS (
+    SELECT DISTINCT
+        d.FK_WORKSHEET,
+        b.OBJECT_ID,
+        b.IS_OUTWARD,
+        b.LEDGER_BAL_ORG_AMT
+    FROM dbo.AC_LEDGER_DETAIL AS d
+    INNER JOIN dbo.AC_LEDGER_BALANCE AS b
+            ON b.OBJECT_ID = d.FK_BALANCE
+    WHERE d.FK_WORKSHEET IS NOT NULL
 )
-BEGIN
-    INSERT INTO audit.ETL_PACKAGE
-        (PACKAGE_NAME, PACKAGE_FILE_NAME, EXECUTION_ORDER, IS_ENABLED, DESCRIPTION)
-    VALUES
-        (N'PROVISION_PACKAGE',
-         N'DimProvision.dtsx',
-         30,
-         1,
-         N'Provision package: Transaction Code, Currency, Transaction Type, Entry Source, Worksheet, Instalment, IW Transaction, OW Transaction, Settlement.');
-END
-ELSE
-BEGIN
-    UPDATE audit.ETL_PACKAGE
-    SET    PACKAGE_FILE_NAME = N'DimProvision.dtsx',
-           EXECUTION_ORDER   = 30,
-           IS_ENABLED        = 1,
-           DESCRIPTION       = N'Provision package: Transaction Code, Currency, Transaction Type, Entry Source, Worksheet, Instalment, IW Transaction, OW Transaction, Settlement.'
-    WHERE  PACKAGE_NAME = N'PROVISION_PACKAGE';
-END
-GO
-
-DECLARE @PackageId INT =
-    (SELECT PACKAGE_ID FROM audit.ETL_PACKAGE WHERE PACKAGE_NAME = N'PROVISION_PACKAGE');
-
-IF @PackageId IS NULL
-BEGIN
-    RAISERROR(N'PROVISION_PACKAGE was not found in audit.ETL_PACKAGE after seed.', 16, 1);
-END
-ELSE
-BEGIN
-    ;WITH src AS (
-        SELECT *
-        FROM (VALUES
-            (N'TRANSACTION_CODE',
-             N'SICS.dbo.ENTRY_CODE',
-             N'dbo.DIM_TRANSACTION_CODE',
-             N'ENTRY_CODE (SicsAccountingEntryCode).'),
-            (N'CURRENCY',
-             N'SICS.dbo.CNU_CURRENCY',
-             N'dbo.DIM_CURRENCY',
-             N'CNU_CURRENCY (SicsCurrency).'),
-            (N'TRANSACTION_TYPE',
-             N'SICS.dbo.sre_grouping_detail',
-             N'dbo.DIM_TRANSACTION_TYPE',
-             N'SRE grouping: sre_grouping_main → header → MASTER → detail.'),
-            (N'ENTRY_SOURCE',
-             N'SICS.dbo.REFERENCE_DATA',
-             N'dbo.DIM_ENTRY_SOURCE',
-             N'REFERENCE_DATA WHERE SUBCLASS = 220 (Origin Of Worksheet).'),
-            (N'WORK_SHEET',
-             N'SICS.dbo.AC_WORKSHEET',
-             N'dbo.DIM_WORK_SHEET',
-             N'AC_WORKSHEET; amounts via AC_LEDGER_BALANCE.FK_WORKSHEET.'),
-            (N'INSTALMENT',
-             N'SICS.dbo.BC_INSTAL',
-             N'dbo.FACT_INSTALMENT',
-             N'BC_INSTAL joined to BC_INST_CUR via FK_INST_CUR.'),
-            (N'IW_TRANSACTION',
-             N'SICS.dbo.AC_LEDGER_DETAIL',
-             N'dbo.FACT_IW_TRANSACTION',
-             N'AC_LEDGER_DETAIL joined to AC_LEDGER_BALANCE; IS_OUTWARD = N.'),
-            (N'OW_TRANSACTION',
-             N'SICS.dbo.AC_LEDGER_DETAIL',
-             N'dbo.FACT_OW_TRANSACTION',
-             N'AC_LEDGER_DETAIL joined to AC_LEDGER_BALANCE; IS_OUTWARD = Y.'),
-            (N'SETTLEMENT',
-             N'SICS.dbo.AC_LEDGER_DETAIL',
-             N'dbo.FACT_SETTLEMENT',
-             N'AC_LEDGER_DETAIL joined to AC_LEDGER_BALANCE; settlement balances.')
-        ) AS v (TABLE_NAME, SOURCE_OBJECT, TARGET_OBJECT, DESCRIPTION)
-    )
-    MERGE audit.ETL_PACKAGE_TABLE AS t
-    USING src
-       ON t.PACKAGE_ID = @PackageId
-      AND t.TABLE_NAME = src.TABLE_NAME
-    WHEN MATCHED THEN
-        UPDATE SET
-            SOURCE_OBJECT = src.SOURCE_OBJECT,
-            TARGET_OBJECT = src.TARGET_OBJECT,
-            DESCRIPTION   = src.DESCRIPTION,
-            IS_ENABLED    = 1
-    WHEN NOT MATCHED THEN
-        INSERT (PACKAGE_ID, TABLE_NAME, SOURCE_OBJECT, TARGET_OBJECT, IS_ENABLED, DESCRIPTION)
-        VALUES (@PackageId, src.TABLE_NAME, src.SOURCE_OBJECT, src.TARGET_OBJECT, 1, src.DESCRIPTION);
-END
-GO
+SELECT
+    w.OBJECT_ID                         AS sics_object_id,   -- staging only; not WRKS_SRGT
+    CONVERT(varchar(8), w.BOOKING_DATE, 112)
+        + '|' + CAST(w.ID_SERIE_NO AS varchar(20))
+                                        AS WRKS_BK,
+    w.BOOKING_DATE                      AS WRKS_DATE,
+    w.ID_SERIE_NO                       AS WRKS_NO,
+    CASE
+        WHEN SUM(CASE WHEN b.IS_OUTWARD = 'Y' THEN 1 ELSE 0 END) > 0
+         AND SUM(CASE WHEN ISNULL(b.IS_OUTWARD, 'N') = 'N' THEN 1 ELSE 0 END) = 0
+            THEN 'O'
+        WHEN SUM(CASE WHEN ISNULL(b.IS_OUTWARD, 'N') = 'N' THEN 1 ELSE 0 END) > 0
+         AND SUM(CASE WHEN b.IS_OUTWARD = 'Y' THEN 1 ELSE 0 END) = 0
+            THEN 'I'
+        WHEN COUNT(b.OBJECT_ID) = 0
+            THEN NULL
+        ELSE 'MIXED'
+    END                                 AS WRKS_INDICATOR,
+    SUM(b.LEDGER_BAL_ORG_AMT)           AS WRKS_CASH_TOTAL_AMT
+FROM dbo.AC_WORKSHEET AS w
+LEFT JOIN ws_balance AS b
+       ON b.FK_WORKSHEET = w.OBJECT_ID
+GROUP BY
+    w.OBJECT_ID,
+    w.BOOKING_DATE,
+    w.ID_SERIE_NO
+ORDER BY
+    w.BOOKING_DATE,
+    w.ID_SERIE_NO;
