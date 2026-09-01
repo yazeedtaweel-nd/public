@@ -1,13 +1,13 @@
 /* ============================================================
-   002_seed_party_package.sql — Party Package registration
+   003_seed_claim_package.sql — Claim Package registration
 
    Seeds audit.ETL_PACKAGE + audit.ETL_PACKAGE_TABLE for the
-   Party Package (DimParty.dtsx) and its six dimension loads.
+   Claim Package (DimClaim.dtsx) and its six dimension loads.
 
    Re-runnable: inserts the package if missing, then MERGE-upserts
    the table rows. Does not touch execution / error history.
 
-   Apply after 01_etl_control.sql (audit schema + control tables).
+   Apply after 001 control DDL and 002 Party seed.
    ============================================================ */
 
 SET NOCOUNT ON;
@@ -16,65 +16,65 @@ GO
 IF NOT EXISTS (
     SELECT 1
     FROM   audit.ETL_PACKAGE
-    WHERE  PACKAGE_NAME = N'PARTY_PACKAGE'
+    WHERE  PACKAGE_NAME = N'CLAIM_PACKAGE'
 )
 BEGIN
     INSERT INTO audit.ETL_PACKAGE
         (PACKAGE_NAME, PACKAGE_FILE_NAME, EXECUTION_ORDER, IS_ENABLED, DESCRIPTION)
     VALUES
-        (N'PARTY_PACKAGE',
-         N'DimParty.dtsx',
-         10,
+        (N'CLAIM_PACKAGE',
+         N'DimClaim.dtsx',
+         20,
          1,
-         N'Party package: Country, User, CRESTA zone, Company, Broker, Original Insured.');
+         N'Claim package: Loss Type, Claim Type, Claim Group, Claim Status, Claim Substatus, Claim.');
 END
 ELSE
 BEGIN
     UPDATE audit.ETL_PACKAGE
-    SET    PACKAGE_FILE_NAME = N'DimParty.dtsx',
-           EXECUTION_ORDER   = 10,
+    SET    PACKAGE_FILE_NAME = N'DimClaim.dtsx',
+           EXECUTION_ORDER   = 20,
            IS_ENABLED        = 1,
-           DESCRIPTION       = N'Party package: Country, User, CRESTA zone, Company, Broker, Original Insured.'
-    WHERE  PACKAGE_NAME = N'PARTY_PACKAGE';
+           DESCRIPTION       = N'Claim package: Loss Type, Claim Type, Claim Group, Claim Status, Claim Substatus, Claim.'
+    WHERE  PACKAGE_NAME = N'CLAIM_PACKAGE';
 END
 GO
 
 DECLARE @PackageId INT =
-    (SELECT PACKAGE_ID FROM audit.ETL_PACKAGE WHERE PACKAGE_NAME = N'PARTY_PACKAGE');
+    (SELECT PACKAGE_ID FROM audit.ETL_PACKAGE WHERE PACKAGE_NAME = N'CLAIM_PACKAGE');
 
 IF @PackageId IS NULL
 BEGIN
-    RAISERROR(N'PARTY_PACKAGE was not found in audit.ETL_PACKAGE after seed.', 16, 1);
+    RAISERROR(N'CLAIM_PACKAGE was not found in audit.ETL_PACKAGE after seed.', 16, 1);
 END
 ELSE
 BEGIN
     ;WITH src AS (
         SELECT *
         FROM (VALUES
-            (N'COUNTRY',
-             N'SICS.dbo.LEGAL_AREA',
-             N'dbo.DIM_COUNTRY',
-             N'LEGAL_AREA WHERE SUBCLASS = 1 (SicsCountry).'),
-            (N'USER',
-             N'SICS.dbo.CNU_USER',
-             N'dbo.DIM_USER',
-             N'CNU_USER joined to RU_LEAF via FK_RU.'),
-            (N'CRESTA_ZONE',
-             N'SICS.dbo.RISK_ZONE',
-             N'dbo.DIM_CRESTA_ZONE',
-             N'RISK_ZONE joined to LEGAL_AREA via FK_COUNTRY.'),
-            (N'COMPANY',
-             N'SICS.dbo.PARTY',
-             N'dbo.DIM_COMPANY',
-             N'PARTY SUBCLASS = 4 (SicsBusinessPartner) plus organisation name / address.'),
-            (N'BROKER',
-             N'SICS.dbo.PARTY',
-             N'dbo.DIM_BROKER',
-             N'PARTY SUBCLASS = 4 filtered to broker business-partner category.'),
-            (N'ORIGINAL_INSURED',
-             N'SICS.dbo.PARTY',
-             N'dbo.DIM_ORIGINAL_INSURED',
-             N'PARTY SUBCLASS = 4 AND IS_INSURED = Y.')
+            (N'LOSS_TYPE',
+             N'SICS.dbo.REFERENCE_DATA',
+             N'dbo.DIM_LOSS_TYPE',
+             N'REFERENCE_DATA WHERE SUBCLASS = 523 (Cause of Loss).'),
+            (N'CLAIM_TYPE',
+             N'SICS.dbo.REFERENCE_DATA',
+             N'dbo.DIM_CLAIM_TYPE',
+             N'REFERENCE_DATA WHERE SUBCLASS = 528 (Claim Classification).'),
+            (N'CLAIM_GROUP',
+             N'SICS.dbo.CLAIMS',
+             N'dbo.DIM_CLAIM_GROUP',
+             N'CLAIMS WHERE SUBCLASS = 6 (Headline Loss).'),
+            (N'CLAIM_STATUS',
+             N'SICS.dbo.REFERENCE_DATA',
+             N'dbo.DIM_CLAIM_STATUS',
+             N'REFERENCE_DATA WHERE SUBCLASS = 517 (Claim Status).'),
+            (N'CLAIM_SUBSTATUS',
+             N'SICS.dbo.REFERENCE_DATA',
+             N'dbo.DIM_CLAIM_SUBSTATUS',
+             N'REFERENCE_DATA WHERE SUBCLASS = 518 (Claim Sub Status).'),
+            (N'CLAIM',
+             N'SICS.dbo.CLAIMS',
+             N'dbo.DIM_CLAIM',
+             N'CLAIMS joined to SOC_TO_CLAIM_REL via FK_CLAIM.')
         ) AS v (TABLE_NAME, SOURCE_OBJECT, TARGET_OBJECT, DESCRIPTION)
     )
     MERGE audit.ETL_PACKAGE_TABLE AS t
