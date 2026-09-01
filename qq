@@ -1,13 +1,13 @@
 /* ============================================================
-   003_seed_claim_package.sql — Claim Package registration
+   004_seed_provision_package.sql — Provision Package registration
 
    Seeds audit.ETL_PACKAGE + audit.ETL_PACKAGE_TABLE for the
-   Claim Package (DimClaim.dtsx) and its six dimension loads.
+   Provision Package (DimProvision.dtsx) and its nine loads.
 
    Re-runnable: inserts the package if missing, then MERGE-upserts
    the table rows. Does not touch execution / error history.
 
-   Apply after 001 control DDL and 002 Party seed.
+   Apply after 001 control DDL, 002 Party seed, and 003 Claim seed.
    ============================================================ */
 
 SET NOCOUNT ON;
@@ -16,65 +16,77 @@ GO
 IF NOT EXISTS (
     SELECT 1
     FROM   audit.ETL_PACKAGE
-    WHERE  PACKAGE_NAME = N'CLAIM_PACKAGE'
+    WHERE  PACKAGE_NAME = N'PROVISION_PACKAGE'
 )
 BEGIN
     INSERT INTO audit.ETL_PACKAGE
         (PACKAGE_NAME, PACKAGE_FILE_NAME, EXECUTION_ORDER, IS_ENABLED, DESCRIPTION)
     VALUES
-        (N'CLAIM_PACKAGE',
-         N'DimClaim.dtsx',
-         20,
+        (N'PROVISION_PACKAGE',
+         N'DimProvision.dtsx',
+         30,
          1,
-         N'Claim package: Loss Type, Claim Type, Claim Group, Claim Status, Claim Substatus, Claim.');
+         N'Provision package: Transaction Code, Currency, Transaction Type, Entry Source, Worksheet, Instalment, IW Transaction, OW Transaction, Settlement.');
 END
 ELSE
 BEGIN
     UPDATE audit.ETL_PACKAGE
-    SET    PACKAGE_FILE_NAME = N'DimClaim.dtsx',
-           EXECUTION_ORDER   = 20,
+    SET    PACKAGE_FILE_NAME = N'DimProvision.dtsx',
+           EXECUTION_ORDER   = 30,
            IS_ENABLED        = 1,
-           DESCRIPTION       = N'Claim package: Loss Type, Claim Type, Claim Group, Claim Status, Claim Substatus, Claim.'
-    WHERE  PACKAGE_NAME = N'CLAIM_PACKAGE';
+           DESCRIPTION       = N'Provision package: Transaction Code, Currency, Transaction Type, Entry Source, Worksheet, Instalment, IW Transaction, OW Transaction, Settlement.'
+    WHERE  PACKAGE_NAME = N'PROVISION_PACKAGE';
 END
 GO
 
 DECLARE @PackageId INT =
-    (SELECT PACKAGE_ID FROM audit.ETL_PACKAGE WHERE PACKAGE_NAME = N'CLAIM_PACKAGE');
+    (SELECT PACKAGE_ID FROM audit.ETL_PACKAGE WHERE PACKAGE_NAME = N'PROVISION_PACKAGE');
 
 IF @PackageId IS NULL
 BEGIN
-    RAISERROR(N'CLAIM_PACKAGE was not found in audit.ETL_PACKAGE after seed.', 16, 1);
+    RAISERROR(N'PROVISION_PACKAGE was not found in audit.ETL_PACKAGE after seed.', 16, 1);
 END
 ELSE
 BEGIN
     ;WITH src AS (
         SELECT *
         FROM (VALUES
-            (N'LOSS_TYPE',
+            (N'TRANSACTION_CODE',
+             N'SICS.dbo.ENTRY_CODE',
+             N'dbo.DIM_TRANSACTION_CODE',
+             N'ENTRY_CODE (SicsAccountingEntryCode).'),
+            (N'CURRENCY',
+             N'SICS.dbo.CNU_CURRENCY',
+             N'dbo.DIM_CURRENCY',
+             N'CNU_CURRENCY (SicsCurrency).'),
+            (N'TRANSACTION_TYPE',
+             N'SICS.dbo.sre_grouping_detail',
+             N'dbo.DIM_TRANSACTION_TYPE',
+             N'SRE grouping: sre_grouping_main → header → MASTER → detail.'),
+            (N'ENTRY_SOURCE',
              N'SICS.dbo.REFERENCE_DATA',
-             N'dbo.DIM_LOSS_TYPE',
-             N'REFERENCE_DATA WHERE SUBCLASS = 523 (Cause of Loss).'),
-            (N'CLAIM_TYPE',
-             N'SICS.dbo.REFERENCE_DATA',
-             N'dbo.DIM_CLAIM_TYPE',
-             N'REFERENCE_DATA WHERE SUBCLASS = 528 (Claim Classification).'),
-            (N'CLAIM_GROUP',
-             N'SICS.dbo.CLAIMS',
-             N'dbo.DIM_CLAIM_GROUP',
-             N'CLAIMS WHERE SUBCLASS = 6 (Headline Loss).'),
-            (N'CLAIM_STATUS',
-             N'SICS.dbo.REFERENCE_DATA',
-             N'dbo.DIM_CLAIM_STATUS',
-             N'REFERENCE_DATA WHERE SUBCLASS = 517 (Claim Status).'),
-            (N'CLAIM_SUBSTATUS',
-             N'SICS.dbo.REFERENCE_DATA',
-             N'dbo.DIM_CLAIM_SUBSTATUS',
-             N'REFERENCE_DATA WHERE SUBCLASS = 518 (Claim Sub Status).'),
-            (N'CLAIM',
-             N'SICS.dbo.CLAIMS',
-             N'dbo.DIM_CLAIM',
-             N'CLAIMS joined to SOC_TO_CLAIM_REL via FK_CLAIM.')
+             N'dbo.DIM_ENTRY_SOURCE',
+             N'REFERENCE_DATA WHERE SUBCLASS = 220 (Origin Of Worksheet).'),
+            (N'WORK_SHEET',
+             N'SICS.dbo.AC_WORKSHEET',
+             N'dbo.DIM_WORK_SHEET',
+             N'AC_WORKSHEET; amounts via AC_LEDGER_BALANCE.FK_WORKSHEET.'),
+            (N'INSTALMENT',
+             N'SICS.dbo.BC_INSTAL',
+             N'dbo.FACT_INSTALMENT',
+             N'BC_INSTAL joined to BC_INST_CUR via FK_INST_CUR.'),
+            (N'IW_TRANSACTION',
+             N'SICS.dbo.AC_LEDGER_DETAIL',
+             N'dbo.FACT_IW_TRANSACTION',
+             N'AC_LEDGER_DETAIL joined to AC_LEDGER_BALANCE; IS_OUTWARD = N.'),
+            (N'OW_TRANSACTION',
+             N'SICS.dbo.AC_LEDGER_DETAIL',
+             N'dbo.FACT_OW_TRANSACTION',
+             N'AC_LEDGER_DETAIL joined to AC_LEDGER_BALANCE; IS_OUTWARD = Y.'),
+            (N'SETTLEMENT',
+             N'SICS.dbo.AC_LEDGER_DETAIL',
+             N'dbo.FACT_SETTLEMENT',
+             N'AC_LEDGER_DETAIL joined to AC_LEDGER_BALANCE; settlement balances.')
         ) AS v (TABLE_NAME, SOURCE_OBJECT, TARGET_OBJECT, DESCRIPTION)
     )
     MERGE audit.ETL_PACKAGE_TABLE AS t
