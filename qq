@@ -1,6 +1,20 @@
-SELECT COUNT(*) AS total_rows FROM dbo.BASE_AUDIT;
-
-SELECT TOP (20) PARENT_CLASS, COUNT(*) AS row_count
-FROM SICS.BASE_AUDIT
-GROUP BY PARENT_CLASS
-ORDER BY COUNT(*) DESC;
+SELECT TOP (50)
+    i.OBJECT_ID                 AS instalment_id,
+    i.INST_NR,
+    ws.BOOKING_DATE             AS cand_a_date,      -- → INS_AUDIT_DATE?
+    ws.ID_SERIE_NO              AS cand_a_num_serie,
+    dtl.WKST_SEQ_NBR            AS cand_b_num_wkst_seq,  -- → INS_AUDIT_NUM?
+    ws.IDENTIFIER               AS worksheet_identifier,
+    i.PREMIUM_AMT,
+    i.BOOKED_PRE_AMT
+FROM sics.BC_INSTAL AS i
+CROSS APPLY (
+    SELECT TOP (1) d.FK_WORKSHEET, d.WKST_SEQ_NBR
+    FROM sics.AC_LEDGER_DETAIL AS d
+    WHERE d.FK_SRCE_INSTALMENT = i.OBJECT_ID
+      AND d.FK_WORKSHEET IS NOT NULL
+    ORDER BY d.WKST_SEQ_NBR
+) AS dtl
+INNER JOIN sics.AC_WORKSHEET AS ws
+        ON ws.OBJECT_ID = dtl.FK_WORKSHEET
+ORDER BY ws.BOOKING_DATE, ws.ID_SERIE_NO, i.INST_NR;
