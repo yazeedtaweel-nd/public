@@ -1,156 +1,29 @@
-/* SICS source extract for FACT_IW_TRANSACTION / FACT_OW_TRANSACTION
-   Grain: 1 row per AC_LEDGER_DETAIL.OBJECT_ID
-   IW: @IsOutward = 'N'
-   OW: @IsOutward = 'Y'
-*/
-DECLARE @IsOutward CHAR(1) = 'N';  -- change to 'Y' for FACT_OW_TRANSACTION
-
 SELECT
-    dtl.OBJECT_ID                         AS SRC_DETAIL_ID,          -- natural key for TRANS_SRGT
-    bal.OBJECT_ID                         AS SRC_BALANCE_ID,
-    ws.OBJECT_ID                          AS SRC_WORKSHEET_ID,       -- WRKS_SRGT lookup
-    ws.IDENTIFIER                         AS WRKS_IDENTIFIER,
-    ws.ID_PREFIX,
-    ws.ID_YR_PART,
-    ws.ID_SERIE_NO                        AS TRANS_AUDIT_NUM_CANDIDATE,  -- confirm vs ADJUSTMENT_NUMBER / WKST_SEQ_NBR
-    bal.ADJUSTMENT_NUMBER,
-    dtl.WKST_SEQ_NBR,
+    i.OBJECT_ID                         AS instalment_id,
+    i.INST_NR,
 
-    /* dates / periods — convert to DIM_DATE / period SRGTs in ETL */
-    ws.BOOKING_DATE                       AS TRANS_AUDIT_DATE_CANDIDATE,
-    bal.DATE_OF_BOOKING,
-    dtl.AC_START_DATE                     AS TRANS_ACCOUNTING_FROM_DATE,
-    dtl.AC_END_DATE                       AS TRANS_ACCOUNTING_TO_DATE,
-    bal.FRK_BOOKING_PERIOD,
-    bal.BOOKING_YEAR,
-    bal.FSK_BOOKING_PERIOD,
+    /* candidate A – worksheet (current mapping) */
+    ws.BOOKING_DATE                     AS cand_a_date,
+    ws.ID_SERIE_NO                      AS cand_a_num_serie,
 
-    /* amounts */
-    dtl.DTL_AMT                           AS TRANS_ORIG_GROSS_AMT,
-    dtl.EXCH_AMT                          AS TRANS_BASE_GROSS_AMT,
-    dtl.FUNC_AMT2                         AS TRANS_BASE2_GROSS_AMT,
-    bal.SETTLED_AMT                       AS TRANS_SETT_GROSS_AMT_CANDIDATE, -- balance grain; confirm
+    /* candidate B – ledger detail sequence (new, strongest for the number) */
+    dtl.WKST_SEQ_NBR                    AS cand_b_num_wkst_seq,
 
-    /* currencies → DIM_CURRENCY via ISO_ALPHA */
-    bal.FK_CURR                           AS CURR_ORIG_CODE,
-    bal.FK_AC_FUNC_CCY                    AS CURR_BASE_CODE,
-    bal.FK_AC_FUNC_CCY2                   AS CURR_BASE2_CODE,
-    bal.FK_LLOYDS_SETL_CUR                AS CURR_SETT_CODE_CANDIDATE,
-
-    /* transaction type/code */
-    dtl.FK_ENTRY_CODE,
-    ec.CODE                               AS ENTRY_CODE,             -- DIM_TRANSACTION_CODE / roll-up to TRST_SRGT
-    ec.NAME                               AS ENTRY_CODE_NAME,
-    ec.FRK_ENTRY_SUB_CAT,
-
-    /* IW vs OW split */
-    bal.IS_OUTWARD,
-    bal.FRK_BUS_LEVEL,
-    bus_ow.SUBCLASS                       AS OW_BUSINESS_SUBCLASS,   -- 11 = SicsOutwardCedentsContract (typical OW)
-
-    /* policy keys → DIM_POLICY */
-    dtl.FK_INS_PER,
-    ip.OBJECT_ID                          AS SRC_INS_PER_ID,
-    bus.OBJECT_ID                         AS SRC_POLICY_BUSINESS_ID,
-    bus.IDENTIFIER                        AS POLICY_BK_CANDIDATE,
-    ip.UNDERWR_YEAR,
-
-    dtl.FK_INS_PER_ASSUMED,                                        -- OW: assumed/inward IP behind the OW booking
-    ip_assumed.OBJECT_ID                  AS SRC_ASSUMED_INS_PER_ID,
-    bus_assumed.OBJECT_ID                 AS SRC_IW_POLICY_BUSINESS_ID,
-    bus_assumed.IDENTIFIER                AS IW_POLICY_BK_CANDIDATE,
-
-    CASE WHEN @IsOutward = 'Y' THEN bus.IDENTIFIER ELSE bus.IDENTIFIER END AS OW_OR_MAIN_POLICY_BK,
-    CASE WHEN @IsOutward = 'Y' THEN bus_assumed.IDENTIFIER ELSE bus.IDENTIFIER END AS IW_POLICY_BK_HINT,
-
-    /* claim */
-    bal.FK_CLAIM                          AS SRC_SOC_TO_CLAIM_REL_ID,
-    soc.FK_CLAIM                          AS SRC_CLAIM_ID_FROM_BALANCE,
-    clm_bal.CLAIM_IDENTIFIER              AS CLAIM_BK_FROM_BALANCE,
-    dtl.FK_CLAIM_TO_SOC                   AS SRC_CLAIM_ID_OUTWARD,   -- outward bookings
-    clm_ow.CLAIM_IDENTIFIER               AS CLAIM_BK_OUTWARD,
-    dtl.FK_HEADLINE_LOSS                  AS SRC_HEADLINE_LOSS_ID,   -- inward
-    hl.CLAIM_IDENTIFIER                   AS CLGRP_BK_CANDIDATE,
-    hl.SUBCLASS                           AS HEADLINE_SUBCLASS,      -- expect 6
-
-    /* company / insured */
-    bal.FK_BASE_COMPANY,
-    p_comp.IDENTIFIER                     AS COMP_BK,
-    bal.FK_BP,
-    p_bp.IDENTIFIER                       AS LEDGER_BP_BK,
-    bal.FK_INSURED,
-    p_ins.IDENTIFIER                      AS IND_BK_CANDIDATE,
-    dtl.FK_ORG_BS,
-    dtl.OCC_ID,
-
-    /* user / worksheet origin */
-    ws.FK_REGISTERED_BY,
-    usr.USER_ID                           AS USR_LOGIN,
-    ws.FRK_ORIGIN                         AS ENTRY_SOURCE_CODE,      -- REF #220
-    ws.FRK_SICSNT_SYSTEM,
-    dtl.FRK_SICSNT_SYSTEM                 AS DETAIL_SICSNT_SYSTEM,
-
-    /* broker — TOP 1 so grain stays at ledger detail */
-    brk.BROK_PARTY_ID,
-    brk.BROK_BK
-
-FROM SICS.AC_LEDGER_DETAIL AS dtl
-INNER JOIN SICS.AC_LEDGER_BALANCE AS bal
-        ON bal.OBJECT_ID = dtl.FK_BALANCE
-LEFT JOIN SICS.AC_WORKSHEET AS ws
-        ON ws.OBJECT_ID = COALESCE(dtl.FK_WORKSHEET, bal.FK_WORKSHEET)
-LEFT JOIN SICS.ENTRY_CODE AS ec
-        ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
-LEFT JOIN SICS.CNU_USER AS usr
-        ON usr.OBJECT_ID = ws.FK_REGISTERED_BY
-
-LEFT JOIN SICS.INSURED_PERIOD AS ip
-        ON ip.OBJECT_ID = dtl.FK_INS_PER
-LEFT JOIN SICS.BUSINESS AS bus
-        ON bus.OBJECT_ID = ip.FK_BUSINESS
-
-LEFT JOIN SICS.INSURED_PERIOD AS ip_assumed
-        ON ip_assumed.OBJECT_ID = dtl.FK_INS_PER_ASSUMED
-LEFT JOIN SICS.BUSINESS AS bus_assumed
-        ON bus_assumed.OBJECT_ID = ip_assumed.FK_BUSINESS
-
-LEFT JOIN SICS.BUSINESS AS bus_ow
-        ON bus_ow.OBJECT_ID = bus.OBJECT_ID
-
-LEFT JOIN SICS.SOC_TO_CLAIM_REL AS soc
-        ON soc.OBJECT_ID = bal.FK_CLAIM
-LEFT JOIN SICS.CLAIMS AS clm_bal
-        ON clm_bal.OBJECT_ID = soc.FK_CLAIM
-LEFT JOIN SICS.CLAIMS AS clm_ow
-        ON clm_ow.OBJECT_ID = dtl.FK_CLAIM_TO_SOC
-LEFT JOIN SICS.CLAIMS AS hl
-        ON hl.OBJECT_ID = dtl.FK_HEADLINE_LOSS
-
-LEFT JOIN SICS.PARTY AS p_comp
-        ON p_comp.OBJECT_ID = bal.FK_BASE_COMPANY
-LEFT JOIN SICS.PARTY AS p_bp
-        ON p_bp.OBJECT_ID = bal.FK_BP
-LEFT JOIN SICS.PARTY AS p_ins
-        ON p_ins.OBJECT_ID = bal.FK_INSURED
-
+    /* candidate C – BASE_AUDIT */
+    ba.CREATED_WHEN                     AS cand_c_created_when,
+    ba.UPDATED_WHEN                     AS cand_c_updated_when,
+    ba.PARENT_CLASS                     AS cand_c_parent_class,
+    CASE WHEN ba.OBJECT_ID IS NULL THEN 'NO AUDIT ROW' ELSE 'ok' END
+                                        AS cand_c_coverage
+FROM dbo.BC_INSTAL AS i
 OUTER APPLY (
-    SELECT TOP (1)
-           p.OBJECT_ID   AS BROK_PARTY_ID,
-           p.IDENTIFIER  AS BROK_BK
-    FROM SICS.BUSINESS_PRTNR_REL AS bpr
-    INNER JOIN SICS.PARTY AS p
-            ON p.OBJECT_ID = bpr.FK_BUS_PARTNER
-    WHERE bpr.FRK_RELSHIP_TYPE = 'BR'
-      AND bpr.FSK_RELSHIP_TYPE = 55
-      AND (
-            bpr.FK_INS_PERIOD = dtl.FK_INS_PER
-         OR bpr.FK_BUSINESS   = ip.FK_BUSINESS
-          )
-    ORDER BY p.IDENTIFIER
-) AS brk
-
-WHERE bal.IS_OUTWARD = @IsOutward
-  -- optional extras once confirmed:
-  -- AND ws.FRK_STATUS = '...'
-  -- AND dtl.FRK_SICSNT_SYSTEM = 'PC'
-;
+    SELECT TOP (1) d.FK_WORKSHEET, d.WKST_SEQ_NBR
+    FROM dbo.AC_LEDGER_DETAIL AS d
+    WHERE d.FK_SRCE_INSTALMENT = i.OBJECT_ID
+    ORDER BY d.WKST_SEQ_NBR
+) AS dtl
+LEFT JOIN dbo.AC_WORKSHEET AS ws
+       ON ws.OBJECT_ID = dtl.FK_WORKSHEET
+LEFT JOIN dbo.BASE_AUDIT AS ba
+       ON ba.FK_PARENT = i.OBJECT_ID
+WHERE i.OBJECT_ID IN ( /* a few ids, ideally from one worksheet */ );
