@@ -1,10 +1,10 @@
 /* Q2 – which reference table owns 'DFD'? */
 SELECT SUBCLASS, CODE, NAME, EXTERNAL_CODE
-FROM dbo.REFERENCE_DATA
+FROM sics.REFERENCE_DATA
 WHERE CODE = N'DFD';
 
 /* Q3 – which ref-1011 code means brokerage? */
-SELECT CODE, NAME FROM dbo.REFERENCE_DATA WHERE SUBCLASS = 1011 ORDER BY CODE;
+SELECT CODE, NAME FROM sics.REFERENCE_DATA WHERE SUBCLASS = 1011 ORDER BY CODE;
 
 
 
@@ -51,44 +51,44 @@ SELECT
     END                                               AS BROKERAGE,
     ISNULL(ipt.PREMIUM_AMT, 0)                        AS TAX_ON_PREMIUM
 
-FROM dbo.BC_INSTAL AS i
+FROM sics.BC_INSTAL AS i
 
-INNER JOIN dbo.BC_INST_CUR AS icur
+INNER JOIN sics.BC_INST_CUR AS icur
         ON icur.OBJECT_ID = i.FK_INST_CUR
 
-INNER JOIN dbo.BC_INST_CONT AS icont
+INNER JOIN sics.BC_INST_CONT AS icont
         ON icont.OBJECT_ID = icur.FK_CONDITION
 
 /* booked only – drops schedule rows that never reached a worksheet */
 CROSS APPLY (
     SELECT TOP (1) d.FK_WORKSHEET, d.FK_BALANCE, d.WKST_SEQ_NBR, d.EXCH_AMT
-    FROM dbo.AC_LEDGER_DETAIL AS d
+    FROM sics.AC_LEDGER_DETAIL AS d
     WHERE d.FK_SRCE_INSTALMENT = i.OBJECT_ID
       AND d.FK_WORKSHEET IS NOT NULL
     ORDER BY d.WKST_SEQ_NBR
 ) AS dtl
 
-INNER JOIN dbo.AC_WORKSHEET AS ws
+INNER JOIN sics.AC_WORKSHEET AS ws
         ON ws.OBJECT_ID = dtl.FK_WORKSHEET
 
-LEFT JOIN dbo.AC_LEDGER_BALANCE AS bal
+LEFT JOIN sics.AC_LEDGER_BALANCE AS bal
        ON bal.OBJECT_ID = dtl.FK_BALANCE
 
 /* policy path – FK_INSURED_PERIOD alone is unreliable (performance copy) */
-LEFT JOIN dbo.BUS_COND_CONTAINER AS bcc
+LEFT JOIN sics.BUS_COND_CONTAINER AS bcc
        ON bcc.OBJECT_ID = icont.FK_COND_CONTAINER
-LEFT JOIN dbo.SCOPE_OF_COVER AS soc
+LEFT JOIN sics.SCOPE_OF_COVER AS soc
        ON soc.OBJECT_ID = bcc.FK_SOC
-LEFT JOIN dbo.LIFE_CYCLE_PHASE AS lcp
+LEFT JOIN sics.LIFE_CYCLE_PHASE AS lcp
        ON lcp.OBJECT_ID = soc.FK_LIFECYCLEP
-LEFT JOIN dbo.INSURED_PERIOD AS ip
+LEFT JOIN sics.INSURED_PERIOD AS ip
        ON ip.OBJECT_ID = COALESCE(icont.FK_INSURED_PERIOD, lcp.FK_INS_PRD)
-LEFT JOIN dbo.BUSINESS AS b
+LEFT JOIN sics.BUSINESS AS b
        ON b.OBJECT_ID = ip.FK_BUSINESS
 
 OUTER APPLY (
     SELECT TOP (1) r.IDENTIFIER
-    FROM dbo.BUS_STRUCT_REP AS r
+    FROM sics.BUS_STRUCT_REP AS r
     WHERE r.FK_PC_INST = icont.OBJECT_ID
     ORDER BY r.IDENTIFIER
 ) AS rep
@@ -96,8 +96,8 @@ OUTER APPLY (
 /* instalment type */
 OUTER APPLY (
     SELECT TOP (1) cd.FRK_TYPE
-    FROM dbo.LPC_PREM_COND AS pc
-    INNER JOIN dbo.BC_INSTAL_COND_DTL AS cd
+    FROM sics.LPC_PREM_COND AS pc
+    INNER JOIN sics.BC_INSTAL_COND_DTL AS cd
             ON cd.FK_CONDITION = pc.OBJECT_ID
            AND cd.FK_CURRENCY  = icur.FK_INST_CUR
     WHERE pc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
@@ -107,10 +107,10 @@ OUTER APPLY (
 /* SRE_MDP – deposit premium for this currency */
 OUTER APPLY (
     SELECT TOP (1) dp.PREMIUM_AMOUNT
-    FROM dbo.LPC_PREM_COND AS pc
-    INNER JOIN dbo.LPC_DEP_PREMIUM AS dp
+    FROM sics.LPC_PREM_COND AS pc
+    INNER JOIN sics.LPC_DEP_PREMIUM AS dp
             ON dp.FK_CONDITION = pc.OBJECT_ID
-    LEFT JOIN dbo.LPC_CUR_LIMIT_PREM AS clp
+    LEFT JOIN sics.LPC_CUR_LIMIT_PREM AS clp
            ON clp.OBJECT_ID = dp.FK_CURRENCY
     WHERE pc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
       AND (clp.FK_CURRENCY = icur.FK_INST_CUR OR clp.FK_CURRENCY IS NULL)
@@ -120,8 +120,8 @@ OUTER APPLY (
 /* brokerage percentage – confirm the ref-1011 code for brokerage */
 OUTER APPLY (
     SELECT TOP (1) de.PCT
-    FROM dbo.DEDUCTION_COND AS dc
-    INNER JOIN dbo.DEDUCTION_ELEMENT AS de
+    FROM sics.DEDUCTION_COND AS dc
+    INNER JOIN sics.DEDUCTION_ELEMENT AS de
             ON de.FK_DED_COND = dc.OBJECT_ID
     WHERE dc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
       AND de.PCT IS NOT NULL
@@ -132,8 +132,8 @@ OUTER APPLY (
 /* tax on premium */
 OUTER APPLY (
     SELECT TOP (1) t.PREMIUM_AMT
-    FROM dbo.BUS_SINGLE_IPT AS t
-    INNER JOIN dbo.BUS_IPT_CONTAINER AS tc
+    FROM sics.BUS_SINGLE_IPT AS t
+    INNER JOIN sics.BUS_IPT_CONTAINER AS tc
             ON tc.OBJECT_ID = t.FK_CONDITION
     WHERE t.INST_NR          = i.INST_NR
       AND t.FK_CURRENCY      = icur.FK_INST_CUR
