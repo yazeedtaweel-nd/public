@@ -1,29 +1,6 @@
-SELECT
-    i.OBJECT_ID                         AS instalment_id,
-    i.INST_NR,
+SELECT COUNT(*) AS total_rows FROM dbo.BASE_AUDIT;
 
-    /* candidate A – worksheet (current mapping) */
-    ws.BOOKING_DATE                     AS cand_a_date,
-    ws.ID_SERIE_NO                      AS cand_a_num_serie,
-
-    /* candidate B – ledger detail sequence (new, strongest for the number) */
-    dtl.WKST_SEQ_NBR                    AS cand_b_num_wkst_seq,
-
-    /* candidate C – BASE_AUDIT */
-    ba.CREATED_WHEN                     AS cand_c_created_when,
-    ba.UPDATED_WHEN                     AS cand_c_updated_when,
-    ba.PARENT_CLASS                     AS cand_c_parent_class,
-    CASE WHEN ba.OBJECT_ID IS NULL THEN 'NO AUDIT ROW' ELSE 'ok' END
-                                        AS cand_c_coverage
-FROM dbo.BC_INSTAL AS i
-OUTER APPLY (
-    SELECT TOP (1) d.FK_WORKSHEET, d.WKST_SEQ_NBR
-    FROM dbo.AC_LEDGER_DETAIL AS d
-    WHERE d.FK_SRCE_INSTALMENT = i.OBJECT_ID
-    ORDER BY d.WKST_SEQ_NBR
-) AS dtl
-LEFT JOIN dbo.AC_WORKSHEET AS ws
-       ON ws.OBJECT_ID = dtl.FK_WORKSHEET
-LEFT JOIN dbo.BASE_AUDIT AS ba
-       ON ba.FK_PARENT = i.OBJECT_ID
-WHERE i.OBJECT_ID IN ( /* a few ids, ideally from one worksheet */ );
+SELECT TOP (20) PARENT_CLASS, COUNT(*) AS row_count
+FROM SICS.BASE_AUDIT
+GROUP BY PARENT_CLASS
+ORDER BY COUNT(*) DESC;
