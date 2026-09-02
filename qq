@@ -1,20 +1,142 @@
-SELECT TOP (50)
-    i.OBJECT_ID                 AS instalment_id,
-    i.INST_NR,
-    ws.BOOKING_DATE             AS cand_a_date,      -- → INS_AUDIT_DATE?
-    ws.ID_SERIE_NO              AS cand_a_num_serie,
-    dtl.WKST_SEQ_NBR            AS cand_b_num_wkst_seq,  -- → INS_AUDIT_NUM?
-    ws.IDENTIFIER               AS worksheet_identifier,
-    i.PREMIUM_AMT,
-    i.BOOKED_PRE_AMT
-FROM sics.BC_INSTAL AS i
+/* Q2 – which reference table owns 'DFD'? */
+SELECT SUBCLASS, CODE, NAME, EXTERNAL_CODE
+FROM dbo.REFERENCE_DATA
+WHERE CODE = N'DFD';
+
+/* Q3 – which ref-1011 code means brokerage? */
+SELECT CODE, NAME FROM dbo.REFERENCE_DATA WHERE SUBCLASS = 1011 ORDER BY CODE;
+
+
+
+/* =============================================================================
+   FACT_INSTALMENT – SICS extract
+   Grain: one booked BC_INSTAL (has a ledger detail on a worksheet)
+
+   Lookup keys only (not DWH columns):
+     WRKS_BK   → DIM_WORK_SHEET.WRKS_BK → WRKS_SRGT
+     POLICY_BK → DIM_POLICY.POLICY_BK   → POLICY_SRGT
+
+   Not selected (no SICS source): INS_FAC_RI_PENDING, INS_CLOSING_REF
+   Ruled out: BASE_AUDIT (1 row, container class only)
+   ============================================================================= */
+
+SELECT
+    CONVERT(varchar(8), ws.BOOKING_DATE, 112)
+        + '|' + CAST(ws.ID_SERIE_NO AS varchar(20))   AS WRKS_BK,
+    COALESCE(b.IDENTIFIER, rep.IDENTIFIER)            AS POLICY_BK,
+
+    ws.BOOKING_DATE                                   AS INS_AUDIT_DATE,
+    dtl.WKST_SEQ_NBR                                  AS INS_AUDIT_NUM,
+    i.INST_NR                                         AS INS_INSTALMENT_NUM,
+    i.DUE_DATE                                        AS INS_INSTALMENT_DUE_DATE,
+    ISNULL(i.PAYMENT_DATE, '9999-01-01')              AS INS_ACTUAL_PAYMENT_DATE,
+    icd.FRK_TYPE                                      AS INS_INSTALMENT_TYPE,
+    i.PREMIUM_AMT                                     AS INS_INSTALMENT_ORIG_AMT,
+    i.BOOKED_PRE_AMT                                  AS INS_INSTALMENT_SETT_AMT,
+    CAST(NULL AS numeric(22,8))                       AS INS_FAC_RI_PENDING,
+    i.AC_START_DATE                                   AS INS_START_DATE,
+    i.AC_END_DATE                                     AS INS_END_DATE,
+    dtl.EXCH_AMT                                      AS INS_INSTALMENT_BASE_AMT,
+    CAST(NULL AS varchar(50))                         AS INS_CLOSING_REF,
+    -1                                                AS POLICY_VERSION_NUM,
+    icur.NR_INSTAL                                    AS INSTALEMENT_COUNT,
+    icur.FK_INST_CUR                                  AS INS_INSTALMENT_ORIG_CCY,
+    ISNULL(bal.FK_CURR, icur.FK_INST_CUR)             AS INS_INSTALMENT_SETT_CCY,
+    dep.PREMIUM_AMOUNT                                AS SRE_MDP,
+    CASE WHEN ISNULL(icur.NR_INSTAL, 0) = 0 THEN NULL
+         ELSE dep.PREMIUM_AMOUNT / icur.NR_INSTAL
+    END                                               AS SRE_MDP_INSTALMENT,
+    CASE WHEN ISNULL(icur.NR_INSTAL, 0) = 0 THEN NULL
+         ELSE (dep.PREMIUM_AMOUNT / icur.NR_INSTAL) * (ded.PCT / 100.0)
+    END                                               AS BROKERAGE,
+    ISNULL(ipt.PREMIUM_AMT, 0)                        AS TAX_ON_PREMIUM
+
+FROM dbo.BC_INSTAL AS i
+
+INNER JOIN dbo.BC_INST_CUR AS icur
+        ON icur.OBJECT_ID = i.FK_INST_CUR
+
+INNER JOIN dbo.BC_INST_CONT AS icont
+        ON icont.OBJECT_ID = icur.FK_CONDITION
+
+/* booked only – drops schedule rows that never reached a worksheet */
 CROSS APPLY (
-    SELECT TOP (1) d.FK_WORKSHEET, d.WKST_SEQ_NBR
-    FROM sics.AC_LEDGER_DETAIL AS d
+    SELECT TOP (1) d.FK_WORKSHEET, d.FK_BALANCE, d.WKST_SEQ_NBR, d.EXCH_AMT
+    FROM dbo.AC_LEDGER_DETAIL AS d
     WHERE d.FK_SRCE_INSTALMENT = i.OBJECT_ID
       AND d.FK_WORKSHEET IS NOT NULL
     ORDER BY d.WKST_SEQ_NBR
 ) AS dtl
-INNER JOIN sics.AC_WORKSHEET AS ws
+
+INNER JOIN dbo.AC_WORKSHEET AS ws
         ON ws.OBJECT_ID = dtl.FK_WORKSHEET
-ORDER BY ws.BOOKING_DATE, ws.ID_SERIE_NO, i.INST_NR;
+
+LEFT JOIN dbo.AC_LEDGER_BALANCE AS bal
+       ON bal.OBJECT_ID = dtl.FK_BALANCE
+
+/* policy path – FK_INSURED_PERIOD alone is unreliable (performance copy) */
+LEFT JOIN dbo.BUS_COND_CONTAINER AS bcc
+       ON bcc.OBJECT_ID = icont.FK_COND_CONTAINER
+LEFT JOIN dbo.SCOPE_OF_COVER AS soc
+       ON soc.OBJECT_ID = bcc.FK_SOC
+LEFT JOIN dbo.LIFE_CYCLE_PHASE AS lcp
+       ON lcp.OBJECT_ID = soc.FK_LIFECYCLEP
+LEFT JOIN dbo.INSURED_PERIOD AS ip
+       ON ip.OBJECT_ID = COALESCE(icont.FK_INSURED_PERIOD, lcp.FK_INS_PRD)
+LEFT JOIN dbo.BUSINESS AS b
+       ON b.OBJECT_ID = ip.FK_BUSINESS
+
+OUTER APPLY (
+    SELECT TOP (1) r.IDENTIFIER
+    FROM dbo.BUS_STRUCT_REP AS r
+    WHERE r.FK_PC_INST = icont.OBJECT_ID
+    ORDER BY r.IDENTIFIER
+) AS rep
+
+/* instalment type */
+OUTER APPLY (
+    SELECT TOP (1) cd.FRK_TYPE
+    FROM dbo.LPC_PREM_COND AS pc
+    INNER JOIN dbo.BC_INSTAL_COND_DTL AS cd
+            ON cd.FK_CONDITION = pc.OBJECT_ID
+           AND cd.FK_CURRENCY  = icur.FK_INST_CUR
+    WHERE pc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
+    ORDER BY CASE WHEN pc.IS_CURRENT_OF_IP = 'Y' THEN 0 ELSE 1 END, pc.OBJECT_ID
+) AS icd
+
+/* SRE_MDP – deposit premium for this currency */
+OUTER APPLY (
+    SELECT TOP (1) dp.PREMIUM_AMOUNT
+    FROM dbo.LPC_PREM_COND AS pc
+    INNER JOIN dbo.LPC_DEP_PREMIUM AS dp
+            ON dp.FK_CONDITION = pc.OBJECT_ID
+    LEFT JOIN dbo.LPC_CUR_LIMIT_PREM AS clp
+           ON clp.OBJECT_ID = dp.FK_CURRENCY
+    WHERE pc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
+      AND (clp.FK_CURRENCY = icur.FK_INST_CUR OR clp.FK_CURRENCY IS NULL)
+    ORDER BY CASE WHEN pc.IS_CURRENT_OF_IP = 'Y' THEN 0 ELSE 1 END, pc.OBJECT_ID
+) AS dep
+
+/* brokerage percentage – confirm the ref-1011 code for brokerage */
+OUTER APPLY (
+    SELECT TOP (1) de.PCT
+    FROM dbo.DEDUCTION_COND AS dc
+    INNER JOIN dbo.DEDUCTION_ELEMENT AS de
+            ON de.FK_DED_COND = dc.OBJECT_ID
+    WHERE dc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
+      AND de.PCT IS NOT NULL
+      /* AND de.FRK_TYPE = N'<brokerage code, ref 1011>' */
+    ORDER BY de.OBJECT_ID
+) AS ded
+
+/* tax on premium */
+OUTER APPLY (
+    SELECT TOP (1) t.PREMIUM_AMT
+    FROM dbo.BUS_SINGLE_IPT AS t
+    INNER JOIN dbo.BUS_IPT_CONTAINER AS tc
+            ON tc.OBJECT_ID = t.FK_CONDITION
+    WHERE t.INST_NR          = i.INST_NR
+      AND t.FK_CURRENCY      = icur.FK_INST_CUR
+      AND tc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
+    ORDER BY t.OBJECT_ID
+) AS ipt;
