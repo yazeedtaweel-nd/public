@@ -1,234 +1,154 @@
 /* =============================================================================
    FACT_INSTALMENT – SICS extract
-   Grain: one row per BC_INSTAL (SicsBusinessAbstractInstalment)
-   Target: SaudiRe_DW.SICS.FACT_INSTALMENT
+   Grain: one row per BC_INSTAL
+   Target: SaudiRe_DW.sics.FACT_INSTALMENT
 
-   Core path:
-     BC_INSTAL.FK_INST_CUR          → BC_INST_CUR.OBJECT_ID
-     BC_INST_CUR.FK_CONDITION       → BC_INST_CONT.OBJECT_ID
-     BC_INST_CONT.FK_INSURED_PERIOD → INSURED_PERIOD.OBJECT_ID
-     INSURED_PERIOD.FK_BUSINESS     → BUSINESS.OBJECT_ID
-     BC_INST_CUR.FK_INST_CUR        → CNU_CURRENCY.ISO_ALPHA
-
-   Booking / worksheet (same rule as DIM_WORK_SHEET):
-     AC_LEDGER_DETAIL.FK_SRCE_INSTALMENT → BC_INSTAL.OBJECT_ID
-     AC_LEDGER_DETAIL.FK_WORKSHEET       → AC_WORKSHEET.OBJECT_ID
-     AC_LEDGER_DETAIL.FK_BALANCE         → AC_LEDGER_BALANCE.OBJECT_ID
-     Do NOT join AC_LEDGER_BALANCE.FK_WORKSHEET
-
-   Supporting:
-     AMENDMENT via BC_INSTAL.FK_AMENDMENT
-     Instalment type  → BC_INSTAL_COND_DTL.FRK_TYPE (ref 83)  -- DFD unconfirmed
-     MDP              → LPC_DEP_PREMIUM via LPC_PREM_COND (same container)
-     Base amount      → LPC_PREMIUM.BASE_AMOUNT via LPC_LIM_PREM_COND
-     Tax candidate    → BUS_SINGLE_IPT (INST_NR + currency)
-
-   ETL-only (not selected):
-     WRKS_SRGT, POLICY_SRGT
-     INS_FAC_RI_PENDING, INS_CLOSING_REF  -- no SICS source found
+   Extra columns (dim lookups only):
+     WRKS_BK   → DIM_WORK_SHEET.WRKS_BK  → WRKS_SRGT
+     POLICY_BK → DIM_POLICY.POLICY_BK    → POLICY_SRGT
    ============================================================================= */
 
 SELECT
-    i.OBJECT_ID                         AS sics_instalment_id,
-    i.SUBCLASS                          AS instalment_subclass,   -- single vs adjustment
-    i.SPEC_STAT                         AS spec_stat,             -- R=Reversed, C=Cancelled
-
-    /* WRKS_SRGT lookup key (DIM_WORK_SHEET uses BOOKING_DATE|ID_SERIE_NO) */
-    ws.OBJECT_ID                        AS sics_worksheet_id,
-    ws.BOOKING_DATE                     AS wrks_booking_date,     -- candidate INS_AUDIT_DATE
-    ws.ID_SERIE_NO                      AS wrks_id_serie_no,      -- candidate INS_AUDIT_NUM
+    /* lookup → WRKS_SRGT */
     CONVERT(varchar(8), ws.BOOKING_DATE, 112)
         + '|' + CAST(ws.ID_SERIE_NO AS varchar(20))
-                                        AS wrks_bk,
+                                        AS WRKS_BK,
 
-    /* INS_INSTALMENT_NUM */
+    /* DWH columns */
+    ws.BOOKING_DATE                     AS INS_AUDIT_DATE,
+    ws.ID_SERIE_NO                      AS INS_AUDIT_NUM,
     i.INST_NR                           AS INS_INSTALMENT_NUM,
-    bal.INSTALMENT_NUMBER               AS ledger_instalment_number,  -- alt; validate
-
-    /* INS_INSTALMENT_DUE_DATE */
     i.DUE_DATE                          AS INS_INSTALMENT_DUE_DATE,
-    bal.DUE_DATE                        AS ledger_due_date,
-
-    /* INS_ACTUAL_PAYMENT_DATE
-       DW sample uses 9999-01-01 for unpaid/null */
-    i.PAYMENT_DATE                      AS payment_date_raw,
     ISNULL(i.PAYMENT_DATE, '9999-01-01')
                                         AS INS_ACTUAL_PAYMENT_DATE,
-    i.EXT_PAYMENT                       AS extended_payment_date,
-    bal.ACTUAL_SETLMT_DATE              AS ledger_actual_settlement_date,  -- alt
-
-    /* INS_INSTALMENT_TYPE – unconfirmed; DFD not in dictionary */
-    icd.FRK_TYPE                        AS INS_INSTALMENT_TYPE,   -- ref table 83
-    rd_type.NAME                        AS instalment_type_name,
-
-    /* Amounts */
+    icd.FRK_TYPE                        AS INS_INSTALMENT_TYPE,
     i.PREMIUM_AMT                       AS INS_INSTALMENT_ORIG_AMT,
-    i.BOOKED_PRE_AMT                    AS INS_INSTALMENT_SETT_AMT,  -- booked; confirm vs SETTLED_AMT
-    i.ADJUST_AMT                        AS adjust_amt,
-    i.ADJ_PRE_AMT                       AS adj_pre_amt,
-    bal.LEDGER_BAL_ORG_AMT              AS ledger_orig_amt,
-    bal.SETTLED_AMT                     AS ledger_settled_amt,
-    dtl.DTL_AMT                         AS ledger_detail_amt,
-
-    /* INS_START_DATE / INS_END_DATE */
+    i.BOOKED_PRE_AMT                    AS INS_INSTALMENT_SETT_AMT,
+    CAST(NULL AS numeric(22, 8))        AS INS_FAC_RI_PENDING,
     i.AC_START_DATE                     AS INS_START_DATE,
     i.AC_END_DATE                       AS INS_END_DATE,
-
-    /* INS_INSTALMENT_BASE_AMT – premium-condition grain, not instalment */
     prem.BASE_AMOUNT                    AS INS_INSTALMENT_BASE_AMT,
+    CAST(NULL AS varchar(50))           AS INS_CLOSING_REF,
 
-    /* POLICY_SRGT lookup */
-    b.OBJECT_ID                         AS sics_business_id,
-    b.IDENTIFIER                        AS policy_bk,
-    ip.OBJECT_ID                        AS sics_insured_period_id,
-    ip.UNDERWR_YEAR                     AS underwriting_year,
+    /* lookup → POLICY_SRGT */
+    COALESCE(b.IDENTIFIER, rep.IDENTIFIER)
+                                        AS POLICY_BK,
 
-    /* POLICY_VERSION_NUM – samples are -1; amendment is a candidate only */
-    a.AMNDMNT_NMBR                      AS POLICY_VERSION_NUM,
-    ISNULL(a.AMNDMNT_NMBR, -1)          AS policy_version_num_dw,
-
-    /* INSTALEMENT_COUNT (DW spelling) */
+    ISNULL(a.AMNDMNT_NMBR, -1)          AS POLICY_VERSION_NUM,
     icur.NR_INSTAL                      AS INSTALEMENT_COUNT,
-    icd.NR_OF_INSTALMENTS               AS nr_of_instalments_cond,  -- alt
-
-    /* Currencies */
     icur.FK_INST_CUR                    AS INS_INSTALMENT_ORIG_CCY,
     ISNULL(bal.FK_CURR, icur.FK_INST_CUR)
                                         AS INS_INSTALMENT_SETT_CCY,
-
-    /* SRE_MDP – confirm which deposit column is MDP */
-    dep.PREMIUM_AMOUNT                  AS SRE_MDP,                 -- effective-period deposit
-    dep.INSURED_AMOUNT                  AS mdp_insured_amount,
-    dep.ANNUAL_AMOUNT                   AS mdp_annual_amount,
-    dep.MIN_AMOUNT                      AS mdp_min_amount,
-
-    /* SRE_MDP_INSTALMENT – DW likely SRE_MDP / NR_INSTAL (validate) */
+    dep.PREMIUM_AMOUNT                  AS SRE_MDP,
     CASE
         WHEN icur.NR_INSTAL IS NULL OR icur.NR_INSTAL = 0 THEN NULL
         ELSE dep.PREMIUM_AMOUNT / icur.NR_INSTAL
     END                                 AS SRE_MDP_INSTALMENT,
-
-    /* BROKERAGE – no direct instalment column; 10% of MDP instalment is a sample pattern only */
     CASE
         WHEN icur.NR_INSTAL IS NULL OR icur.NR_INSTAL = 0 THEN NULL
         ELSE (dep.PREMIUM_AMOUNT / icur.NR_INSTAL) * 0.10
-    END                                 AS BROKERAGE_derived_10pct, -- unconfirmed
+    END                                 AS BROKERAGE,
+    ISNULL(ipt.PREMIUM_AMT, 0)          AS TAX_ON_PREMIUM
 
-    /* TAX_ON_PREMIUM – IPT candidate */
-    ipt.PREMIUM_AMT                     AS TAX_ON_PREMIUM,
-    ipt.BOOKED_AMT                      AS ipt_booked_amt,
+FROM sics.BC_INSTAL AS i
 
-    /* Helpers / unused in DW but useful for validation */
-    i.MAN_BOOKED,
-    i.IS_CHANGED_BOOK,
-    i.AS_OF_DATE,
-    ws.IDENTIFIER                       AS worksheet_identifier
-FROM SICS.BC_INSTAL AS i
-
-INNER JOIN SICS.BC_INST_CUR AS icur
+INNER JOIN sics.BC_INST_CUR AS icur
         ON icur.OBJECT_ID = i.FK_INST_CUR
 
-LEFT JOIN SICS.BC_INST_CONT AS icont
+LEFT JOIN sics.BC_INST_CONT AS icont
        ON icont.OBJECT_ID = icur.FK_CONDITION
 
-LEFT JOIN SICS.INSURED_PERIOD AS ip
-       ON ip.OBJECT_ID = icont.FK_INSURED_PERIOD
+LEFT JOIN sics.BUS_COND_CONTAINER AS bcc
+       ON bcc.OBJECT_ID = icont.FK_COND_CONTAINER
 
-LEFT JOIN SICS.BUSINESS AS b
+LEFT JOIN sics.SCOPE_OF_COVER AS soc
+       ON soc.OBJECT_ID = bcc.FK_SOC
+
+LEFT JOIN sics.LIFE_CYCLE_PHASE AS lcp
+       ON lcp.OBJECT_ID = soc.FK_LIFECYCLEP
+
+LEFT JOIN sics.INSURED_PERIOD AS ip
+       ON ip.OBJECT_ID = COALESCE(icont.FK_INSURED_PERIOD, lcp.FK_INS_PRD)
+
+LEFT JOIN sics.BUSINESS AS b
        ON b.OBJECT_ID = ip.FK_BUSINESS
 
-LEFT JOIN SICS.AMENDMENT AS a
+LEFT JOIN sics.AMENDMENT AS a
        ON a.OBJECT_ID = i.FK_AMENDMENT
 
-/* First booked ledger line for this instalment → worksheet + settlement */
+OUTER APPLY (
+    SELECT TOP (1)
+        r.IDENTIFIER
+    FROM sics.BUS_STRUCT_REP AS r
+    WHERE r.FK_PC_INST = icont.OBJECT_ID
+    ORDER BY r.IDENTIFIER
+) AS rep
+
 OUTER APPLY (
     SELECT TOP (1)
         d.FK_WORKSHEET,
-        d.FK_BALANCE,
-        d.DTL_AMT,
-        d.OBJECT_ID
-    FROM SICS.AC_LEDGER_DETAIL AS d
+        d.FK_BALANCE
+    FROM sics.AC_LEDGER_DETAIL AS d
     WHERE d.FK_SRCE_INSTALMENT = i.OBJECT_ID
     ORDER BY d.OBJECT_ID
 ) AS dtl
 
-LEFT JOIN SICS.AC_WORKSHEET AS ws
+LEFT JOIN sics.AC_WORKSHEET AS ws
        ON ws.OBJECT_ID = dtl.FK_WORKSHEET
 
-LEFT JOIN SICS.AC_LEDGER_BALANCE AS bal
+LEFT JOIN sics.AC_LEDGER_BALANCE AS bal
        ON bal.OBJECT_ID = dtl.FK_BALANCE
 
-/* Instalment type + count from condition detail (same container + currency) */
 OUTER APPLY (
     SELECT TOP (1)
-        dtlc.FRK_TYPE,
-        dtlc.NR_OF_INSTALMENTS
-    FROM SICS.LPC_PREM_COND AS pc
-    INNER JOIN SICS.BC_INSTAL_COND_DTL AS dtlc
+        dtlc.FRK_TYPE
+    FROM sics.LPC_PREM_COND AS pc
+    INNER JOIN sics.BC_INSTAL_COND_DTL AS dtlc
             ON dtlc.FK_CONDITION = pc.OBJECT_ID
            AND dtlc.FK_CURRENCY  = icur.FK_INST_CUR
     WHERE pc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
-      AND pc.FK_INSURED_PERIOD = icont.FK_INSURED_PERIOD
+      AND (
+            pc.FK_INSURED_PERIOD = ip.OBJECT_ID
+         OR pc.FK_INSURED_PERIOD IS NULL
+          )
     ORDER BY CASE WHEN pc.IS_CURRENT_OF_IP = 'Y' THEN 0 ELSE 1 END,
              pc.OBJECT_ID
 ) AS icd
 
-LEFT JOIN SICS.REFERENCE_DATA AS rd_type
-       ON rd_type.CODE     = icd.FRK_TYPE
-      AND rd_type.SUBCLASS = 83
-
-/* Deposit / MDP */
 OUTER APPLY (
     SELECT TOP (1)
-        dp.PREMIUM_AMOUNT,
-        dp.INSURED_AMOUNT,
-        dp.ANNUAL_AMOUNT,
-        dp.MIN_AMOUNT
-    FROM SICS.LPC_PREM_COND AS pc
-    INNER JOIN SICS.LPC_DEP_PREMIUM AS dp
+        dp.PREMIUM_AMOUNT
+    FROM sics.LPC_PREM_COND AS pc
+    INNER JOIN sics.LPC_DEP_PREMIUM AS dp
             ON dp.FK_CONDITION = pc.OBJECT_ID
-    LEFT JOIN SICS.LPC_CUR_LIMIT_PREM AS clp
+    LEFT JOIN sics.LPC_CUR_LIMIT_PREM AS clp
            ON clp.OBJECT_ID = dp.FK_CURRENCY
     WHERE pc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
-      AND pc.FK_INSURED_PERIOD = icont.FK_INSURED_PERIOD
       AND (clp.FK_CURRENCY = icur.FK_INST_CUR OR clp.FK_CURRENCY IS NULL)
     ORDER BY CASE WHEN pc.IS_CURRENT_OF_IP = 'Y' THEN 0 ELSE 1 END,
              pc.OBJECT_ID
 ) AS dep
 
-/* Base premium */
 OUTER APPLY (
     SELECT TOP (1)
         p.BASE_AMOUNT
-    FROM SICS.LPC_LIM_PREM_COND AS lpc
-    INNER JOIN SICS.LPC_PREMIUM AS p
+    FROM sics.LPC_LIM_PREM_COND AS lpc
+    INNER JOIN sics.LPC_PREMIUM AS p
             ON p.FK_CONDITION = lpc.OBJECT_ID
             OR p.OBJECT_ID    = lpc.FK_TOT_PREM
     WHERE lpc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
-      AND lpc.FK_INSURED_PERIOD = icont.FK_INSURED_PERIOD
     ORDER BY CASE WHEN lpc.IS_CURRENT_OF_IP = 'Y' THEN 0 ELSE 1 END,
              lpc.OBJECT_ID
 ) AS prem
 
-/* Insurance premium tax by instalment number + currency */
 OUTER APPLY (
     SELECT TOP (1)
-        t.PREMIUM_AMT,
-        t.BOOKED_AMT
-    FROM SICS.BUS_SINGLE_IPT AS t
-    INNER JOIN SICS.BUS_IPT_CONTAINER AS tc
+        t.PREMIUM_AMT
+    FROM sics.BUS_SINGLE_IPT AS t
+    INNER JOIN sics.BUS_IPT_CONTAINER AS tc
             ON tc.OBJECT_ID = t.FK_CONDITION
     WHERE t.INST_NR     = i.INST_NR
       AND t.FK_CURRENCY = icur.FK_INST_CUR
-      AND (
-            tc.FK_INSURED_PERIOD = icont.FK_INSURED_PERIOD
-         OR tc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
-          )
+      AND tc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
     ORDER BY t.OBJECT_ID
-) AS ipt
-
-ORDER BY
-    b.IDENTIFIER,
-    ip.UNDERWR_YEAR,
-    i.DUE_DATE,
-    i.INST_NR;
+) AS ipt;
