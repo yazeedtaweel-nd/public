@@ -1,7 +1,10 @@
 SELECT
-    CONVERT(varchar(8), ws.BOOKING_DATE, 112)
-        + '|' + CAST(ws.ID_SERIE_NO AS varchar(20))   AS WRKS_BK,
+    CASE WHEN ws.OBJECT_ID IS NULL THEN NULL
+         ELSE CONVERT(varchar(8), ws.BOOKING_DATE, 112)
+              + '|' + CAST(ws.ID_SERIE_NO AS varchar(20))
+    END                                               AS WRKS_BK,
     COALESCE(b.IDENTIFIER, rep.IDENTIFIER)            AS POLICY_BK,
+
     ws.BOOKING_DATE                                   AS INS_AUDIT_DATE,
     dtl.WKST_SEQ_NBR                                  AS INS_AUDIT_NUM,
     i.INST_NR                                         AS INS_INSTALMENT_NUM,
@@ -20,71 +23,82 @@ SELECT
          ELSE dep.PREMIUM_AMOUNT / icur.NR_INSTAL
     END                                               AS SRE_MDP_INSTALMENT,
     CASE WHEN ISNULL(icur.NR_INSTAL, 0) = 0 THEN NULL
-         ELSE (dep.PREMIUM_AMOUNT / icur.NR_INSTAL) * (ded.PCT / 100.0)
+         ELSE (dep.PREMIUM_AMOUNT / icur.NR_INSTAL) * (ISNULL(ded.PCT, 10) / 100.0)
     END                                               AS BROKERAGE,
     ISNULL(tax.TAX_AMT, 0)                            AS TAX_ON_PREMIUM
-FROM sics.BC_INSTAL AS i
-INNER JOIN sics.BC_INST_CUR AS icur
+
+FROM dbo.BC_INSTAL AS i
+
+INNER JOIN dbo.BC_INST_CUR AS icur
         ON icur.OBJECT_ID = i.FK_INST_CUR
-INNER JOIN sics.BC_INST_CONT AS icont
-        ON icont.OBJECT_ID = icur.FK_CONDITION
-CROSS APPLY (
+
+LEFT JOIN dbo.BC_INST_CONT AS icont
+       ON icont.OBJECT_ID = icur.FK_CONDITION
+
+OUTER APPLY (
     SELECT TOP (1)
            d.FK_WORKSHEET,
            d.FK_BALANCE,
            d.WKST_SEQ_NBR,
            d.EXCH_AMT
-    FROM sics.AC_LEDGER_DETAIL AS d
+    FROM dbo.AC_LEDGER_DETAIL AS d
     WHERE d.FK_SRCE_INSTALMENT = i.OBJECT_ID
-      AND d.FK_WORKSHEET IS NOT NULL
-    ORDER BY d.WKST_SEQ_NBR
+    ORDER BY CASE WHEN d.FK_WORKSHEET IS NULL THEN 1 ELSE 0 END,
+             d.WKST_SEQ_NBR
 ) AS dtl
-INNER JOIN sics.AC_WORKSHEET AS ws
-        ON ws.OBJECT_ID = dtl.FK_WORKSHEET
-LEFT JOIN sics.AC_LEDGER_BALANCE AS bal
+
+LEFT JOIN dbo.AC_WORKSHEET AS ws
+       ON ws.OBJECT_ID = dtl.FK_WORKSHEET
+
+LEFT JOIN dbo.AC_LEDGER_BALANCE AS bal
        ON bal.OBJECT_ID = dtl.FK_BALANCE
-LEFT JOIN sics.BUS_COND_CONTAINER AS bcc
+
+LEFT JOIN dbo.BUS_COND_CONTAINER AS bcc
        ON bcc.OBJECT_ID = icont.FK_COND_CONTAINER
-LEFT JOIN sics.SCOPE_OF_COVER AS soc
+LEFT JOIN dbo.SCOPE_OF_COVER AS soc
        ON soc.OBJECT_ID = bcc.FK_SOC
-LEFT JOIN sics.LIFE_CYCLE_PHASE AS lcp
+LEFT JOIN dbo.LIFE_CYCLE_PHASE AS lcp
        ON lcp.OBJECT_ID = soc.FK_LIFECYCLEP
-LEFT JOIN sics.INSURED_PERIOD AS ip
+LEFT JOIN dbo.INSURED_PERIOD AS ip
        ON ip.OBJECT_ID = COALESCE(icont.FK_INSURED_PERIOD, lcp.FK_INS_PRD)
-LEFT JOIN sics.BUSINESS AS b
+LEFT JOIN dbo.BUSINESS AS b
        ON b.OBJECT_ID = ip.FK_BUSINESS
+
 OUTER APPLY (
     SELECT TOP (1) r.IDENTIFIER
-    FROM sics.BUS_STRUCT_REP AS r
+    FROM dbo.BUS_STRUCT_REP AS r
     WHERE r.FK_PC_INST = icont.OBJECT_ID
     ORDER BY r.IDENTIFIER
 ) AS rep
+
 OUTER APPLY (
     SELECT TOP (1) dp.PREMIUM_AMOUNT
-    FROM sics.LPC_PREM_COND AS pc
-    INNER JOIN sics.LPC_DEP_PREMIUM AS dp
+    FROM dbo.LPC_PREM_COND AS pc
+    INNER JOIN dbo.LPC_DEP_PREMIUM AS dp
             ON dp.FK_CONDITION = pc.OBJECT_ID
-    LEFT JOIN sics.LPC_CUR_LIMIT_PREM AS clp
+    LEFT JOIN dbo.LPC_CUR_LIMIT_PREM AS clp
            ON clp.OBJECT_ID = dp.FK_CURRENCY
     WHERE pc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
       AND (clp.FK_CURRENCY = icur.FK_INST_CUR OR clp.FK_CURRENCY IS NULL)
     ORDER BY CASE WHEN pc.IS_CURRENT_OF_IP = 'Y' THEN 0 ELSE 1 END,
              pc.OBJECT_ID
 ) AS dep
+
 OUTER APPLY (
     SELECT TOP (1) de.PCT
-    FROM sics.DEDUCTION_COND AS dc
-    INNER JOIN sics.DEDUCTION_ELEMENT AS de
+    FROM dbo.DEDUCTION_COND AS dc
+    INNER JOIN dbo.DEDUCTION_ELEMENT AS de
             ON de.FK_DED_COND = dc.OBJECT_ID
     WHERE dc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
       AND de.FRK_TYPE = N'BRO'
       AND de.PCT IS NOT NULL
     ORDER BY de.OBJECT_ID
 ) AS ded
+
 OUTER APPLY (
     SELECT SUM(de.AMT_AMT) AS TAX_AMT
-    FROM sics.DEDUCTION_COND AS dc
-    INNER JOIN sics.DEDUCTION_ELEMENT AS de
+    FROM dbo.DEDUCTION_COND AS dc
+    INNER JOIN dbo.DEDUCTION_ELEMENT AS de
             ON de.FK_DED_COND = dc.OBJECT_ID
     WHERE dc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
       AND de.FRK_TYPE IN (N'IPT', N'IPT1', N'IPT2', N'IPT3')
