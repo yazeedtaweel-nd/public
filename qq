@@ -3,6 +3,9 @@
    IW: @IsOutward = 'N'
    OW: @IsOutward = 'Y'
 
+   Date *_SRGT = YYYYMMDD int
+   Processing period: YEAR + Mnn → YYYYMM01 (month start)
+
    Not extracted (DWH-only): TRANS_SRGT, IND_SRGT, CLGRP_SRGT, VTT_SRGT,
    DATA_SOURCE, SOURCE, CREATED_DATE_SRGT, UPDATED_DATE_SRGT
 */
@@ -14,15 +17,19 @@ SELECT
     brk.BROK_BK                                                 AS BROK_BK,
     p_comp.IDENTIFIER                                           AS COMP_BK,
 
-    ws.BOOKING_DATE                                             AS TRANS_AUDIT_DATE,
+    CONVERT(int, CONVERT(char(8), ws.BOOKING_DATE, 112))        AS TRANS_AUDIT_DATE_SRGT,
     ws.ID_SERIE_NO                                              AS TRANS_AUDIT_NUM,
-    bal.FRK_BOOKING_PERIOD                                      AS TRANS_PROCESSING_PERIOD,
-    bal.BOOKING_YEAR                                            AS TRANS_PROCESSING_YEAR,
+
+    CONVERT(int,
+        CONVERT(char(4), bal.BOOKING_YEAR)
+        + RIGHT('0' + REPLACE(bal.FRK_BOOKING_PERIOD, 'M', ''), 2)
+        + '01'
+    )                                                           AS TRANS_PROCESSING_PERIOD_SRGT,
 
     ec.CODE                                                     AS TRST_BK,
 
-    dtl.AC_START_DATE                                           AS TRANS_ACCOUNTING_FROM_DATE,
-    dtl.AC_END_DATE                                             AS TRANS_ACCOUNTING_TO_DATE,
+    CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112))      AS TRANS_ACCOUNTING_FROM_DATE_SRGT,
+    CONVERT(int, CONVERT(char(8), dtl.AC_END_DATE, 112))        AS TRANS_ACCOUNTING_TO_DATE_SRGT,
 
     dtl.EXCH_AMT                                                AS TRANS_BASE_GROSS_AMT,
     dtl.FUNC_AMT2                                               AS TRANS_BASE2_GROSS_AMT,
@@ -41,41 +48,41 @@ SELECT
         + '|'
         + CONVERT(varchar(20), ws.ID_SERIE_NO)                  AS WRKS_BK
 
-FROM SICS.AC_LEDGER_DETAIL AS dtl
-INNER JOIN SICS.AC_LEDGER_BALANCE AS bal
+FROM dbo.AC_LEDGER_DETAIL AS dtl
+INNER JOIN dbo.AC_LEDGER_BALANCE AS bal
         ON bal.OBJECT_ID = dtl.FK_BALANCE
-LEFT JOIN SICS.AC_WORKSHEET AS ws
+LEFT JOIN dbo.AC_WORKSHEET AS ws
         ON ws.OBJECT_ID = COALESCE(dtl.FK_WORKSHEET, bal.FK_WORKSHEET)
-LEFT JOIN SICS.ENTRY_CODE AS ec
+LEFT JOIN dbo.ENTRY_CODE AS ec
         ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
-LEFT JOIN SICS.CNU_USER AS usr
+LEFT JOIN dbo.CNU_USER AS usr
         ON usr.OBJECT_ID = ws.FK_REGISTERED_BY
 
-LEFT JOIN SICS.INSURED_PERIOD AS ip
+LEFT JOIN dbo.INSURED_PERIOD AS ip
         ON ip.OBJECT_ID = dtl.FK_INS_PER
-LEFT JOIN SICS.BUSINESS AS bus
+LEFT JOIN dbo.BUSINESS AS bus
         ON bus.OBJECT_ID = ip.FK_BUSINESS
 
-LEFT JOIN SICS.INSURED_PERIOD AS ip_assumed
+LEFT JOIN dbo.INSURED_PERIOD AS ip_assumed
         ON ip_assumed.OBJECT_ID = dtl.FK_INS_PER_ASSUMED
-LEFT JOIN SICS.BUSINESS AS bus_assumed
+LEFT JOIN dbo.BUSINESS AS bus_assumed
         ON bus_assumed.OBJECT_ID = ip_assumed.FK_BUSINESS
 
-LEFT JOIN SICS.SOC_TO_CLAIM_REL AS soc
+LEFT JOIN dbo.SOC_TO_CLAIM_REL AS soc
         ON soc.OBJECT_ID = bal.FK_CLAIM
-LEFT JOIN SICS.CLAIMS AS clm_bal
+LEFT JOIN dbo.CLAIMS AS clm_bal
         ON clm_bal.OBJECT_ID = soc.FK_CLAIM
-LEFT JOIN SICS.CLAIMS AS clm_ow
+LEFT JOIN dbo.CLAIMS AS clm_ow
         ON clm_ow.OBJECT_ID = dtl.FK_CLAIM_TO_SOC
 
-LEFT JOIN SICS.PARTY AS p_comp
+LEFT JOIN dbo.PARTY AS p_comp
         ON p_comp.OBJECT_ID = bal.FK_BASE_COMPANY
 
 OUTER APPLY (
     SELECT TOP (1)
            p.IDENTIFIER AS BROK_BK
-    FROM SICS.BUSINESS_PRTNR_REL AS bpr
-    INNER JOIN SICS.PARTY AS p
+    FROM dbo.BUSINESS_PRTNR_REL AS bpr
+    INNER JOIN dbo.PARTY AS p
             ON p.OBJECT_ID = bpr.FK_BUS_PARTNER
     WHERE bpr.FRK_RELSHIP_TYPE = 'BR'
       AND bpr.FSK_RELSHIP_TYPE = 55
