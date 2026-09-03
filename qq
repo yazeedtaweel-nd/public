@@ -1,105 +1,89 @@
+/* SICS extract for FACT_IW_TRANSACTION / FACT_OW_TRANSACTION
+   Grain: 1 row per AC_LEDGER_DETAIL.OBJECT_ID
+   IW: @IsOutward = 'N'
+   OW: @IsOutward = 'Y'
+
+   Not extracted (DWH-only): TRANS_SRGT, IND_SRGT, CLGRP_SRGT, VTT_SRGT,
+   DATA_SOURCE, SOURCE, CREATED_DATE_SRGT, UPDATED_DATE_SRGT
+*/
+DECLARE @IsOutward CHAR(1) = 'N';  -- 'Y' for FACT_OW_TRANSACTION
+
 SELECT
-    CASE WHEN ws.OBJECT_ID IS NULL THEN NULL
-         ELSE CONVERT(varchar(8), ws.BOOKING_DATE, 112)
-              + '|' + CAST(ws.ID_SERIE_NO AS varchar(20))
-    END                                               AS WRKS_BK,
-    COALESCE(b.IDENTIFIER, rep.IDENTIFIER)            AS POLICY_BK,
+    bus.IDENTIFIER                                              AS POLICY_BK,
+    COALESCE(clm_ow.CLAIM_IDENTIFIER, clm_bal.CLAIM_IDENTIFIER) AS CLA_CLAIM_BK,
+    brk.BROK_BK                                                 AS BROK_BK,
+    p_comp.IDENTIFIER                                           AS COMP_BK,
 
-    ws.BOOKING_DATE                                   AS INS_AUDIT_DATE,
-    dtl.WKST_SEQ_NBR                                  AS INS_AUDIT_NUM,
-    i.INST_NR                                         AS INS_INSTALMENT_NUM,
-    i.DUE_DATE                                        AS INS_INSTALMENT_DUE_DATE,
-    ISNULL(i.PAYMENT_DATE, '9999-01-01')              AS INS_ACTUAL_PAYMENT_DATE,
-    i.PREMIUM_AMT                                     AS INS_INSTALMENT_ORIG_AMT,
-    i.BOOKED_PRE_AMT                                  AS INS_INSTALMENT_SETT_AMT,
-    i.AC_START_DATE                                   AS INS_START_DATE,
-    i.AC_END_DATE                                     AS INS_END_DATE,
-    dtl.EXCH_AMT                                      AS INS_INSTALMENT_BASE_AMT,
-    icur.NR_INSTAL                                    AS INSTALEMENT_COUNT,
-    icur.FK_INST_CUR                                  AS INS_INSTALMENT_ORIG_CCY,
-    ISNULL(bal.FK_CURR, icur.FK_INST_CUR)             AS INS_INSTALMENT_SETT_CCY,
-    dep.PREMIUM_AMOUNT                                AS SRE_MDP,
-    CASE WHEN ISNULL(icur.NR_INSTAL, 0) = 0 THEN NULL
-         ELSE dep.PREMIUM_AMOUNT / icur.NR_INSTAL
-    END                                               AS SRE_MDP_INSTALMENT,
-    CASE WHEN ISNULL(icur.NR_INSTAL, 0) = 0 THEN NULL
-         ELSE (dep.PREMIUM_AMOUNT / icur.NR_INSTAL) * (ISNULL(ded.PCT, 10) / 100.0)
-    END                                               AS BROKERAGE,
-    ISNULL(tax.TAX_AMT, 0)                            AS TAX_ON_PREMIUM
+    ws.BOOKING_DATE                                             AS TRANS_AUDIT_DATE,
+    ws.ID_SERIE_NO                                              AS TRANS_AUDIT_NUM,
+    bal.FRK_BOOKING_PERIOD                                      AS TRANS_PROCESSING_PERIOD,
+    bal.BOOKING_YEAR                                            AS TRANS_PROCESSING_YEAR,
 
-FROM dbo.BC_INSTAL AS i
+    ec.CODE                                                     AS TRST_BK,
 
-INNER JOIN dbo.BC_INST_CUR AS icur
-        ON icur.OBJECT_ID = i.FK_INST_CUR
+    dtl.AC_START_DATE                                           AS TRANS_ACCOUNTING_FROM_DATE,
+    dtl.AC_END_DATE                                             AS TRANS_ACCOUNTING_TO_DATE,
 
-LEFT JOIN dbo.BC_INST_CONT AS icont
-       ON icont.OBJECT_ID = icur.FK_CONDITION
+    dtl.EXCH_AMT                                                AS TRANS_BASE_GROSS_AMT,
+    dtl.FUNC_AMT2                                               AS TRANS_BASE2_GROSS_AMT,
+    bal.SETTLED_AMT                                             AS TRANS_SETT_GROSS_AMT,
+    dtl.DTL_AMT                                                 AS TRANS_ORIG_GROSS_AMT,
+
+    bus_assumed.IDENTIFIER                                      AS IW_POLICY_BK,
+    CASE WHEN bal.IS_OUTWARD = 'Y' THEN bus.IDENTIFIER END      AS OW_POLICY_BK,
+
+    bal.FK_CURR                                                 AS CURR_ORIG_BK,
+    bal.FK_AC_FUNC_CCY                                          AS CURR_BASE_BK,
+    COALESCE(bal.FK_LLOYDS_SETL_CUR, bal.FK_CURR)               AS CURR_SETT_BK,
+
+    usr.USER_ID                                                 AS USR_BK,
+    CONVERT(varchar(8), ws.BOOKING_DATE, 112)
+        + '|'
+        + CONVERT(varchar(20), ws.ID_SERIE_NO)                  AS WRKS_BK
+
+FROM SICS.AC_LEDGER_DETAIL AS dtl
+INNER JOIN SICS.AC_LEDGER_BALANCE AS bal
+        ON bal.OBJECT_ID = dtl.FK_BALANCE
+LEFT JOIN SICS.AC_WORKSHEET AS ws
+        ON ws.OBJECT_ID = COALESCE(dtl.FK_WORKSHEET, bal.FK_WORKSHEET)
+LEFT JOIN SICS.ENTRY_CODE AS ec
+        ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
+LEFT JOIN SICS.CNU_USER AS usr
+        ON usr.OBJECT_ID = ws.FK_REGISTERED_BY
+
+LEFT JOIN SICS.INSURED_PERIOD AS ip
+        ON ip.OBJECT_ID = dtl.FK_INS_PER
+LEFT JOIN SICS.BUSINESS AS bus
+        ON bus.OBJECT_ID = ip.FK_BUSINESS
+
+LEFT JOIN SICS.INSURED_PERIOD AS ip_assumed
+        ON ip_assumed.OBJECT_ID = dtl.FK_INS_PER_ASSUMED
+LEFT JOIN SICS.BUSINESS AS bus_assumed
+        ON bus_assumed.OBJECT_ID = ip_assumed.FK_BUSINESS
+
+LEFT JOIN SICS.SOC_TO_CLAIM_REL AS soc
+        ON soc.OBJECT_ID = bal.FK_CLAIM
+LEFT JOIN SICS.CLAIMS AS clm_bal
+        ON clm_bal.OBJECT_ID = soc.FK_CLAIM
+LEFT JOIN SICS.CLAIMS AS clm_ow
+        ON clm_ow.OBJECT_ID = dtl.FK_CLAIM_TO_SOC
+
+LEFT JOIN SICS.PARTY AS p_comp
+        ON p_comp.OBJECT_ID = bal.FK_BASE_COMPANY
 
 OUTER APPLY (
     SELECT TOP (1)
-           d.FK_WORKSHEET,
-           d.FK_BALANCE,
-           d.WKST_SEQ_NBR,
-           d.EXCH_AMT
-    FROM dbo.AC_LEDGER_DETAIL AS d
-    WHERE d.FK_SRCE_INSTALMENT = i.OBJECT_ID
-    ORDER BY CASE WHEN d.FK_WORKSHEET IS NULL THEN 1 ELSE 0 END,
-             d.WKST_SEQ_NBR
-) AS dtl
+           p.IDENTIFIER AS BROK_BK
+    FROM SICS.BUSINESS_PRTNR_REL AS bpr
+    INNER JOIN SICS.PARTY AS p
+            ON p.OBJECT_ID = bpr.FK_BUS_PARTNER
+    WHERE bpr.FRK_RELSHIP_TYPE = 'BR'
+      AND bpr.FSK_RELSHIP_TYPE = 55
+      AND (
+            bpr.FK_INS_PERIOD = dtl.FK_INS_PER
+         OR bpr.FK_BUSINESS   = ip.FK_BUSINESS
+          )
+    ORDER BY p.IDENTIFIER
+) AS brk
 
-LEFT JOIN dbo.AC_WORKSHEET AS ws
-       ON ws.OBJECT_ID = dtl.FK_WORKSHEET
-
-LEFT JOIN dbo.AC_LEDGER_BALANCE AS bal
-       ON bal.OBJECT_ID = dtl.FK_BALANCE
-
-LEFT JOIN dbo.BUS_COND_CONTAINER AS bcc
-       ON bcc.OBJECT_ID = icont.FK_COND_CONTAINER
-LEFT JOIN dbo.SCOPE_OF_COVER AS soc
-       ON soc.OBJECT_ID = bcc.FK_SOC
-LEFT JOIN dbo.LIFE_CYCLE_PHASE AS lcp
-       ON lcp.OBJECT_ID = soc.FK_LIFECYCLEP
-LEFT JOIN dbo.INSURED_PERIOD AS ip
-       ON ip.OBJECT_ID = COALESCE(icont.FK_INSURED_PERIOD, lcp.FK_INS_PRD)
-LEFT JOIN dbo.BUSINESS AS b
-       ON b.OBJECT_ID = ip.FK_BUSINESS
-
-OUTER APPLY (
-    SELECT TOP (1) r.IDENTIFIER
-    FROM dbo.BUS_STRUCT_REP AS r
-    WHERE r.FK_PC_INST = icont.OBJECT_ID
-    ORDER BY r.IDENTIFIER
-) AS rep
-
-OUTER APPLY (
-    SELECT TOP (1) dp.PREMIUM_AMOUNT
-    FROM dbo.LPC_PREM_COND AS pc
-    INNER JOIN dbo.LPC_DEP_PREMIUM AS dp
-            ON dp.FK_CONDITION = pc.OBJECT_ID
-    LEFT JOIN dbo.LPC_CUR_LIMIT_PREM AS clp
-           ON clp.OBJECT_ID = dp.FK_CURRENCY
-    WHERE pc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
-      AND (clp.FK_CURRENCY = icur.FK_INST_CUR OR clp.FK_CURRENCY IS NULL)
-    ORDER BY CASE WHEN pc.IS_CURRENT_OF_IP = 'Y' THEN 0 ELSE 1 END,
-             pc.OBJECT_ID
-) AS dep
-
-OUTER APPLY (
-    SELECT TOP (1) de.PCT
-    FROM dbo.DEDUCTION_COND AS dc
-    INNER JOIN dbo.DEDUCTION_ELEMENT AS de
-            ON de.FK_DED_COND = dc.OBJECT_ID
-    WHERE dc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
-      AND de.FRK_TYPE = N'BRO'
-      AND de.PCT IS NOT NULL
-    ORDER BY de.OBJECT_ID
-) AS ded
-
-OUTER APPLY (
-    SELECT SUM(de.AMT_AMT) AS TAX_AMT
-    FROM dbo.DEDUCTION_COND AS dc
-    INNER JOIN dbo.DEDUCTION_ELEMENT AS de
-            ON de.FK_DED_COND = dc.OBJECT_ID
-    WHERE dc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
-      AND de.FRK_TYPE IN (N'IPT', N'IPT1', N'IPT2', N'IPT3')
-) AS tax;
+WHERE bal.IS_OUTWARD = @IsOutward;
