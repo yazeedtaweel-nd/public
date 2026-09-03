@@ -1,86 +1,75 @@
-/* SICS extract for FACT_IW_TRANSACTION / FACT_OW_TRANSACTION
-   Grain: 1 row per AC_LEDGER_DETAIL.OBJECT_ID
-   IW: @IsOutward = 'N'
-   OW: @IsOutward = 'Y'
-
-   Date *_SRGT = YYYYMMDD int
-   Processing period: YEAR + Mnn → YYYYMM01 (month start)
-
-   Not extracted (DWH-only): TRANS_SRGT, IND_SRGT, CLGRP_SRGT, VTT_SRGT,
-   DATA_SOURCE, SOURCE, CREATED_DATE_SRGT, UPDATED_DATE_SRGT
-*/
-DECLARE @IsOutward CHAR(1) = 'N';  -- 'Y' for FACT_OW_TRANSACTION
-
 SELECT
-    bus.IDENTIFIER                                              AS POLICY_BK,
+    bus.IDENTIFIER                                               AS POLICY_BK,
     COALESCE(clm_ow.CLAIM_IDENTIFIER, clm_bal.CLAIM_IDENTIFIER) AS CLA_CLAIM_BK,
-    brk.BROK_BK                                                 AS BROK_BK,
-    p_comp.IDENTIFIER                                           AS COMP_BK,
+    brk.BROK_BK                                                  AS BROK_BK,
+    p_comp.IDENTIFIER                                            AS COMP_BK,
 
-    CONVERT(int, CONVERT(char(8), ws.BOOKING_DATE, 112))        AS TRANS_AUDIT_DATE_SRGT,
-    ws.ID_SERIE_NO                                              AS TRANS_AUDIT_NUM,
-
-    CONVERT(int,
+    CONVERT(int, CONVERT(char(8), ws.BOOKING_DATE, 112))
+                                                                  AS TRANS_AUDIT_DATE_SRGT,
+    ws.ID_SERIE_NO                                                AS TRANS_AUDIT_NUM,
+    TRY_CONVERT(
+        int,
         CONVERT(char(4), bal.BOOKING_YEAR)
         + RIGHT('0' + REPLACE(bal.FRK_BOOKING_PERIOD, 'M', ''), 2)
         + '01'
-    )                                                           AS TRANS_PROCESSING_PERIOD_SRGT,
+    )                                                             AS TRANS_PROCESSING_PERIOD_SRGT,
 
-    ec.CODE                                                     AS TRST_BK,
+    ec.CODE                                                       AS TRST_TYPE_BK,
 
-    CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112))      AS TRANS_ACCOUNTING_FROM_DATE_SRGT,
-    CONVERT(int, CONVERT(char(8), dtl.AC_END_DATE, 112))        AS TRANS_ACCOUNTING_TO_DATE_SRGT,
+    CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112))
+                                                                  AS TRANS_ACCOUNTING_FROM_DATE_SRGT,
+    CONVERT(int, CONVERT(char(8), dtl.AC_END_DATE, 112))
+                                                                  AS TRANS_ACCOUNTING_TO_DATE_SRGT,
 
-    dtl.EXCH_AMT                                                AS TRANS_BASE_GROSS_AMT,
-    dtl.FUNC_AMT2                                               AS TRANS_BASE2_GROSS_AMT,
-    bal.SETTLED_AMT                                             AS TRANS_SETT_GROSS_AMT,
-    dtl.DTL_AMT                                                 AS TRANS_ORIG_GROSS_AMT,
+    CAST(dtl.EXCH_AMT AS money)                                   AS TRANS_BASE_GROSS_AMT,
+    CAST(dtl.FUNC_AMT2 AS money)                                  AS TRANS_BASE2_GROSS_AMT,
+    CAST(bal.SETTLED_AMT AS money)                                AS TRANS_SETT_GROSS_AMT,
+    CAST(dtl.DTL_AMT AS money)                                    AS TRANS_ORIG_GROSS_AMT,
 
-    bus_assumed.IDENTIFIER                                      AS IW_POLICY_BK,
-    CASE WHEN bal.IS_OUTWARD = 'Y' THEN bus.IDENTIFIER END      AS OW_POLICY_BK,
+    bus_assumed.IDENTIFIER                                        AS IW_POLICY_BK,
+    bus.IDENTIFIER                                                AS OW_POLICY_BK,
 
-    bal.FK_CURR                                                 AS CURR_ORIG_BK,
-    bal.FK_AC_FUNC_CCY                                          AS CURR_BASE_BK,
-    COALESCE(bal.FK_LLOYDS_SETL_CUR, bal.FK_CURR)               AS CURR_SETT_BK,
+    bal.FK_CURR                                                   AS CURR_ORIG_BK,
+    bal.FK_AC_FUNC_CCY                                            AS CURR_BASE_BK,
+    COALESCE(bal.FK_LLOYDS_SETL_CUR, bal.FK_CURR)                 AS CURR_SETT_BK,
 
-    usr.USER_ID                                                 AS USR_BK,
+    usr.USER_ID                                                   AS USR_BK,
     CONVERT(varchar(8), ws.BOOKING_DATE, 112)
-        + '|'
-        + CONVERT(varchar(20), ws.ID_SERIE_NO)                  AS WRKS_BK
+        + '|' + CONVERT(varchar(20), ws.ID_SERIE_NO)              AS WRKS_BK
 
 FROM dbo.AC_LEDGER_DETAIL AS dtl
 INNER JOIN dbo.AC_LEDGER_BALANCE AS bal
         ON bal.OBJECT_ID = dtl.FK_BALANCE
 LEFT JOIN dbo.AC_WORKSHEET AS ws
-        ON ws.OBJECT_ID = COALESCE(dtl.FK_WORKSHEET, bal.FK_WORKSHEET)
+       ON ws.OBJECT_ID = dtl.FK_WORKSHEET
 LEFT JOIN dbo.ENTRY_CODE AS ec
-        ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
+       ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
 LEFT JOIN dbo.CNU_USER AS usr
-        ON usr.OBJECT_ID = ws.FK_REGISTERED_BY
+       ON usr.OBJECT_ID = ws.FK_REGISTERED_BY
 
 LEFT JOIN dbo.INSURED_PERIOD AS ip
-        ON ip.OBJECT_ID = dtl.FK_INS_PER
+       ON ip.OBJECT_ID = dtl.FK_INS_PER
 LEFT JOIN dbo.BUSINESS AS bus
-        ON bus.OBJECT_ID = ip.FK_BUSINESS
+       ON bus.OBJECT_ID = ip.FK_BUSINESS
 
 LEFT JOIN dbo.INSURED_PERIOD AS ip_assumed
-        ON ip_assumed.OBJECT_ID = dtl.FK_INS_PER_ASSUMED
+       ON ip_assumed.OBJECT_ID = dtl.FK_INS_PER_ASSUMED
 LEFT JOIN dbo.BUSINESS AS bus_assumed
-        ON bus_assumed.OBJECT_ID = ip_assumed.FK_BUSINESS
+       ON bus_assumed.OBJECT_ID = ip_assumed.FK_BUSINESS
 
 LEFT JOIN dbo.SOC_TO_CLAIM_REL AS soc
-        ON soc.OBJECT_ID = bal.FK_CLAIM
+       ON soc.OBJECT_ID = bal.FK_CLAIM
 LEFT JOIN dbo.CLAIMS AS clm_bal
-        ON clm_bal.OBJECT_ID = soc.FK_CLAIM
+       ON clm_bal.OBJECT_ID = soc.FK_CLAIM
 LEFT JOIN dbo.CLAIMS AS clm_ow
-        ON clm_ow.OBJECT_ID = dtl.FK_CLAIM_TO_SOC
+       ON clm_ow.OBJECT_ID = dtl.FK_CLAIM_TO_SOC
 
 LEFT JOIN dbo.PARTY AS p_comp
-        ON p_comp.OBJECT_ID = bal.FK_BASE_COMPANY
+       ON p_comp.OBJECT_ID = bal.FK_BASE_COMPANY
 
 OUTER APPLY (
     SELECT TOP (1)
-           p.IDENTIFIER AS BROK_BK
+        p.IDENTIFIER AS BROK_BK
     FROM dbo.BUSINESS_PRTNR_REL AS bpr
     INNER JOIN dbo.PARTY AS p
             ON p.OBJECT_ID = bpr.FK_BUS_PARTNER
@@ -88,9 +77,9 @@ OUTER APPLY (
       AND bpr.FSK_RELSHIP_TYPE = 55
       AND (
             bpr.FK_INS_PERIOD = dtl.FK_INS_PER
-         OR bpr.FK_BUSINESS   = ip.FK_BUSINESS
-          )
+         OR bpr.FK_BUSINESS = ip.FK_BUSINESS
+      )
     ORDER BY p.IDENTIFIER
 ) AS brk
 
-WHERE bal.IS_OUTWARD = @IsOutward;
+WHERE bal.IS_OUTWARD = 'Y';
