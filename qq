@@ -1,85 +1,304 @@
-SELECT
-    bus.IDENTIFIER                                               AS POLICY_BK,
-    COALESCE(clm_ow.CLAIM_IDENTIFIER, clm_bal.CLAIM_IDENTIFIER) AS CLA_CLAIM_BK,
-    brk.BROK_BK                                                  AS BROK_BK,
-    p_comp.IDENTIFIER                                            AS COMP_BK,
+/* ================================================================
+   FACT_SETTLEMENT — SICS source extraction
 
-    CONVERT(int, CONVERT(char(8), ws.BOOKING_DATE, 112))
-                                                                  AS TRANS_AUDIT_DATE_SRGT,
-    ws.ID_SERIE_NO                                                AS TRANS_AUDIT_NUM,
+   Grain:
+     One row per AC_LEDGER_DETAIL belonging to a Settlement Balance.
+
+   Lookup columns:
+     *_BK columns are used by SSIS to retrieve the corresponding
+     DWH surrogate keys.
+
+   Excluded:
+     CREATED_DATE_SRGT
+     UPDATED_DATE_SRGT
+     Other ETL-generated values
+   ================================================================ */
+
+SELECT
+    /* ============================================================
+       WORKSHEET LOOKUP
+       WRKS_BK → DIM_WORK_SHEET.WRKS_BK → WRKS_SRGT
+       ============================================================ */
+    CASE
+        WHEN COALESCE(ws.BOOKING_DATE, bal.DATE_OF_BOOKING) IS NULL
+          OR COALESCE(ws.ID_SERIE_NO, bal.ID_SERIE_NO) IS NULL
+        THEN NULL
+        ELSE
+            CONVERT(char(8),
+                    COALESCE(ws.BOOKING_DATE, bal.DATE_OF_BOOKING),
+                    112)
+            + '|'
+            + CONVERT(varchar(20),
+                      COALESCE(ws.ID_SERIE_NO, bal.ID_SERIE_NO))
+    END AS WRKS_BK,
+
+    /* ============================================================
+       TRANSACTION LOOKUPS
+       ============================================================ */
+
+    /* DIM_TRANSACTION_CODE → TRCD_SRGT */
+    ec.CODE AS TRCD_CODE_BK,
+
+    /* DIM_TRANSACTION_TYPE → TRST_SRGT */
+    ec.CODE AS TRST_TYPE_BK,
+
+    /* Needed because transaction codes may exist for I and O */
+    CASE
+        WHEN bal.IS_OUTWARD = 'Y' THEN 'O'
+        ELSE 'I'
+    END AS TRST_INDICATOR,
+
+    /* DIM_SETTLEMENT_ENTRY_TYPE → STL_ENTRY_TYPE_SRGT */
+    bal.FRK_BALANCE_TYPE AS STL_ENTRY_TYPE_BK,
+
+    /* DIM_SETTLEMENT_STATUS → STL_STATUS_SRGT
+       Expected source codes: S, U, P */
+    bal.FRK_SETLMNT_IND AS STL_STATUS_BK,
+
+    /* ============================================================
+       POLICY LOOKUP
+       POLICY_BK → DIM_POLICY.POLICY_BK → POLICY_SRGT
+       ============================================================ */
+    bus.IDENTIFIER AS POLICY_BK,
+
+    /* If DIM_POLICY uses insured-period BK, use this during testing */
+    ip.BUS_INS_PER_ID AS POLICY_INSURED_PERIOD_BK,
+
+    /* ============================================================
+       CLAIM LOOKUP
+       CLA_CLAIM_BK → DIM_CLAIM → CLA_CLAIM_SRGT
+       ============================================================ */
+    COALESCE(
+        claim_direct.CLAIM_IDENTIFIER,
+        claim_from_balance.CLAIM_IDENTIFIER
+    ) AS CLA_CLAIM_BK,
+
+    /* ============================================================
+       CLAIM GROUP LOOKUP
+       CLGRP_BK → DIM_CLAIM_GROUP → CLGRP_SRGT
+       ============================================================ */
+    COALESCE(
+        headline.CLAIM_IDENTIFIER,
+        claim_direct.CLAIM_IDENTIFIER,
+        claim_from_balance.CLAIM_IDENTIFIER
+    ) AS CLGRP_BK,
+
+    /* ============================================================
+       BROKER LOOKUP
+       BROK_BK → DIM_BROKER.BROK_BK → BROK_SRGT
+       ============================================================ */
+    broker.BROK_BK,
+
+    /* ============================================================
+       CURRENCY LOOKUPS
+       ============================================================ */
+
+    /* DIM_CURRENCY → CURR_ORIG_SRGT */
+    bal.FK_CURR AS CURR_ORIG_BK,
+
+    /* DIM_CURRENCY → CURR_BASE_SRGT */
+    bal.FK_AC_FUNC_CCY AS CURR_BASE_BK,
+
+    /* Settlement Balance currency → CURR_SETT_SRGT */
+    settlement_balance.FK_CURR AS CURR_SETT_BK,
+
+    /* ============================================================
+       AUDIT DATE AND NUMBER
+       ============================================================ */
+
+    /* YYYYMMDD integer, for example 20161202 */
+    CONVERT(
+        int,
+        CONVERT(
+            char(8),
+            COALESCE(ws.BOOKING_DATE, bal.DATE_OF_BOOKING),
+            112
+        )
+    ) AS STL_AUDIT_DATE_SRGT,
+
+    /* Raw DWH date column */
+    CAST(
+        COALESCE(ws.BOOKING_DATE, bal.DATE_OF_BOOKING)
+        AS date
+    ) AS STL_AUDIT_DATE,
+
+    COALESCE(
+        ws.ID_SERIE_NO,
+        bal.ID_SERIE_NO
+    ) AS STL_AUDIT_NUM,
+
+    /* ============================================================
+       EFFECTIVE AND RECONCILED DATES
+       ============================================================ */
+
+    /* Remittance uses VALUE_DATE; other balances use DUE_DATE */
+    CAST(
+        COALESCE(bal.VALUE_DATE, bal.DUE_DATE)
+        AS date
+    ) AS STL_EFFECTIVE_DATE,
+
+    /* Actual date on which settlement/pairing occurred */
+    CAST(
+        bal.ACTUAL_SETLMT_DATE
+        AS date
+    ) AS STL_RECONCILED_DATE,
+
+    /* ============================================================
+       PROCESSING PERIOD
+
+       Examples:
+         BOOKING_YEAR = 2016, period = M12 → 20161201
+         BOOKING_YEAR = 2016, period = 12  → 20161201
+       ============================================================ */
     TRY_CONVERT(
         int,
         CONVERT(char(4), bal.BOOKING_YEAR)
-        + RIGHT('0' + REPLACE(bal.FRK_BOOKING_PERIOD, 'M', ''), 2)
+        + RIGHT(
+            '0' + REPLACE(
+                UPPER(LTRIM(RTRIM(bal.FRK_BOOKING_PERIOD))),
+                'M',
+                ''
+            ),
+            2
+        )
         + '01'
-    )                                                             AS TRANS_PROCESSING_PERIOD_SRGT,
+    ) AS STL_PROCESSING_PERIOD_SRGT,
 
-    ec.CODE                                                       AS TRST_TYPE_BK,
+    /* ============================================================
+       GROSS AMOUNTS
+       ============================================================ */
 
-    CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112))
-                                                                  AS TRANS_ACCOUNTING_FROM_DATE_SRGT,
-    CONVERT(int, CONVERT(char(8), dtl.AC_END_DATE, 112))
-                                                                  AS TRANS_ACCOUNTING_TO_DATE_SRGT,
+    CAST(dtl.DTL_AMT AS money)
+        AS STL_ORIG_GROSS_AMT,
 
-    CAST(dtl.EXCH_AMT AS money)                                   AS TRANS_BASE_GROSS_AMT,
-    CAST(dtl.FUNC_AMT2 AS money)                                  AS TRANS_BASE2_GROSS_AMT,
-    CAST(bal.SETTLED_AMT AS money)                                AS TRANS_SETT_GROSS_AMT,
-    CAST(dtl.DTL_AMT AS money)                                    AS TRANS_ORIG_GROSS_AMT,
+    CAST(dtl.EXCH_AMT AS money)
+        AS STL_BASE_GROSS_AMT,
 
-    bus_assumed.IDENTIFIER                                        AS IW_POLICY_BK,
-    bus.IDENTIFIER                                                AS OW_POLICY_BK,
+    CAST(dtl.FUNC_AMT2 AS money)
+        AS STL_BASE2_GROSS_AMT,
 
-    bal.FK_CURR                                                   AS CURR_ORIG_BK,
-    bal.FK_AC_FUNC_CCY                                            AS CURR_BASE_BK,
-    COALESCE(bal.FK_LLOYDS_SETL_CUR, bal.FK_CURR)                 AS CURR_SETT_BK,
+    /*
+       Full amount of the parent Settlement Balance in settlement
+       currency. This value can repeat when several details belong
+       to the same settlement.
+    */
+    CAST(settlement_balance.LEDGER_BAL_ORG_AMT AS money)
+        AS STL_SETT_GROSS_AMT,
 
-    usr.USER_ID                                                   AS USR_BK,
-    CONVERT(varchar(8), ws.BOOKING_DATE, 112)
-        + '|' + CONVERT(varchar(20), ws.ID_SERIE_NO)              AS WRKS_BK
+    /* ============================================================
+       PAID-TO-DATE AMOUNTS
+       ============================================================ */
 
-FROM dbo.AC_LEDGER_DETAIL AS dtl
-INNER JOIN dbo.AC_LEDGER_BALANCE AS bal
+    /*
+       Original currency:
+       gross amount minus amount not yet released.
+    */
+    CAST(
+        dtl.DTL_AMT - COALESCE(dtl.DTL_UNR_AMT, 0)
+        AS money
+    ) AS STL_ORIG_PTD_AMT,
+
+    /*
+       Base currency:
+       apply the released percentage to the functional amount.
+    */
+    CAST(
+        CASE
+            WHEN NULLIF(dtl.DTL_AMT, 0) IS NULL THEN 0
+            ELSE dtl.EXCH_AMT
+                 * (
+                     (dtl.DTL_AMT - COALESCE(dtl.DTL_UNR_AMT, 0))
+                     / NULLIF(dtl.DTL_AMT, 0)
+                   )
+        END
+        AS money
+    ) AS STL_BASE_PTD_AMT,
+
+    /*
+       Base currency 2:
+       same released percentage applied to FUNC_AMT2.
+    */
+    CAST(
+        CASE
+            WHEN NULLIF(dtl.DTL_AMT, 0) IS NULL THEN 0
+            ELSE dtl.FUNC_AMT2
+                 * (
+                     (dtl.DTL_AMT - COALESCE(dtl.DTL_UNR_AMT, 0))
+                     / NULLIF(dtl.DTL_AMT, 0)
+                   )
+        END
+        AS money
+    ) AS STL_BASE2_PTD_AMT,
+
+    /*
+       Amount contributed by the member balance in the currency
+       of the parent Settlement Balance.
+    */
+    CAST(bal.SETTLED_AMT AS money)
+        AS STL_SETT_PTD_AMT,
+
+    /* General Ledger account */
+    bal.FRK_GL_ACCOUNT AS STL_ACCOUNT_CODE
+
+FROM sics.AC_LEDGER_DETAIL AS dtl
+
+INNER JOIN sics.AC_LEDGER_BALANCE AS bal
         ON bal.OBJECT_ID = dtl.FK_BALANCE
-LEFT JOIN dbo.AC_WORKSHEET AS ws
-       ON ws.OBJECT_ID = dtl.FK_WORKSHEET
-LEFT JOIN dbo.ENTRY_CODE AS ec
-       ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
-LEFT JOIN dbo.CNU_USER AS usr
-       ON usr.OBJECT_ID = ws.FK_REGISTERED_BY
 
-LEFT JOIN dbo.INSURED_PERIOD AS ip
+/* Parent Settlement Balance */
+INNER JOIN sics.AC_LEDGER_BALANCE AS settlement_balance
+        ON settlement_balance.OBJECT_ID = bal.FK_SETTLEMENT_BAL
+       AND settlement_balance.SUBCLASS = 1
+
+LEFT JOIN sics.AC_WORKSHEET AS ws
+       ON ws.OBJECT_ID = COALESCE(
+            dtl.FK_WORKSHEET,
+            bal.FK_WORKSHEET
+          )
+
+LEFT JOIN sics.ENTRY_CODE AS ec
+       ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
+
+/* Policy */
+LEFT JOIN sics.INSURED_PERIOD AS ip
        ON ip.OBJECT_ID = dtl.FK_INS_PER
-LEFT JOIN dbo.BUSINESS AS bus
+
+LEFT JOIN sics.BUSINESS AS bus
        ON bus.OBJECT_ID = ip.FK_BUSINESS
 
-LEFT JOIN dbo.INSURED_PERIOD AS ip_assumed
-       ON ip_assumed.OBJECT_ID = dtl.FK_INS_PER_ASSUMED
-LEFT JOIN dbo.BUSINESS AS bus_assumed
-       ON bus_assumed.OBJECT_ID = ip_assumed.FK_BUSINESS
+/* Claim directly linked to outward accounting detail */
+LEFT JOIN sics.CLAIMS AS claim_direct
+       ON claim_direct.OBJECT_ID = dtl.FK_CLAIM_TO_SOC
 
-LEFT JOIN dbo.SOC_TO_CLAIM_REL AS soc
-       ON soc.OBJECT_ID = bal.FK_CLAIM
-LEFT JOIN dbo.CLAIMS AS clm_bal
-       ON clm_bal.OBJECT_ID = soc.FK_CLAIM
-LEFT JOIN dbo.CLAIMS AS clm_ow
-       ON clm_ow.OBJECT_ID = dtl.FK_CLAIM_TO_SOC
+/* Claim linked through the balance */
+LEFT JOIN sics.SOC_TO_CLAIM_REL AS claim_relation
+       ON claim_relation.OBJECT_ID = bal.FK_CLAIM
 
-LEFT JOIN dbo.PARTY AS p_comp
-       ON p_comp.OBJECT_ID = bal.FK_BASE_COMPANY
+LEFT JOIN sics.CLAIMS AS claim_from_balance
+       ON claim_from_balance.OBJECT_ID = claim_relation.FK_CLAIM
 
-OUTER APPLY (
+/* Headline Loss / Claim Group */
+LEFT JOIN sics.CLAIMS AS headline
+       ON headline.OBJECT_ID = dtl.FK_HEADLINE_LOSS
+      AND headline.SUBCLASS = 6
+
+/* Select one broker relationship for the policy */
+OUTER APPLY
+(
     SELECT TOP (1)
-        p.IDENTIFIER AS BROK_BK
-    FROM dbo.BUSINESS_PRTNR_REL AS bpr
-    INNER JOIN dbo.PARTY AS p
-            ON p.OBJECT_ID = bpr.FK_BUS_PARTNER
+        broker_party.IDENTIFIER AS BROK_BK
+    FROM sics.BUSINESS_PRTNR_REL AS bpr
+    INNER JOIN sics.PARTY AS broker_party
+            ON broker_party.OBJECT_ID = bpr.FK_BUS_PARTNER
     WHERE bpr.FRK_RELSHIP_TYPE = 'BR'
       AND bpr.FSK_RELSHIP_TYPE = 55
-      AND (
-            bpr.FK_INS_PERIOD = dtl.FK_INS_PER
-         OR bpr.FK_BUSINESS = ip.FK_BUSINESS
+      AND
+      (
+             bpr.FK_INS_PERIOD = ip.OBJECT_ID
+          OR bpr.FK_BUSINESS   = bus.OBJECT_ID
       )
-    ORDER BY p.IDENTIFIER
-) AS brk
+    ORDER BY broker_party.IDENTIFIER
+) AS broker
 
-WHERE bal.IS_OUTWARD = 'Y';
+WHERE bal.FK_SETTLEMENT_BAL IS NOT NULL
+  AND bal.IS_PART_SET_BAL = 'Y';
