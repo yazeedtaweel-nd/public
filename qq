@@ -1,22 +1,14 @@
 SELECT
-    c.OBJECT_ID                         AS sics_object_id,
-    c.ISO_ALPHA_2                       AS ctry_country_code,
-    c.ISO_ALPHA_3                       AS iso_alpha_3,
-    c.NAME                              AS ctry_country_name,
-    c.IS_ACTIVE                         AS country_is_active,
-    r.region_object_id,
-    r.region_code,
-    r.ctry_partner_region_name,
-    r.area_group_category,
-    r.region_is_active
+    c.ISO_ALPHA_2                       AS CTRY_COUNTRY_CODE,
+    c.NAME                              AS CTRY_COUNTRY_NAME,
+    r.NAME                              AS CTRY_PARTNER_REGION_NAME,
+    r.CODE                              AS CTRY_SRE_REGION_CODE,
+    r.NAME                              AS CTRY_SRE_REGION_NAME
 FROM SICS.LEGAL_AREA AS c
 OUTER APPLY (
     SELECT TOP (1)
-        rg.OBJECT_ID          AS region_object_id,
-        rg.CODE               AS region_code,
-        rg.NAME               AS ctry_partner_region_name,
-        rg.FRK_AREA_GRP_CTGRY AS area_group_category,
-        rg.IS_ACTIVE          AS region_is_active
+        rg.CODE,
+        rg.NAME
     FROM SICS.AREA_GROUP_COUNTRY AS agc
     INNER JOIN SICS.LEGAL_AREA AS rg
             ON rg.OBJECT_ID = agc.FK_AREA_GROUP
