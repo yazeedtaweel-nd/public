@@ -1,13 +1,4 @@
-/* =============================================================================
-   DIM_COUNTRY – full SICS extract
-   Country : LEGAL_AREA SUBCLASS = 1  (SicsCountry)
-   Region  : LEGAL_AREA SUBCLASS = 4  (SicsAreaGroupCountry)
-             via AREA_GROUP_COUNTRY
-   SRE     : sre schema placeholders (replace when DDL is available)
 
-   Not from SICS:
-     CTRY_SRGT, CREATED_DATE_SRGT, UPDATED_DATE_SRGT  → ETL only
-   ============================================================================= */
 
 SELECT
     /* ---- Country (LEGAL_AREA SUBCLASS = 1) ---- */
@@ -35,16 +26,11 @@ FROM SICS.LEGAL_AREA AS c
 LEFT JOIN SICS.AREA_GROUP_COUNTRY AS agc
        ON agc.FK_COUNTRY = c.OBJECT_ID
 
-/* Region / Country Group */
 LEFT JOIN SICS.LEGAL_AREA AS r
        ON r.OBJECT_ID = agc.FK_AREA_GROUP
       AND r.SUBCLASS = 4                -- SicsAreaGroupCountry
 
-/* ---- SRE join (uncomment when schema is deployed) ----
-LEFT JOIN sre.<SRE_REGION_TABLE> AS sre
-       ON sre.<COUNTRY_KEY> = c.OBJECT_ID
-       -- or: ON sre.<COUNTRY_KEY> = c.ISO_ALPHA_2
-*/
+
 
 WHERE c.SUBCLASS = 1                    -- SicsCountry
   AND c.IS_ACTIVE = 'Y'                 -- 249 active countries validated
@@ -56,3 +42,42 @@ WHERE c.SUBCLASS = 1                    -- SicsCountry
 ORDER BY
     c.ISO_ALPHA_2,
     r.CODE;
+
+
+
+
+
+
+
+
+
+SELECT
+    c.OBJECT_ID                         AS sics_object_id,
+    c.ISO_ALPHA_2                       AS ctry_country_code,
+    c.ISO_ALPHA_3                       AS iso_alpha_3,
+    c.NAME                              AS ctry_country_name,
+    c.IS_ACTIVE                         AS country_is_active,
+    r.region_object_id,
+    r.region_code,
+    r.ctry_partner_region_name,
+    r.area_group_category,
+    r.region_is_active
+FROM SICS.LEGAL_AREA AS c
+OUTER APPLY (
+    SELECT TOP (1)
+        rg.OBJECT_ID         AS region_object_id,
+        rg.CODE              AS region_code,
+        rg.NAME              AS ctry_partner_region_name,
+        rg.FRK_AREA_GRP_CTGRY AS area_group_category,
+        rg.IS_ACTIVE         AS region_is_active
+    FROM SICS.AREA_GROUP_COUNTRY AS agc
+    INNER JOIN SICS.LEGAL_AREA AS rg
+            ON rg.OBJECT_ID = agc.FK_AREA_GROUP
+           AND rg.SUBCLASS = 4
+    WHERE agc.FK_COUNTRY = c.OBJECT_ID
+      AND rg.IS_ACTIVE = 'Y'
+    ORDER BY rg.CODE                    -- replace with business rule when known
+) AS r
+WHERE c.SUBCLASS = 1
+  AND c.IS_ACTIVE = 'Y'
+ORDER BY c.ISO_ALPHA_2;
