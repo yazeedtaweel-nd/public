@@ -1,14 +1,9 @@
 SELECT
-    c.ISO_ALPHA_2 AS country_code,
-    c.NAME        AS country_name,
-    COUNT(*)      AS region_cnt
-FROM SICS.LEGAL_AREA AS c
-INNER JOIN SICS.AREA_GROUP_COUNTRY AS agc
-        ON agc.FK_COUNTRY = c.OBJECT_ID
-INNER JOIN SICS.LEGAL_AREA AS r
-        ON r.OBJECT_ID = agc.FK_AREA_GROUP
-       AND r.SUBCLASS = 4
-       AND r.FRK_AREA_GRP_CTGRY = 'REGION'
-WHERE c.SUBCLASS = 1
-  AND c.ISO_ALPHA_2 = 'YE'
-GROUP BY c.ISO_ALPHA_2, c.NAME;
+    rz.CODE              AS CRZ_BK,
+    rz.NAME              AS RISK_ZONE_NAME,
+    la.NAME              AS COUNTRY_NAME,
+    la.ISO_ALPHA_2       AS CTRY_COUNTRY_CODE
+FROM SICS.RISK_ZONE rz
+LEFT JOIN LEGAL_AREA la
+    ON la.OBJECT_ID = rz.FK_COUNTRY
+   AND la.SUBCLASS = 1;
