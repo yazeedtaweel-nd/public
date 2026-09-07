@@ -1,7 +1,58 @@
-SELECT agc.FK_COUNTRY, COUNT(*) AS region_cnt
-FROM SICS.AREA_GROUP_COUNTRY AS agc
-INNER JOIN SICS.LEGAL_AREA AS r
-        ON r.OBJECT_ID = agc.FK_AREA_GROUP
-       AND r.SUBCLASS = 4
-GROUP BY agc.FK_COUNTRY
-HAVING COUNT(*) > 1;
+/* =============================================================================
+   DIM_COUNTRY – full SICS extract
+   Country : LEGAL_AREA SUBCLASS = 1  (SicsCountry)
+   Region  : LEGAL_AREA SUBCLASS = 4  (SicsAreaGroupCountry)
+             via AREA_GROUP_COUNTRY
+   SRE     : sre schema placeholders (replace when DDL is available)
+
+   Not from SICS:
+     CTRY_SRGT, CREATED_DATE_SRGT, UPDATED_DATE_SRGT  → ETL only
+   ============================================================================= */
+
+SELECT
+    /* ---- Country (LEGAL_AREA SUBCLASS = 1) ---- */
+    c.OBJECT_ID                         AS sics_object_id,          -- staging key; not CTRY_SRGT
+    c.ISO_ALPHA_2                       AS ctry_country_code,       -- CTRY_COUNTRY_CODE
+    c.ISO_ALPHA_3                       AS iso_alpha_3,             -- reference only
+    c.NAME                              AS ctry_country_name,       -- CTRY_COUNTRY_NAME
+    c.IS_ACTIVE                         AS country_is_active,
+
+    /* ---- Region (LEGAL_AREA SUBCLASS = 4) ---- */
+    r.OBJECT_ID                         AS region_object_id,
+    r.CODE                              AS region_code,
+    r.NAME                              AS ctry_partner_region_name,-- CTRY_PARTNER_REGION_NAME candidate
+    r.FRK_AREA_GRP_CTGRY                AS area_group_category,     -- REFERENCE_DATA type 20
+    r.IS_ACTIVE                         AS region_is_active
+
+    /* ---- SRE schema (uncomment + replace placeholders when DDL exists) ----
+    , sre.<REGION_CODE>                 AS ctry_sre_region_code     -- CTRY_SRE_REGION_CODE
+    , sre.<REGION_NAME>                 AS ctry_sre_region_name     -- CTRY_SRE_REGION_NAME
+    */
+
+FROM SICS.LEGAL_AREA AS c
+
+/* Country → Area Group link */
+LEFT JOIN SICS.AREA_GROUP_COUNTRY AS agc
+       ON agc.FK_COUNTRY = c.OBJECT_ID
+
+/* Region / Country Group */
+LEFT JOIN SICS.LEGAL_AREA AS r
+       ON r.OBJECT_ID = agc.FK_AREA_GROUP
+      AND r.SUBCLASS = 4                -- SicsAreaGroupCountry
+
+/* ---- SRE join (uncomment when schema is deployed) ----
+LEFT JOIN sre.<SRE_REGION_TABLE> AS sre
+       ON sre.<COUNTRY_KEY> = c.OBJECT_ID
+       -- or: ON sre.<COUNTRY_KEY> = c.ISO_ALPHA_2
+*/
+
+WHERE c.SUBCLASS = 1                    -- SicsCountry
+  AND c.IS_ACTIVE = 'Y'                 -- 249 active countries validated
+  /* Optional region filter:
+  AND (r.OBJECT_ID IS NULL OR r.IS_ACTIVE = 'Y')
+  AND r.FRK_AREA_GRP_CTGRY = '<your_category>'
+  */
+
+ORDER BY
+    c.ISO_ALPHA_2,
+    r.CODE;
