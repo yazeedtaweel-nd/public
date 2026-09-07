@@ -1,22 +1,14 @@
 SELECT
-    c.ISO_ALPHA_2                       AS CTRY_COUNTRY_CODE,
-    c.NAME                              AS CTRY_COUNTRY_NAME,
-    r.NAME                              AS CTRY_PARTNER_REGION_NAME,
-    r.CODE                              AS CTRY_SRE_REGION_CODE,
-    r.NAME                              AS CTRY_SRE_REGION_NAME
+    c.ISO_ALPHA_2 AS country_code,
+    c.NAME        AS country_name,
+    COUNT(*)      AS region_cnt
 FROM SICS.LEGAL_AREA AS c
-OUTER APPLY (
-    SELECT TOP (1)
-        rg.CODE,
-        rg.NAME
-    FROM SICS.AREA_GROUP_COUNTRY AS agc
-    INNER JOIN SICS.LEGAL_AREA AS rg
-            ON rg.OBJECT_ID = agc.FK_AREA_GROUP
-           AND rg.SUBCLASS = 4
-           AND rg.FRK_AREA_GRP_CTGRY = 'REGION'
-    WHERE agc.FK_COUNTRY = c.OBJECT_ID
-    ORDER BY rg.CODE
-) AS r
+INNER JOIN SICS.AREA_GROUP_COUNTRY AS agc
+        ON agc.FK_COUNTRY = c.OBJECT_ID
+INNER JOIN SICS.LEGAL_AREA AS r
+        ON r.OBJECT_ID = agc.FK_AREA_GROUP
+       AND r.SUBCLASS = 4
+       AND r.FRK_AREA_GRP_CTGRY = 'REGION'
 WHERE c.SUBCLASS = 1
-  AND c.IS_ACTIVE = 'Y'
-ORDER BY c.ISO_ALPHA_2;
+  AND c.ISO_ALPHA_2 = 'YE'
+GROUP BY c.ISO_ALPHA_2, c.NAME;
