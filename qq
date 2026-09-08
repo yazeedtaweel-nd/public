@@ -1,14 +1,32 @@
+/* DIM_POLICY_TERM — dimension members only (SICS)
+   Grain: one row per Accounting Basis reference-data value (SUBCLASS = 65)
+   plus the DW unknown member. Expect 4 rows total. */
 SELECT
-    b.IDENTIFIER AS POLICY_BK,
-    p.IDENTIFIER AS BROKER_BK
-FROM SICS.BUSINESS_PRTNR_REL r
-JOIN SICS.INSURED_PERIOD ip
-      ON ip.OBJECT_ID = r.FK_INS_PERIOD
-JOIN SICS.BUSINESS b
-      ON b.OBJECT_ID = ip.FK_BUSINESS
-JOIN SICS.PARTY p
-      ON p.OBJECT_ID = r.FK_BUS_PARTNER
-WHERE r.FSK_RELSHIP_TYPE = 55
-  AND r.FRK_RELSHIP_TYPE = 'BR'
-  AND r.SUBCLASS = 10
-  AND b.SUBCLASS IN (1, 3, 8, 11, 17); 
+    rd.CODE                             AS SICS_CODE,   -- CLCUT / RUNOF / NONE
+    rd.NAME                             AS SICS_NAME,   -- Clean Cut / Run Off / <None>
+    rd.IS_ACTIVE,
+    CASE rd.CODE
+        WHEN 'CLCUT' THEN 'M'           -- Clean Cut  -> Mandatory (confirm M vs O)
+        WHEN 'RUNOF' THEN 'N'           -- Run Off    -> Not Clean Cut
+        ELSE '?'                        -- NONE       -> Undefined
+    END                                 AS PTRM_BK,
+    CASE rd.CODE
+        WHEN 'CLCUT' THEN 'MANADATORY CLEAN CUT'
+        WHEN 'RUNOF' THEN 'NOT CLEAN CUT'
+        ELSE 'UNDEFINED'
+    END                                 AS PTRM_NAME,
+    COUNT(DISTINCT bca_prem.OBJECT_ID)  AS USED_AS_PREM_BASIS_CNT,
+    COUNT(DISTINCT bca_clm.OBJECT_ID)   AS USED_AS_CLAIM_BASIS_CNT
+FROM SICS.REFERENCE_DATA AS rd
+LEFT JOIN SICS.BUS_COMMON_ACC AS bca_prem
+       ON bca_prem.FRK_ACCT_BASIS = rd.CODE
+      AND ISNULL(bca_prem.FSK_ACCT_BASIS, 65) = 65
+LEFT JOIN SICS.BUS_COMMON_ACC AS bca_clm
+       ON bca_clm.FRK_ACCT_CLAIM_BAS = rd.CODE
+      AND ISNULL(bca_clm.FSK_ACCT_CLAIM_BAS, 65) = 65
+WHERE rd.SUBCLASS = 65
+GROUP BY rd.CODE, rd.NAME, rd.IS_ACTIVE
+
+UNION ALL
+
+SELECT NULL, NULL, NULL, 'O', 'OPTIONAL CLEAN CUT', 0, 0;  -- no SICS equivalent (see below)
