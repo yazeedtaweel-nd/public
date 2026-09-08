@@ -1,32 +1,39 @@
-/* DIM_POLICY_TERM — dimension members only (SICS)
-   Grain: one row per Accounting Basis reference-data value (SUBCLASS = 65)
-   plus the DW unknown member. Expect 4 rows total. */
+/* DIM_POLICY_TERM — dimension members (SICS), pre-aggregated */
+WITH prem_usage AS (
+    SELECT FRK_ACCT_BASIS AS CODE, COUNT(*) AS CNT
+    FROM SICS.BUS_COMMON_ACC
+    WHERE FRK_ACCT_BASIS IS NOT NULL
+      AND (FSK_ACCT_BASIS = 65 OR FSK_ACCT_BASIS IS NULL)
+    GROUP BY FRK_ACCT_BASIS
+),
+claim_usage AS (
+    SELECT FRK_ACCT_CLAIM_BAS AS CODE, COUNT(*) AS CNT
+    FROM SICS.BUS_COMMON_ACC
+    WHERE FRK_ACCT_CLAIM_BAS IS NOT NULL
+      AND (FSK_ACCT_CLAIM_BAS = 65 OR FSK_ACCT_CLAIM_BAS IS NULL)
+    GROUP BY FRK_ACCT_CLAIM_BAS
+)
 SELECT
-    rd.CODE                             AS SICS_CODE,   -- CLCUT / RUNOF / NONE
-    rd.NAME                             AS SICS_NAME,   -- Clean Cut / Run Off / <None>
+    rd.CODE                     AS SICS_CODE,
+    rd.NAME                     AS SICS_NAME,
     rd.IS_ACTIVE,
     CASE rd.CODE
-        WHEN 'CLCUT' THEN 'M'           -- Clean Cut  -> Mandatory (confirm M vs O)
-        WHEN 'RUNOF' THEN 'N'           -- Run Off    -> Not Clean Cut
-        ELSE '?'                        -- NONE       -> Undefined
-    END                                 AS PTRM_BK,
+        WHEN 'CLCUT' THEN 'M'
+        WHEN 'RUNOF' THEN 'N'
+        ELSE '?'
+    END                         AS PTRM_BK,
     CASE rd.CODE
         WHEN 'CLCUT' THEN 'MANADATORY CLEAN CUT'
         WHEN 'RUNOF' THEN 'NOT CLEAN CUT'
         ELSE 'UNDEFINED'
-    END                                 AS PTRM_NAME,
-    COUNT(DISTINCT bca_prem.OBJECT_ID)  AS USED_AS_PREM_BASIS_CNT,
-    COUNT(DISTINCT bca_clm.OBJECT_ID)   AS USED_AS_CLAIM_BASIS_CNT
+    END                         AS PTRM_NAME,
+    ISNULL(p.CNT, 0)            AS USED_AS_PREM_BASIS_CNT,
+    ISNULL(c.CNT, 0)            AS USED_AS_CLAIM_BASIS_CNT
 FROM SICS.REFERENCE_DATA AS rd
-LEFT JOIN SICS.BUS_COMMON_ACC AS bca_prem
-       ON bca_prem.FRK_ACCT_BASIS = rd.CODE
-      AND ISNULL(bca_prem.FSK_ACCT_BASIS, 65) = 65
-LEFT JOIN SICS.BUS_COMMON_ACC AS bca_clm
-       ON bca_clm.FRK_ACCT_CLAIM_BAS = rd.CODE
-      AND ISNULL(bca_clm.FSK_ACCT_CLAIM_BAS, 65) = 65
+LEFT JOIN prem_usage  AS p ON p.CODE = rd.CODE
+LEFT JOIN claim_usage AS c ON c.CODE = rd.CODE
 WHERE rd.SUBCLASS = 65
-GROUP BY rd.CODE, rd.NAME, rd.IS_ACTIVE
 
 UNION ALL
 
-SELECT NULL, NULL, NULL, 'O', 'OPTIONAL CLEAN CUT', 0, 0;  -- no SICS equivalent (see below)
+SELECT NULL, NULL, NULL, 'O', 'OPTIONAL CLEAN CUT', 0, 0;
