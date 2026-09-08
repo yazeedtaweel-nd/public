@@ -1,5 +1,5 @@
 /* ============================================================
-   005_seed_policy_package.sql — Policy Package registration
+   005_seed_POLICY_LOAD.sql — Policy Package registration
 
    Seeds audit.ETL_PACKAGE + audit.ETL_PACKAGE_TABLE for the
    Policy Package (DimPolicy.dtsx) and its five loads:
@@ -16,13 +16,13 @@ GO
 IF NOT EXISTS (
     SELECT 1
     FROM   audit.ETL_PACKAGE
-    WHERE  PACKAGE_NAME = N'POLICY_PACKAGE'
+    WHERE  PACKAGE_NAME = N'POLICY_LOAD'
 )
 BEGIN
     INSERT INTO audit.ETL_PACKAGE
         (PACKAGE_NAME, PACKAGE_FILE_NAME, EXECUTION_ORDER, IS_ENABLED, DESCRIPTION)
     VALUES
-        (N'POLICY_PACKAGE',
+        (N'POLICY_LOAD',
          N'DimPolicy.dtsx',
          15,
          1,
@@ -35,16 +35,16 @@ BEGIN
            EXECUTION_ORDER   = 15,
            IS_ENABLED        = 1,
            DESCRIPTION       = N'Policy package: Policy, OW Policy Broker, Policy Aggregate, Policy Limit, Policy Premium.'
-    WHERE  PACKAGE_NAME = N'POLICY_PACKAGE';
+    WHERE  PACKAGE_NAME = N'POLICY_LOAD';
 END
 GO
 
 DECLARE @PackageId INT =
-    (SELECT PACKAGE_ID FROM audit.ETL_PACKAGE WHERE PACKAGE_NAME = N'POLICY_PACKAGE');
+    (SELECT PACKAGE_ID FROM audit.ETL_PACKAGE WHERE PACKAGE_NAME = N'POLICY_LOAD');
 
 IF @PackageId IS NULL
 BEGIN
-    RAISERROR(N'POLICY_PACKAGE was not found in audit.ETL_PACKAGE after seed.', 16, 1);
+    RAISERROR(N'POLICY_LOAD was not found in audit.ETL_PACKAGE after seed.', 16, 1);
 END
 ELSE
 BEGIN
