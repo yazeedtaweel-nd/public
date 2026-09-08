@@ -1,14 +1,90 @@
+/* ============================================================
+   005_seed_policy_package.sql — Policy Package registration
 
-SELECT
-    b.IDENTIFIER AS POLICY_BK,
-    p.IDENTIFIER AS BROKER_BK
-FROM SICS.BUSINESS_PRTNR_REL r
-JOIN SICS.INSURED_PERIOD ip
-      ON ip.OBJECT_ID = r.FK_INS_PERIOD
-JOIN SICS.BUSINESS b
-      ON b.OBJECT_ID = ip.FK_BUSINESS
-JOIN SICS.PARTY p
-      ON p.OBJECT_ID = r.FK_BUS_PARTNER
-WHERE r.FSK_RELSHIP_TYPE = 55
-  AND r.FRK_RELSHIP_TYPE = 'BR'
-  AND r.SUBCLASS = 10;
+   Seeds audit.ETL_PACKAGE + audit.ETL_PACKAGE_TABLE for the
+   Policy Package (DimPolicy.dtsx) and its five loads:
+   DIM_POLICY, LINK_OW_POLICY_BROKER, FACT_POLICY_AGGREGATE,
+   FACT_POLICY_LIMIT, FACT_POLICY_PREMIUM.
+
+   Re-runnable: inserts the package if missing, then MERGE-upserts
+   the table rows. Does not touch execution / error history.
+   ============================================================ */
+
+SET NOCOUNT ON;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM   audit.ETL_PACKAGE
+    WHERE  PACKAGE_NAME = N'POLICY_PACKAGE'
+)
+BEGIN
+    INSERT INTO audit.ETL_PACKAGE
+        (PACKAGE_NAME, PACKAGE_FILE_NAME, EXECUTION_ORDER, IS_ENABLED, DESCRIPTION)
+    VALUES
+        (N'POLICY_PACKAGE',
+         N'DimPolicy.dtsx',
+         15,
+         1,
+         N'Policy package: Policy, OW Policy Broker, Policy Aggregate, Policy Limit, Policy Premium.');
+END
+ELSE
+BEGIN
+    UPDATE audit.ETL_PACKAGE
+    SET    PACKAGE_FILE_NAME = N'DimPolicy.dtsx',
+           EXECUTION_ORDER   = 15,
+           IS_ENABLED        = 1,
+           DESCRIPTION       = N'Policy package: Policy, OW Policy Broker, Policy Aggregate, Policy Limit, Policy Premium.'
+    WHERE  PACKAGE_NAME = N'POLICY_PACKAGE';
+END
+GO
+
+DECLARE @PackageId INT =
+    (SELECT PACKAGE_ID FROM audit.ETL_PACKAGE WHERE PACKAGE_NAME = N'POLICY_PACKAGE');
+
+IF @PackageId IS NULL
+BEGIN
+    RAISERROR(N'POLICY_PACKAGE was not found in audit.ETL_PACKAGE after seed.', 16, 1);
+END
+ELSE
+BEGIN
+    ;WITH src AS (
+        SELECT *
+        FROM (VALUES
+            (N'POLICY',
+             N'SICS.dbo.BUSINESS',
+             N'dbo.DIM_POLICY',
+             N'BUSINESS joined to INSURED_PERIOD; IW and OW loads via subclass / direction filter.'),
+            (N'OW_POLICY_BROKER',
+             N'SICS.dbo.BUSINESS_PRTNR_REL',
+             N'dbo.LINK_OW_POLICY_BROKER',
+             N'BUSINESS_PRTNR_REL WHERE FRK_RELSHIP_TYPE = BR (FSK_RELSHIP_TYPE = 55); join PARTY via FK_BUS_PARTNER.'),
+            (N'POLICY_AGGREGATE',
+             N'SICS.dbo.CESSION',
+             N'dbo.FACT_POLICY_AGGREGATE',
+             N'CESSION joined to INS_PERIL via FK_INS_PERIL; policy via FK_SOC → SCOPE_OF_COVER.'),
+            (N'POLICY_LIMIT',
+             N'SICS.dbo.LPC_LIMIT',
+             N'dbo.FACT_POLICY_LIMIT',
+             N'LPC_LIMIT via LPC_LIM_PREM_COND; currency via FK_MAIN_CURRENCY → CNU_CURRENCY.'),
+            (N'POLICY_PREMIUM',
+             N'SICS.dbo.LPC_PREMIUM',
+             N'dbo.FACT_POLICY_PREMIUM',
+             N'LPC_PREMIUM via LPC_LIM_PREM_COND; currency via FK_MAIN_CURRENCY → CNU_CURRENCY.')
+        ) AS v (TABLE_NAME, SOURCE_OBJECT, TARGET_OBJECT, DESCRIPTION)
+    )
+    MERGE audit.ETL_PACKAGE_TABLE AS t
+    USING src
+       ON t.PACKAGE_ID = @PackageId
+      AND t.TABLE_NAME = src.TABLE_NAME
+    WHEN MATCHED THEN
+        UPDATE SET
+            SOURCE_OBJECT = src.SOURCE_OBJECT,
+            TARGET_OBJECT = src.TARGET_OBJECT,
+            DESCRIPTION   = src.DESCRIPTION,
+            IS_ENABLED    = 1
+    WHEN NOT MATCHED THEN
+        INSERT (PACKAGE_ID, TABLE_NAME, SOURCE_OBJECT, TARGET_OBJECT, IS_ENABLED, DESCRIPTION)
+        VALUES (@PackageId, src.TABLE_NAME, src.SOURCE_OBJECT, src.TARGET_OBJECT, 1, src.DESCRIPTION);
+END
+GO
