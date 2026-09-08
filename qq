@@ -1,33 +1,13 @@
-/* Synergy MOP  <->  SICS Type Of Participation (REFERENCE_DATA SUBCLASS = 22)
-   Returns every subclass-22 code with its Synergy target, and flags
-   anything not yet covered by the decode so it can be reviewed. */
 SELECT
-    rd.CODE                                   AS SICS_CODE,      -- QA, SURPLUS, ...
-    rd.NAME                                   AS SICS_NAME,      -- Quota Share, Surplus, ...
-    rd.IS_ACTIVE,
-    CASE
-        WHEN rd.CODE = 'QA'                          THEN 1
-        WHEN rd.CODE = 'SURPLUS'                     THEN 3
-        WHEN rd.CODE LIKE '%XL%'
-          OR rd.NAME LIKE '%Excess%'                 THEN 2
-    END                                       AS MOP_CODE,
-    CASE
-        WHEN rd.CODE = 'QA'                          THEN 'PRO RATA - QS'
-        WHEN rd.CODE = 'SURPLUS'                     THEN 'PRO RATA - SURPLUS'
-        WHEN rd.CODE LIKE '%XL%'
-          OR rd.NAME LIKE '%Excess%'                 THEN 'EXCESS OF LOSS'
-    END                                       AS MOP_DESC,
-    CASE
-        WHEN rd.CODE IN ('QA', 'SURPLUS')            THEN 'PRO'
-        WHEN rd.CODE LIKE '%XL%'
-          OR rd.NAME LIKE '%Excess%'                 THEN 'XL'
-    END                                       AS MOP_SHORT_NAME,
-    CASE
-        WHEN rd.CODE IN ('QA', 'SURPLUS')
-          OR rd.CODE LIKE '%XL%'
-          OR rd.NAME LIKE '%Excess%'                 THEN 'MAPPED'
-        ELSE 'UNMAPPED - REVIEW'
-    END                                       AS MAP_STATUS
+    rd.SUBCLASS,
+    rd.CODE,
+    CASE rd.CODE
+        WHEN 'QA'      THEN 'PRO RATA - QS'
+        WHEN 'SURPLUS' THEN 'PRO RATA - SURPLUS'
+        ELSE rd.NAME
+    END AS NAME,
+    rd.EXTERNAL_CODE,
+    rd.IS_ACTIVE
 FROM SICS.REFERENCE_DATA AS rd
 WHERE rd.SUBCLASS = 22
-ORDER BY MAP_STATUS, rd.CODE;
+ORDER BY rd.CODE;
