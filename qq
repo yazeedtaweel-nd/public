@@ -1,39 +1,33 @@
-/* DIM_POLICY_TERM — dimension members (SICS), pre-aggregated */
-WITH prem_usage AS (
-    SELECT FRK_ACCT_BASIS AS CODE, COUNT(*) AS CNT
-    FROM SICS.BUS_COMMON_ACC
-    WHERE FRK_ACCT_BASIS IS NOT NULL
-      AND (FSK_ACCT_BASIS = 65 OR FSK_ACCT_BASIS IS NULL)
-    GROUP BY FRK_ACCT_BASIS
-),
-claim_usage AS (
-    SELECT FRK_ACCT_CLAIM_BAS AS CODE, COUNT(*) AS CNT
-    FROM SICS.BUS_COMMON_ACC
-    WHERE FRK_ACCT_CLAIM_BAS IS NOT NULL
-      AND (FSK_ACCT_CLAIM_BAS = 65 OR FSK_ACCT_CLAIM_BAS IS NULL)
-    GROUP BY FRK_ACCT_CLAIM_BAS
-)
+/* Synergy MOP  <->  SICS Type Of Participation (REFERENCE_DATA SUBCLASS = 22)
+   Returns every subclass-22 code with its Synergy target, and flags
+   anything not yet covered by the decode so it can be reviewed. */
 SELECT
-    rd.CODE                     AS SICS_CODE,
-    rd.NAME                     AS SICS_NAME,
+    rd.CODE                                   AS SICS_CODE,      -- QA, SURPLUS, ...
+    rd.NAME                                   AS SICS_NAME,      -- Quota Share, Surplus, ...
     rd.IS_ACTIVE,
-    CASE rd.CODE
-        WHEN 'CLCUT' THEN 'M'
-        WHEN 'RUNOF' THEN 'N'
-        ELSE '?'
-    END                         AS PTRM_BK,
-    CASE rd.CODE
-        WHEN 'CLCUT' THEN 'MANADATORY CLEAN CUT'
-        WHEN 'RUNOF' THEN 'NOT CLEAN CUT'
-        ELSE 'UNDEFINED'
-    END                         AS PTRM_NAME,
-    ISNULL(p.CNT, 0)            AS USED_AS_PREM_BASIS_CNT,
-    ISNULL(c.CNT, 0)            AS USED_AS_CLAIM_BASIS_CNT
+    CASE
+        WHEN rd.CODE = 'QA'                          THEN 1
+        WHEN rd.CODE = 'SURPLUS'                     THEN 3
+        WHEN rd.CODE LIKE '%XL%'
+          OR rd.NAME LIKE '%Excess%'                 THEN 2
+    END                                       AS MOP_CODE,
+    CASE
+        WHEN rd.CODE = 'QA'                          THEN 'PRO RATA - QS'
+        WHEN rd.CODE = 'SURPLUS'                     THEN 'PRO RATA - SURPLUS'
+        WHEN rd.CODE LIKE '%XL%'
+          OR rd.NAME LIKE '%Excess%'                 THEN 'EXCESS OF LOSS'
+    END                                       AS MOP_DESC,
+    CASE
+        WHEN rd.CODE IN ('QA', 'SURPLUS')            THEN 'PRO'
+        WHEN rd.CODE LIKE '%XL%'
+          OR rd.NAME LIKE '%Excess%'                 THEN 'XL'
+    END                                       AS MOP_SHORT_NAME,
+    CASE
+        WHEN rd.CODE IN ('QA', 'SURPLUS')
+          OR rd.CODE LIKE '%XL%'
+          OR rd.NAME LIKE '%Excess%'                 THEN 'MAPPED'
+        ELSE 'UNMAPPED - REVIEW'
+    END                                       AS MAP_STATUS
 FROM SICS.REFERENCE_DATA AS rd
-LEFT JOIN prem_usage  AS p ON p.CODE = rd.CODE
-LEFT JOIN claim_usage AS c ON c.CODE = rd.CODE
-WHERE rd.SUBCLASS = 65
-
-UNION ALL
-
-SELECT NULL, NULL, NULL, 'O', 'OPTIONAL CLEAN CUT', 0, 0;
+WHERE rd.SUBCLASS = 22
+ORDER BY MAP_STATUS, rd.CODE;
