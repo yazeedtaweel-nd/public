@@ -1,36 +1,28 @@
-SWITH zone_country AS (
+WITH tree AS (
     SELECT
-        rz.OBJECT_ID  AS zone_id,
-        rz.CODE       AS zone_code,
-        rz.NAME       AS zone_name,
-        rz.FK_COUNTRY AS country_id,
-        rz.FK_PARENT  AS next_ancestor
+        rz.OBJECT_ID, rz.CODE, rz.SUBCLASS,
+        CAST(rz.NAME AS NVARCHAR(200)) AS root_name,
+        CAST(NULL AS VARCHAR(32)) AS country_id,
+        1 AS lvl
     FROM SICS.RISK_ZONE rz
+    WHERE rz.FK_PARENT IS NULL
     UNION ALL
     SELECT
-        zc.zone_id,
-        zc.zone_code,
-        zc.zone_name,
-        anc.FK_COUNTRY,
-        anc.FK_PARENT
-    FROM zone_country zc
-    JOIN SICS.RISK_ZONE anc
-        ON anc.OBJECT_ID = zc.next_ancestor
-    WHERE zc.country_id IS NULL
+        c.OBJECT_ID, c.CODE, c.SUBCLASS,
+        t.root_name,
+        COALESCE(c.FK_COUNTRY, t.country_id),
+        t.lvl + 1
+    FROM SICS.RISK_ZONE c
+    JOIN tree t ON c.FK_PARENT = t.OBJECT_ID
 )
 SELECT
-    zc.zone_code AS CRZ_BK,
-    CASE
-        WHEN la.NAME IS NULL AND zc.zone_name IS NULL THEN NULL
-        WHEN la.NAME IS NULL THEN zc.zone_name
-        WHEN zc.zone_name IS NULL THEN la.NAME
-        ELSE la.NAME + ' - ' + zc.zone_name
-    END AS CRZ_NAME,
-    COALESCE(la.CODE, la.ISO_ALPHA_2) AS CTRY_COUNTRY_CODE
-FROM zone_country zc
-LEFT JOIN SICS.LEGAL_AREA la
-    ON la.OBJECT_ID = zc.country_id
-WHERE zc.country_id IS NOT NULL
-   OR zc.next_ancestor IS NULL
-ORDER BY zc.zone_code
+    root_name,
+    lvl,
+    SUBCLASS,
+    COUNT(*) AS rows_total,
+    SUM(CASE WHEN CODE IS NOT NULL THEN 1 ELSE 0 END) AS rows_with_code,
+    SUM(CASE WHEN country_id IS NULL THEN 1 ELSE 0 END) AS rows_without_country
+FROM tree
+GROUP BY root_name, lvl, SUBCLASS
+ORDER BY root_name, lvl
 OPTION (MAXRECURSION 0);
