@@ -1,6 +1,8 @@
 WITH zone_country AS (
     SELECT
         rz.OBJECT_ID  AS zone_id,
+        rz.CODE       AS zone_code,
+        rz.NAME       AS zone_name,
         rz.FK_COUNTRY AS country_id,
         rz.FK_PARENT  AS next_ancestor
     FROM SICS.RISK_ZONE rz
@@ -9,6 +11,8 @@ WITH zone_country AS (
 
     SELECT
         zc.zone_id,
+        zc.zone_code,
+        zc.zone_name,
         anc.FK_COUNTRY,
         anc.FK_PARENT
     FROM zone_country zc
@@ -16,15 +20,19 @@ WITH zone_country AS (
         ON anc.OBJECT_ID = zc.next_ancestor
     WHERE zc.country_id IS NULL
 )
-SELECT 'extract_rows' AS metric, COUNT(*) AS cnt
+SELECT
+    zc.zone_code AS CRZ_BK,
+    CASE
+        WHEN la.NAME IS NULL AND zc.zone_name IS NULL THEN NULL
+        WHEN la.NAME IS NULL THEN zc.zone_name
+        WHEN zc.zone_name IS NULL THEN la.NAME
+        ELSE la.NAME + ' - ' + zc.zone_name
+    END AS CRZ_NAME,
+    COALESCE(la.CODE, la.ISO_ALPHA_2) AS CTRY_COUNTRY_CODE
 FROM zone_country zc
-WHERE zc.country_id IS NOT NULL OR zc.next_ancestor IS NULL
-
-UNION ALL
-SELECT 'extract_distinct_zones', COUNT(DISTINCT zc.zone_id)
-FROM zone_country zc
-WHERE zc.country_id IS NOT NULL OR zc.next_ancestor IS NULL
-
-UNION ALL
-SELECT 'risk_zone_total', COUNT(*) FROM SICS.RISK_ZONE
+LEFT JOIN SICS.LEGAL_AREA la
+    ON la.OBJECT_ID = zc.country_id
+WHERE zc.country_id IS NOT NULL
+   OR zc.next_ancestor IS NULL
+ORDER BY zc.zone_code
 OPTION (MAXRECURSION 0);
