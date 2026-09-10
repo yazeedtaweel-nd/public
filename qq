@@ -1,36 +1,23 @@
-WITH zone_country AS (
-    SELECT
-        rz.OBJECT_ID  AS zone_id,
-        rz.CODE       AS zone_code,
-        rz.NAME       AS zone_name,
-        rz.FK_COUNTRY AS country_id,
-        rz.FK_PARENT  AS next_ancestor
-    FROM SICS.RISK_ZONE rz
-    WHERE rz.CODE IS NOT NULL
+-- 1) Are the peril codes in RISK_ZONE at all?
+SELECT COUNT(*) AS peril_codes_in_risk_zone
+FROM SICS.RISK_ZONE
+WHERE CODE LIKE '%9800' OR CODE LIKE '%9900';
 
-    UNION ALL
+-- 2) How big is the peril link table?
+SELECT COUNT(*) AS rz_ctr_to_ref_rows FROM SICS.RZ_CTR_TO_REF;
 
-    SELECT
-        zc.zone_id,
-        zc.zone_code,
-        zc.zone_name,
-        anc.FK_COUNTRY,
-        anc.FK_PARENT
-    FROM SICS.zone_country zc
-    JOIN SICS.RISK_ZONE anc
-        ON anc.OBJECT_ID = zc.next_ancestor
-    WHERE zc.country_id IS NULL
-)
+-- 3) What perils does it hold?
 SELECT
-    zc.zone_code AS CRZ_BK,
-    CASE
-        WHEN la.NAME IS NULL THEN zc.zone_name
-        ELSE la.NAME + ' - ' + zc.zone_name
-    END AS CRZ_NAME,
-    COALESCE(la.CODE, la.ISO_ALPHA_2) AS CTRY_COUNTRY_CODE
-FROM zone_country zc
-LEFT JOIN LEGAL_AREA la
-    ON la.OBJECT_ID = zc.country_id
-WHERE zc.country_id IS NOT NULL
-   OR zc.next_ancestor IS NULL
-ORDER BY zc.zone_code;
+    r.FRK_PERIL_TYPE,
+    rd.NAME AS peril_name,
+    COUNT(*) AS cnt
+FROM SICS.RZ_CTR_TO_REF r
+LEFT JOIN SICS.REFERENCE_DATA rd
+    ON rd.CODE = r.FRK_PERIL_TYPE
+   AND rd.SUBCLASS = r.FSK_PERIL_TYPE
+GROUP BY r.FRK_PERIL_TYPE, rd.NAME;
+
+-- 4) Do the odd ones exist under any spelling?
+SELECT CODE, NAME, FK_COUNTRY, FK_PARENT
+FROM SICS.RISK_ZONE
+WHERE CODE IN ('0000000','ACH0300','DAU0200','DAU2700','CMX3b00','CMX4b00','6ID1800','6PH0801','6PH0901','CBB0200');
