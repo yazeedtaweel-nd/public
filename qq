@@ -1,23 +1,10 @@
--- 1) Are the peril codes in RISK_ZONE at all?
-SELECT COUNT(*) AS peril_codes_in_risk_zone
-FROM SICS.RISK_ZONE
-WHERE CODE LIKE '%9800' OR CODE LIKE '%9900';
-
--- 2) How big is the peril link table?
-SELECT COUNT(*) AS rz_ctr_to_ref_rows FROM SICS.RZ_CTR_TO_REF;
-
--- 3) What perils does it hold?
 SELECT
-    r.FRK_PERIL_TYPE,
-    rd.NAME AS peril_name,
+    CASE WHEN CRZ_BK LIKE '%9800' OR CRZ_BK LIKE '%9900' THEN 'peril' ELSE 'standard' END AS row_kind,
+    CREATED_DATE_SRGT,
+    UPDATED_DATE_SRGT,
     COUNT(*) AS cnt
-FROM SICS.RZ_CTR_TO_REF r
-LEFT JOIN SICS.REFERENCE_DATA rd
-    ON rd.CODE = r.FRK_PERIL_TYPE
-   AND rd.SUBCLASS = r.FSK_PERIL_TYPE
-GROUP BY r.FRK_PERIL_TYPE, rd.NAME;
-
--- 4) Do the odd ones exist under any spelling?
-SELECT CODE, NAME, FK_COUNTRY, FK_PARENT
-FROM SICS.RISK_ZONE
-WHERE CODE IN ('0000000','ACH0300','DAU0200','DAU2700','CMX3b00','CMX4b00','6ID1800','6PH0801','6PH0901','CBB0200');
+FROM [SaudiRe_Dw].[dbo].[DIM_CRESTA_ZONE]
+GROUP BY
+    CASE WHEN CRZ_BK LIKE '%9800' OR CRZ_BK LIKE '%9900' THEN 'peril' ELSE 'standard' END,
+    CREATED_DATE_SRGT, UPDATED_DATE_SRGT
+ORDER BY cnt DESC;
