@@ -1,10 +1,36 @@
+-- Country node + any child zone code + Flood/Windstorm peril
+WITH child_prefix AS (
+    SELECT
+        parent.OBJECT_ID AS country_zone_id,
+        MIN(LEFT(child.CODE, LEN(child.CODE) - 4)) AS cresta_prefix
+    FROM SICS.RISK_ZONE parent
+    JOIN RISK_ZONE child
+        ON child.FK_PARENT = parent.OBJECT_ID
+       AND child.CODE IS NOT NULL
+    GROUP BY parent.OBJECT_ID
+)
 SELECT
-    CASE WHEN CRZ_BK LIKE '%9800' OR CRZ_BK LIKE '%9900' THEN 'peril' ELSE 'standard' END AS row_kind,
-    CREATED_DATE_SRGT,
-    UPDATED_DATE_SRGT,
-    COUNT(*) AS cnt
-FROM [SaudiRe_Dw].[dbo].[DIM_CRESTA_ZONE]
-GROUP BY
-    CASE WHEN CRZ_BK LIKE '%9800' OR CRZ_BK LIKE '%9900' THEN 'peril' ELSE 'standard' END,
-    CREATED_DATE_SRGT, UPDATED_DATE_SRGT
-ORDER BY cnt DESC;
+    cp.cresta_prefix
+        + CASE
+            WHEN r.FRK_PERIL_TYPE IN ('FD', '2FD') THEN '9800'
+            WHEN r.FRK_PERIL_TYPE IN ('WD', '2WD') THEN '9900'
+          END AS CRZ_BK,
+    la.NAME
+        + ' - ENTIRE COUNTRY ('
+        + rd.NAME
+        + ')' AS CRZ_NAME,
+    la.CODE AS CTRY_COUNTRY_CODE,
+    r.FRK_PERIL_TYPE
+FROM SICS.RZ_CTR_TO_REF r
+JOIN SICS.RISK_ZONE rzc
+    ON rzc.OBJECT_ID = r.FK_RZ_COUNTRY
+JOIN SICS.LEGAL_AREA la
+    ON la.OBJECT_ID = rzc.FK_COUNTRY
+JOIN SICS.REFERENCE_DATA rd
+    ON rd.CODE = r.FRK_PERIL_TYPE
+   AND rd.SUBCLASS = ISNULL(r.FSK_PERIL_TYPE, 44)
+LEFT JOIN child_prefix cp
+    ON cp.country_zone_id = rzc.OBJECT_ID
+WHERE r.FRK_PERIL_TYPE IN ('FD', '2FD', 'WD', '2WD')
+  AND cp.cresta_prefix IS NOT NULL
+ORDER BY 1;
