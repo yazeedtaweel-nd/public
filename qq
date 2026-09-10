@@ -1,21 +1,9 @@
 SELECT
-    b.SUBCLASS              AS BUS_SUBCLASS,
-    b.FRK_LEVEL_OF_BUS,     -- table 45
-    lob.NAME                AS LEVEL_OF_BUS_NAME,
-    b.FRK_TYPE_OF_BUS,      -- table 46
-    tob.NAME                AS TYPE_OF_BUS_NAME,
-    ip.SUBCLASS             AS IP_SUBCLASS,
-    COUNT(*)                AS CNT
-FROM dbo.BUSINESS b
-LEFT JOIN dbo.INSURED_PERIOD ip
-       ON ip.FK_BUSINESS = b.OBJECT_ID
-LEFT JOIN dbo.REFERENCE_DATA lob
-       ON lob.SUBCLASS = 45
-      AND lob.CODE = b.FRK_LEVEL_OF_BUS
-LEFT JOIN dbo.REFERENCE_DATA tob
-       ON tob.SUBCLASS = 46
-      AND tob.CODE = b.FRK_TYPE_OF_BUS
-GROUP BY
-    b.SUBCLASS, b.FRK_LEVEL_OF_BUS, lob.NAME,
-    b.FRK_TYPE_OF_BUS, tob.NAME, ip.SUBCLASS
-ORDER BY BUS_SUBCLASS, CNT DESC;
+    rz.CODE AS CRZ_BK,
+    ISNULL(la.NAME, '') + ' - ' + rz.NAME AS CRZ_NAME,
+    ISNULL(la.ISO_ALPHA_2, la.CODE) AS CTRY_COUNTRY_CODE
+FROM SICS.RISK_ZONE rz
+LEFT JOIN LEGAL_AREA la
+    ON la.OBJECT_ID = rz.FK_COUNTRY
+   AND la.SUBCLASS = 1
+ORDER BY rz.CODE;
