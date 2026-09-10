@@ -1,59 +1,14 @@
 WITH zone_country AS (
     SELECT
         rz.OBJECT_ID  AS zone_id,
-        rz.CODE       AS zone_code,
-        rz.NAME       AS zone_name,
         rz.FK_COUNTRY AS country_id,
         rz.FK_PARENT  AS next_ancestor
     FROM SICS.RISK_ZONE rz
-    WHERE rz.CODE IS NOT NULL
 
     UNION ALL
 
     SELECT
         zc.zone_id,
-        zc.zone_code,
-        zc.zone_name,
-        anc.FK_COUNTRY,
-        anc.FK_PARENT
-    FROM zone_country zc
-    JOIN SICS.RISK_ZONE anc
-        ON anc.OBJECT_ID = zc.next_ancestor
-    WHERE zc.country_id IS NULL
-)
-SELECT
-    zc.zone_code AS CRZ_BK,
-    CASE
-        WHEN la.NAME IS NULL THEN zc.zone_name
-        ELSE la.NAME + ' - ' + zc.zone_name
-    END AS CRZ_NAME,
-    COALESCE(la.CODE, la.ISO_ALPHA_2) AS CTRY_COUNTRY_CODE
-FROM zone_country zc
-LEFT JOIN SICS.LEGAL_AREA la
-    ON la.OBJECT_ID = zc.country_id
-WHERE zc.country_id IS NOT NULL
-   OR zc.next_ancestor IS NULL
-ORDER BY zc.zone_code;
-
-
-
-
-
-
-WITH zone_country AS (
-    SELECT
-        rz.OBJECT_ID  AS zone_id,
-        rz.CODE       AS zone_code,
-        rz.FK_COUNTRY AS country_id,
-        rz.FK_PARENT  AS next_ancestor
-    FROM SICS.RISK_ZONE rz
-    WHERE rz.CODE IS NOT NULL
-
-    UNION ALL
-
-    SELECT
-        zc.zone_id,
-        zc.zone_code,
         anc.FK_COUNTRY,
         anc.FK_PARENT
     FROM zone_country zc
@@ -66,17 +21,10 @@ FROM zone_country zc
 WHERE zc.country_id IS NOT NULL OR zc.next_ancestor IS NULL
 
 UNION ALL
+SELECT 'extract_distinct_zones', COUNT(DISTINCT zc.zone_id)
+FROM zone_country zc
+WHERE zc.country_id IS NOT NULL OR zc.next_ancestor IS NULL
+
+UNION ALL
 SELECT 'risk_zone_total', COUNT(*) FROM SICS.RISK_ZONE
-
-UNION ALL
-SELECT 'risk_zone_with_code', COUNT(*) FROM SICS.RISK_ZONE WHERE CODE IS NOT NULL
-
-UNION ALL
-SELECT 'risk_zone_country_nodes', COUNT(*) FROM SICS.RISK_ZONE WHERE FK_COUNTRY IS NOT NULL
-
-UNION ALL
-SELECT 'risk_zone_peril_codes', COUNT(*) FROM SICS.RISK_ZONE
-WHERE CODE LIKE '%9800' OR CODE LIKE '%9900'
-
-UNION ALL
-SELECT 'rz_ctr_to_ref_rows', COUNT(*) FROM SICS.RZ_CTR_TO_REF;
+OPTION (MAXRECURSION 0);
