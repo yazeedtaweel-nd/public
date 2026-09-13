@@ -1,182 +1,45 @@
--- =============================================
--- Currency (referenced by LEGAL_AREA.FK_MAIN_CURR)
--- =============================================
-CREATE TABLE dbo.CNU_CURRENCY (
-    OBJECT_ID   INT             NOT NULL PRIMARY KEY,
-    CODE        VARCHAR(10)     NOT NULL,          -- ISO currency code
-    NAME        VARCHAR(100)    NULL
-);
+SELECT
+    z.CODE AS CRZ_BK,
+    la.NAME + ' - ' + z.NAME AS CRZ_NAME,
+    COALESCE(la.CODE, la.ISO_ALPHA_2) AS CTRY_COUNTRY_CODE,
+    la.NAME AS COUNTRY_NAME,
+    z.NAME AS ZONE_NAME,
+    CAST(NULL AS VARCHAR(15)) AS PERIL_CODE,
+    CAST(NULL AS VARCHAR(60)) AS PERIL_NAME,
+    'ZONE' AS ROW_SOURCE
+FROM SICS.RISK_ZONE AS ctry
+JOIN SICS.RISK_ZONE AS z
+    ON z.FK_PARENT = ctry.OBJECT_ID
+   AND z.SUBCLASS = 1
+JOIN SICS.LEGAL_AREA AS la
+    ON la.OBJECT_ID = ctry.FK_COUNTRY
+   AND la.SUBCLASS = 1
+WHERE ctry.SUBCLASS = 2
 
--- =============================================
--- LEGAL_AREA  (polymorphic: Country + Area Group)
--- =============================================
-CREATE TABLE dbo.LEGAL_AREA (
-    OBJECT_ID           INT             NOT NULL PRIMARY KEY,
-    SUBCLASS            INT             NOT NULL,   -- 1 = Country, 4 = AreaGroup
-    CODE                VARCHAR(50)     NULL,
-    UNIQUE_CODE         VARCHAR(50)     NULL,
-    ISO_ALPHA_2         CHAR(2)         NULL,
-    ISO_ALPHA_3         CHAR(3)         NULL,
-    ISO_NUMERIC         VARCHAR(10)     NULL,
-    ALTERNATE_ID        VARCHAR(50)     NULL,
-    SHORT_NAME          VARCHAR(50)     NULL,
-    NAME                VARCHAR(200)    NULL,
-    IS_ACTIVE           CHAR(1)         NULL DEFAULT 'Y',
-    PHONE_PREFIX        VARCHAR(20)     NULL,
-    FK_MAIN_CURR        INT             NULL,       -- → CNU_CURRENCY
-    FRK_AREA_GRP_CTGRY  INT             NULL,       -- REFERENCE_DATA type 20 (Area Group only)
-    CONSTRAINT FK_LA_CURRENCY FOREIGN KEY (FK_MAIN_CURR) REFERENCES dbo.CNU_CURRENCY(OBJECT_ID)
-);
-
--- =============================================
--- AREA_GROUP_COUNTRY  (junction)
--- =============================================
-CREATE TABLE dbo.AREA_GROUP_COUNTRY (
-    OBJECT_ID       INT             NOT NULL PRIMARY KEY,  -- optional
-    FK_COUNTRY      INT             NOT NULL,              -- → LEGAL_AREA (SUBCLASS=1)
-    FK_AREA_GROUP   INT             NOT NULL,              -- → LEGAL_AREA (SUBCLASS=4)
-    CONSTRAINT FK_AGC_COUNTRY    FOREIGN KEY (FK_COUNTRY)    REFERENCES dbo.LEGAL_AREA(OBJECT_ID),
-    CONSTRAINT FK_AGC_AREA_GROUP FOREIGN KEY (FK_AREA_GROUP) REFERENCES dbo.LEGAL_AREA(OBJECT_ID)
-);
-
-
-
-
--- =============================================
--- Currencies
--- =============================================
-INSERT INTO dbo.CNU_CURRENCY (OBJECT_ID, CODE, NAME) VALUES
-(501, 'USD', 'US Dollar'),
-(502, 'GBP', 'Pound Sterling'),
-(503, 'EUR', 'Euro'),
-(504, 'CHF', 'Swiss Franc'),
-(505, 'SGD', 'Singapore Dollar'),
-(506, 'JPY', 'Japanese Yen');
-
--- =============================================
--- LEGAL_AREA – Countries (SUBCLASS = 1)
--- =============================================
-INSERT INTO dbo.LEGAL_AREA (
-    OBJECT_ID, SUBCLASS, CODE, UNIQUE_CODE,
-    ISO_ALPHA_2, ISO_ALPHA_3, ISO_NUMERIC,
-    ALTERNATE_ID, SHORT_NAME, NAME,
-    IS_ACTIVE, PHONE_PREFIX, FK_MAIN_CURR, FRK_AREA_GRP_CTGRY
-) VALUES
-(10001, 1, 'GB',  'GB',  'GB', 'GBR', '826', NULL, 'UK',  'United Kingdom', 'Y', '+44', 502, NULL),
-(10002, 1, 'US',  'US',  'US', 'USA', '840', NULL, 'USA', 'United States',  'Y', '+1',  501, NULL),
-(10003, 1, 'CH',  'CH',  'CH', 'CHE', '756', NULL, 'CH',  'Switzerland',    'Y', '+41', 504, NULL),
-(10004, 1, 'SG',  'SG',  'SG', 'SGP', '702', NULL, 'SG',  'Singapore',      'Y', '+65', 505, NULL),
-(10005, 1, 'DE',  'DE',  'DE', 'DEU', '276', NULL, 'DE',  'Germany',        'Y', '+49', 503, NULL),
-(10006, 1, 'JP',  'JP',  'JP', 'JPN', '392', NULL, 'JP',  'Japan',          'Y', '+81', 506, NULL),
-(10007, 1, 'FR',  'FR',  'FR', 'FRA', '250', NULL, 'FR',  'France',         'N', '+33', 503, NULL);  -- inactive
-
--- =============================================
--- LEGAL_AREA – Area Groups (SUBCLASS = 4)
--- =============================================
-INSERT INTO dbo.LEGAL_AREA (
-    OBJECT_ID, SUBCLASS, CODE, UNIQUE_CODE,
-    ISO_ALPHA_2, ISO_ALPHA_3, ISO_NUMERIC,
-    ALTERNATE_ID, SHORT_NAME, NAME,
-    IS_ACTIVE, PHONE_PREFIX, FK_MAIN_CURR, FRK_AREA_GRP_CTGRY
-) VALUES
-(20001, 4, 'EU',   'EU',   NULL, NULL, NULL, NULL, 'EU',  'European Union',     'Y', NULL, NULL, 20),
-(20002, 4, 'APAC', 'APAC', NULL, NULL, NULL, NULL, 'APA', 'Asia Pacific',       'Y', NULL, NULL, 20),
-(20003, 4, 'NA',   'NA',   NULL, NULL, NULL, NULL, 'NA',  'North America',      'Y', NULL, NULL, 20),
-(20004, 4, 'EMEA', 'EMEA', NULL, NULL, NULL, NULL, 'EME', 'Europe Middle East', 'Y', NULL, NULL, 20),
-(20005, 4, 'G7',   'G7',   NULL, NULL, NULL, NULL, 'G7',  'G7 Countries',       'Y', NULL, NULL, 20);
-
--- =============================================
--- AREA_GROUP_COUNTRY (country can belong to multiple groups)
--- =============================================
-INSERT INTO dbo.AREA_GROUP_COUNTRY (OBJECT_ID, FK_COUNTRY, FK_AREA_GROUP) VALUES
--- United Kingdom
-(30001, 10001, 20001),  -- EU (historical example)
-(30002, 10001, 20004),  -- EMEA
-(30003, 10001, 20005),  -- G7
--- United States
-(30004, 10002, 20003),  -- North America
-(30005, 10002, 20005),  -- G7
--- Switzerland
-(30006, 10003, 20004),  -- EMEA
--- Singapore
-(30007, 10004, 20002),  -- APAC
--- Germany
-(30008, 10005, 20001),  -- EU
-(30009, 10005, 20004),  -- EMEA
-(30010, 10005, 20005),  -- G7
--- Japan
-(30011, 10006, 20002),  -- APAC
-(30012, 10006, 20005),  -- G7
--- France (inactive country)
-(30013, 10007, 20001),  -- EU
-(30014, 10007, 20004);  -- EMEA
-
-
-
-
-
-
-/* =============================================================================
-   DIM_COUNTRY – SICS extract (proposal)
-   Source grain: LEGAL_AREA WHERE SUBCLASS = 1  (SicsCountry)
-
-   Confirmed columns for discussion:
-     - Country identity, codes, name, active flag
-   Optional (NOT approved as Partner/SRE region):
-     - Area / Country Group via AREA_GROUP_COUNTRY
-   Not available on LEGAL_AREA:
-     - CREATED/UPDATED dates  → DWH/ETL only
-     - CTRY_SRGT              → DWH/ETL only
-     - SRE region             → no SICS source identified
-   ============================================================================= */
+UNION ALL
 
 SELECT
-    /* Technical key in SICS (UUID) – optional staging key, not CTRY_SRGT */
-    c.OBJECT_ID                          AS sics_object_id,
-
-    /* Filter discriminator */
-    c.SUBCLASS                           AS subclass,          -- expect 1
-
-    /* Business key candidates – team must pick which becomes CTRY_COUNTRY_CODE */
-    c.CODE                               AS country_code,      -- SICS legal-area code
-    c.UNIQUE_CODE                        AS unique_code,       -- same description as CODE
-    c.ISO_ALPHA_2                        AS iso_alpha_2,       -- official ISO-2 (mandatory in DD)
-    c.ISO_ALPHA_3                        AS iso_alpha_3,       -- official ISO-3 (mandatory in DD)
-    c.ISO_NUMERIC                        AS iso_numeric,
-    c.ALTERNATE_ID                       AS alternate_id,      -- non-ISO identifier
-    c.SHORT_NAME                         AS short_name,        -- may hold external-system code
-
-    /* Name → CTRY_COUNTRY_NAME candidate */
-    c.NAME                               AS country_name,
-
-    /* Useful qualifiers (not in DIM_COUNTRY column list, but useful for DQ) */
-    c.IS_ACTIVE                          AS is_active,
-    c.PHONE_PREFIX                       AS phone_prefix,
-    c.FK_MAIN_CURR                       AS main_currency_id,  -- FK to CNU_CURRENCY.OBJECT_ID
-
-    /* -------------------------------------------------------------------------
-       Area / Country Group – CANDIDATE only for Partner Region discussion
-       One country can have many groups → may return multiple rows per country
-       ------------------------------------------------------------------------- */
-    ag.OBJECT_ID                         AS area_group_object_id,
-    ag.CODE                              AS area_group_code,
-    ag.NAME                              AS area_group_name,   -- candidate for region name?
-    ag.FRK_AREA_GRP_CTGRY                AS area_group_category, -- REFERENCE_DATA type 20
-    ag.IS_ACTIVE                         AS area_group_is_active
-
-FROM LEGAL_AREA AS c
-LEFT JOIN AREA_GROUP_COUNTRY AS agc
-       ON agc.FK_COUNTRY = c.OBJECT_ID
-LEFT JOIN LEGAL_AREA AS ag
-       ON ag.OBJECT_ID = agc.FK_AREA_GROUP
-      /* Country Area Group rows (SicsAreaGroupCountry) */
-      AND ag.SUBCLASS = 4
-
-WHERE c.SUBCLASS = 1                    -- SicsCountry only
-  /* Optional: active countries only – confirm with team
-  AND c.IS_ACTIVE = 'Y'
-  */
-ORDER BY
-    c.ISO_ALPHA_2,
-    c.CODE,
-    ag.CODE;
+    z.CODE AS CRZ_BK,
+    UPPER(CONCAT(la.NAME, ' - (', z.NAME, ')')) AS CRZ_NAME,
+    COALESCE(la.CODE, la.ISO_ALPHA_2) AS CTRY_COUNTRY_CODE,
+    la.NAME AS COUNTRY_NAME,
+    z.NAME AS ZONE_NAME,
+    rd.CODE AS PERIL_CODE,
+    rd.NAME AS PERIL_NAME,
+    'COUNTRY_PERIL' AS ROW_SOURCE
+FROM SICS.RISK_ZONE AS rz
+JOIN SICS.RISK_ZONE AS z
+    ON z.FK_PARENT = rz.OBJECT_ID
+   AND z.SUBCLASS = 1
+JOIN SICS.LEGAL_AREA AS la
+    ON la.OBJECT_ID = rz.FK_COUNTRY
+   AND la.SUBCLASS = 1
+JOIN SICS.RZ_CTR_TO_REF AS rzp
+    ON rzp.FK_RZ_COUNTRY = rz.OBJECT_ID
+JOIN SICS.REFERENCE_DATA AS rd
+    ON rd.CODE = rzp.FRK_PERIL_TYPE
+   AND rd.SUBCLASS = rzp.FSK_PERIL_TYPE
+   AND rd.SUBCLASS = 44
+WHERE rz.SUBCLASS = 2
+  AND rd.CODE IN ('FD', 'WD', '2FD', '2WD')
+ORDER BY CRZ_BK, ROW_SOURCE, PERIL_NAME;
