@@ -1,0 +1,2001 @@
+1AE00000,United Arab Emirates - Ajman,AE
+1AE00100,United Arab Emirates - Abu Dhabi,AE
+1AE00200,United Arab Emirates - Dubai,AE
+1AE00300,United Arab Emirates - Fujairah,AE
+1AE00400,United Arab Emirates - Ras al-Khaimah,AE
+1AE00500,United Arab Emirates - Sharjah,AE
+1AE00600,United Arab Emirates - Umm al-Quwain,AE
+1EG0000,Egypt - Misr El Kadima,EG
+1EG0100,Egypt - Al Saieda Zainab,EG
+1EG0200,Egypt - Al Khalifa,EG
+1EG0300,Egypt - Abdeen,EG
+1EG0400,Egypt - Al Mousky,EG
+1EG0500,Egypt - Kasr Al Nile,EG
+1EG0600,Egypt - Bolak,EG
+1EG0700,Egypt - Al Uzbakia,EG
+1EG0800,Egypt - Al Darb Al Ahmar,EG
+1EG0900,Egypt - Al Gamalia,EG
+1EG1000,Egypt - Bab Al Sheiria,EG
+1EG10000,Egypt - Aga,EG
+1EG10100,Egypt - Al Senbelaween,EG
+1EG10300,Egypt - Al Manzala,EG
+1EG10400,Egypt - Belkas,EG
+1EG10500,Egypt - Dekernis,EG
+1EG10600,Egypt - Sherbeen,EG
+1EG10700,Egypt - Talkha,EG
+1EG10800,Egypt - Met Ghamr,EG
+1EG1100,Egypt - Al Dahier,EG
+1EG11000,Egypt - Meniat Al Nasr,EG
+1EG11200,Egypt - Tamy Almaded,EG
+1EG11300,Egypt - Met Salseel,EG
+1EG11400,Egypt - Bani Abied,EG
+1EG11500,Egypt - Mahala Demna,EG
+1EG11600,Egypt - Gamasa,EG
+1EG11700,Egypt - Nebrowa,EG
+1EG11800,Egypt - Zakazik First,EG
+1EG11900,Egypt - Zakazik Second,EG
+1EG1200,Egypt - Al Sharabia,EG
+1EG12000,Egypt - Zakazik,EG
+1EG12100,Egypt - Abu Hamad,EG
+1EG12200,Egypt - Abu Kebier,EG
+1EG12300,Egypt - Al Husainia,EG
+1EG12400,Egypt - New Salhia,EG
+1EG12500,Egypt - Belbees,EG
+1EG12600,Egypt - 10th of Ramadan First,EG
+1EG12700,Egypt - Derb Neg,EG
+1EG12800,Egypt - Fakous,EG
+1EG1300,Egypt - Shoubra,EG
+1EG13000,Egypt - Kafr Sakr,EG
+1EG13100,Egypt - Menia Al Kamh,EG
+1EG13200,Egypt - Hehia,EG
+1EG13300,Egypt - Mashtoul Al Souk,EG
+1EG13400,Egypt - Al Ebrahimia,EG
+1EG13500,Egypt - Al Qenayat,EG
+1EG13600,Egypt - Sakr Suns,EG
+1EG13700,Egypt - Al Qarien,EG
+1EG13800,Egypt - 10th of Ramadan Second,EG
+1EG13900,Egypt - Banha,EG
+1EG1400,Egypt - Rod Al Farag,EG
+1EG14100,Egypt - Al Khanka,EG
+1EG14200,Egypt - Al Kanater Al Khairiea,EG
+1EG14300,Egypt - Shebeen Al Kanater,EG
+1EG14400,Egypt - Shoubra Al Khiema First,EG
+1EG14500,Egypt - Shoubra Al Khiema Second,EG
+1EG14600,Egypt - Toukh,EG
+1EG14700,Egypt - Kalioub,EG
+1EG14900,Egypt - Kafr Shokr,EG
+1EG1500,Egypt - Al Saheel,EG
+1EG15000,Egypt - Al Khosos,EG
+1EG15100,Egypt - Al Obor,EG
+1EG15200,Egypt - Kaha,EG
+1EG15300,Egypt - Kafr Al Shiekh,EG
+1EG15500,Egypt - Al Boroloos,EG
+1EG15600,Egypt - Bella,EG
+1EG15700,Egypt - Dosook,EG
+1EG15900,Egypt - Sedi Salem,EG
+1EG1600,Egypt - Al Waily,EG
+1EG16000,Egypt - Foh,EG
+1EG16100,Egypt - Qaleen,EG
+1EG16200,Egypt - Motobas,EG
+1EG16300,Egypt - Al Hamool,EG
+1EG16400,Egypt - Al Riadh,EG
+1EG16500,Egypt - Tanta First,EG
+1EG16600,Egypt - Tanta Second,EG
+1EG16700,Egypt - Tanta,EG
+1EG16800,Egypt - Al Santa,EG
+1EG16900,Egypt - Greater Mahala First,EG
+1EG1700,Egypt - Hadaiek Al Koba,EG
+1EG17000,Egypt - Greater Mahala Second,EG
+1EG17100,Egypt - Greater Mahala,EG
+1EG17200,Egypt - Basioun,EG
+1EG17300,Egypt - Zefta,EG
+1EG17400,Egypt - Samanoud,EG
+1EG17500,Egypt - Katour,EG
+1EG17600,Egypt - Kafr Al Zaiat,EG
+1EG17700,Egypt - Shebeen Al Kom,EG
+1EG17900,Egypt - Ashmon,EG
+1EG1800,Egypt - Al Zaytoun,EG
+1EG18000,Egypt - Al Bagour,EG
+1EG18100,Egypt - Al Shohadaa,EG
+1EG18200,Egypt - Berkat Al Sabaa,EG
+1EG18300,Egypt - Tela,EG
+1EG18400,Egypt - Koisna,EG
+1EG18500,Egypt - Menouf,EG
+1EG18600,Egypt - Sers Al Liana,EG
+1EG18700,Egypt - Sadat City,EG
+1EG18800,Egypt - Menouf City,EG
+1EG18900,Egypt - Damanhour,EG
+1EG1900,Egypt - Al Mataria,EG
+1EG19000,Egypt - Damnhour,EG
+1EG19100,Egypt - Abu Al Matameer,EG
+1EG19200,Egypt - Abu Homos,EG
+1EG19300,Egypt - Al Delengat,EG
+1EG19400,Egypt - Al Mahmoudia,EG
+1EG19500,Egypt - Etay Al Baroud,EG
+1EG19600,Egypt - Housh Issa,EG
+1EG19700,Egypt - Rasheed,EG
+1EG19800,Egypt - Shoubra Khet,EG
+1EG19900,Egypt - Kafr Al Dawar,EG
+1EG2000,Egypt - Nasr City 1,EG
+1EG20100,Egypt - Kom Hamada,EG
+1EG20200,Egypt - Wady Al Natroun,EG
+1EG20300,Egypt - Al Rahmania,EG
+1EG20400,Egypt - Edco,EG
+1EG20500,Egypt - Nubaria West,EG
+1EG20600,Egypt - Badr,EG
+1EG20700,Egypt - Ismailia First,EG
+1EG20800,Egypt - Ismailia Second,EG
+1EG20900,Egypt - Ismailia Third,EG
+1EG2100,Egypt - Nasr City 2,EG
+1EG21000,Egypt - Ismailia,EG
+1EG21100,Egypt - Al Tal Al Kabeer,EG
+1EG21200,Egypt - Al Kantara,EG
+1EG21300,Egypt - Faied,EG
+1EG21400,Egypt - Al Kantara East,EG
+1EG21600,Egypt - Al Agouza,EG
+1EG21700,Egypt - Al Doki,EG
+1EG21900,Egypt - Bolak Al Dakrour,EG
+1EG2200,Egypt - Heliopolis,EG
+1EG22000,Egypt - Al Omrania,EG
+1EG22100,Egypt - Bani Suief,EG
+1EG22300,Egypt - New Bani Suief City,EG
+1EG22400,Egypt - Al Feshn,EG
+1EG22500,Egypt - Al Wasta,EG
+1EG22600,Egypt - Ahnasia,EG
+1EG22700,Egypt - Bba,EG
+1EG22800,Egypt - Samasta,EG
+1EG22900,Egypt - Naser,EG
+1EG2300,Egypt - Al Nozha,EG
+1EG23000,Egypt - Fayoum,EG
+1EG23200,Egypt - Ebshoway,EG
+1EG23300,Egypt - Atsah,EG
+1EG23400,Egypt - Sanouras,EG
+1EG23500,Egypt - Tamia,EG
+1EG23600,Egypt - Youssief Al Sedik,EG
+1EG23700,Egypt - Menia,EG
+1EG23900,Egypt - New Menia,EG
+1EG2400,Egypt - Ain Shams,EG
+1EG24000,Egypt - Abu Korkas,EG
+1EG24100,Egypt - Al Adoua,EG
+1EG24200,Egypt - Bani Mazar,EG
+1EG24300,Egypt - Deer Mawas,EG
+1EG24400,Egypt - Samaloot,EG
+1EG24500,Egypt - Matay,EG
+1EG24600,Egypt - Maghagha,EG
+1EG24700,Egypt - Malawy,EG
+1EG24900,Egypt - Assiut 1,EG
+1EG2500,Egypt - Al Zawia Al Hamraa,EG
+1EG25000,Egypt - Assiut 2,EG
+1EG25100,Egypt - Assiut,EG
+1EG25200,Egypt - Abnob,EG
+1EG25300,Egypt - Abu Teg,EG
+1EG25400,Egypt - Al Badrawy,EG
+1EG25500,Egypt - Sahel Salim,EG
+1EG25600,Egypt - Al Ghanaiem,EG
+1EG25700,Egypt - Al Kossia,EG
+1EG25800,Egypt - Dirot,EG
+1EG25900,Egypt - Sadafa,EG
+1EG2600,Egypt - Al Salam,EG
+1EG26000,Egypt - Manfalout,EG
+1EG26100,Egypt - Al Fath,EG
+1EG26200,Egypt - New Assiut,EG
+1EG26300,Egypt - Suhag First,EG
+1EG26400,Egypt - Suhag Second,EG
+1EG26500,Egypt - Suhag,EG
+1EG26600,Egypt - Akhmeem,EG
+1EG26700,Egypt - Al Balina,EG
+1EG26800,Egypt - Al Maragha,EG
+1EG26900,Egypt - Al Monshaat,EG
+1EG2700,Egypt - Al Zamalik,EG
+1EG27000,Egypt - Dar Al Salam,EG
+1EG27100,Egypt - Gerga City,EG
+1EG27200,Egypt - Gerga,EG
+1EG27300,Egypt - West Juhaina,EG
+1EG27400,Egypt - Sakaltah,EG
+1EG27500,Egypt - Tamah,EG
+1EG27600,Egypt - Tahta,EG
+1EG27800,Egypt - Al Kawthar,EG
+1EG27900,Egypt - Al Ossirat,EG
+1EG2800,Egypt - Monshait Nasir,EG
+1EG28000,Egypt - New Suhag,EG
+1EG28100,Egypt - Qena,EG
+1EG28300,Egypt - Abu Tesht,EG
+1EG28400,Egypt - Deshna,EG
+1EG28500,Egypt - Qoss,EG
+1EG28600,Egypt - Nagaa Hamady,EG
+1EG28700,Egypt - Nakada,EG
+1EG28800,Egypt - Farshout,EG
+1EG28900,Egypt - Keft,EG
+1EG2900,Egypt - Al Bassatin,EG
+1EG29000,Egypt - Al Wakf,EG
+1EG29100,Egypt - Aswan,EG
+1EG29300,Egypt - Edfo,EG
+1EG29400,Egypt - Kom Ombo,EG
+1EG29500,Egypt - Nasr,EG
+1EG29600,Egypt - Deraw,EG
+1EG29700,Egypt - Abu Sunbol,EG
+1EG29800,Egypt - New Toshka,EG
+1EG29900,Egypt - Luxor,EG
+1EG3000,Egypt - Al Marg,EG
+1EG30100,Egypt - Teba Police,EG
+1EG30200,Egypt - Armant,EG
+1EG30300,Egypt - Esna,EG
+1EG30400,Egypt - Hurghada First,EG
+1EG30500,Egypt - Al Qusir,EG
+1EG30600,Egypt - Safaga,EG
+1EG30700,Egypt - Marsa Alam,EG
+1EG30800,Egypt - Ras Ghareeb,EG
+1EG30900,Egypt - Al Shalateen,EG
+1EG3100,Egypt - Al Montazah,EG
+1EG31000,Egypt - Hallaib,EG
+1EG31100,Egypt - Hurghada Second,EG
+1EG31200,Egypt - Al Kharga Police,EG
+1EG31300,Egypt - Al Dakhla Police,EG
+1EG31400,Egypt - Al Farafra Police,EG
+1EG31500,Egypt - Paris Police,EG
+1EG31600,Egypt - Mersa Matrouh,EG
+1EG31700,Egypt - Al Ahamam,EG
+1EG31800,Egypt - Al Saloom,EG
+1EG31900,Egypt - Al Dabaa,EG
+1EG3200,Egypt - Awal Al Raml,EG
+1EG32000,Egypt - Sedi Brani,EG
+1EG32100,Egypt - Siwa,EG
+1EG32200,Egypt - Al Alamin Marina,EG
+1EG32300,Egypt - North Coast-Part,EG
+1EG32400,Egypt - Arish First,EG
+1EG32500,Egypt - Al Arish Second,EG
+1EG32600,Egypt - Al Arish Third,EG
+1EG32700,Egypt - Al Arish Fourth,EG
+1EG32800,Egypt - Biear Al Abd,EG
+1EG32900,Egypt - Al Hasana,EG
+1EG3300,Egypt - Sedi Gaber,EG
+1EG33000,Egypt - Nekhiel,EG
+1EG33100,Egypt - Al Shiekh Zuwaid,EG
+1EG33200,Egypt - Rafah,EG
+1EG33300,Egypt - Romana Police,EG
+1EG33400,Egypt - Al Kassima Police,EG
+1EG33500,Egypt - Al Tour,EG
+1EG33600,Egypt - Ras Sudr,EG
+1EG33700,Egypt - Abu Redis,EG
+1EG33800,Egypt - Sant Kathrine,EG
+1EG33900,Egypt - Sharm El Shiekh,EG
+1EG3400,Egypt - Bab Sharky,EG
+1EG34000,Egypt - Dahab,EG
+1EG34100,Egypt - Nouaiba,EG
+1EG34200,Egypt - Tabah Police,EG
+1EG34500,Egypt - Asyut,EG
+1EG34600,Egypt - Red Sea,EG
+1EG34700,Egypt - Beheira,EG
+1EG34800,Egypt - Beni Suef,EG
+1EG3500,Egypt - Moharam Bek,EG
+1EG35000,Egypt - Dakahlia,EG
+1EG35100,Egypt - Damietta,EG
+1EG35200,Egypt - Faiyum,EG
+1EG35300,Egypt - Gharbia,EG
+1EG35700,Egypt - South Sinai,EG
+1EG35800,Egypt - Qalyubia,EG
+1EG35900,Egypt - Kafr el-Sheikh,EG
+1EG3600,Egypt - Al Atareen,EG
+1EG36200,Egypt - Minya,EG
+1EG36300,Egypt - Monufia,EG
+1EG36400,Egypt - Matruh,EG
+1EG36500,Egypt - Port Said,EG
+1EG36600,Egypt - Sohag,EG
+1EG36700,Egypt - Sharqia,EG
+1EG36800,Egypt - North Sinai,EG
+1EG36900,Egypt - 6th of October,EG
+1EG3700,Egypt - Al Mansheia,EG
+1EG37100,Egypt - New Valley,EG
+1EG3800,Egypt - Karmoz,EG
+1EG3900,Egypt - Al Laban,EG
+1EG4000,Egypt - Al Gomrok,EG
+1EG4100,Egypt - Mena Al Basal,EG
+1EG4200,Egypt - Al Dekhila,EG
+1EG4300,Egypt - Al America,EG
+1EG4400,Egypt - Borg Al Arab,EG
+1EG4500,Egypt - Borg Al Arab Al Gadida,EG
+1EG4600,Egypt - Than Raml,EG
+1EG4700,Egypt - Al Sahel Al Shamaly,EG
+1EG4800,Egypt - Al Shark,EG
+1EG4900,Egypt - Al Arab,EG
+1EG5000,Egypt - Al Manakh,EG
+1EG5100,Egypt - Bor Fouad,EG
+1EG5200,Egypt - Al Dawahy,EG
+1EG5300,Egypt - Al Ganoub,EG
+1EG5400,Egypt - Al Zouhor,EG
+1EG5500,Egypt - Bor Fouad Second,EG
+1EG5600,Egypt - Mobarak,EG
+1EG5700,Egypt - Al Manasra,EG
+1EG5800,Egypt - Al Ganoub Second,EG
+1EG6000,Egypt - Al Arbaien,EG
+1EG6100,Egypt - Ataka,EG
+1EG6200,Egypt - Faisal,EG
+1EG6300,Egypt - Al Ganaeen,EG
+1EG6400,Egypt - Al Tebeen,EG
+1EG6500,Egypt - Helwan,EG
+1EG6600,Egypt - 15. Mai,EG
+1EG6700,Egypt - Maadi,EG
+1EG6800,Egypt - Torah,EG
+1EG6900,Egypt - Al Saf,EG
+1EG7000,Egypt - Atfeeh,EG
+1EG7100,Egypt - New Cairo First,EG
+1EG7200,Egypt - New Cairo Second,EG
+1EG7300,Egypt - New Cairo Third,EG
+1EG7400,Egypt - Al Shorouk,EG
+1EG7500,Egypt - Badr City,EG
+1EG7600,Egypt - Al Ahram,EG
+1EG7700,Egypt - 6th October first,EG
+1EG7800,Egypt - Al Hawamdia,EG
+1EG7900,Egypt - Giza,EG
+1EG8000,Egypt - Al Badrashen,EG
+1EG8100,Egypt - Al Aiad,EG
+1EG8200,Egypt - Embaba,EG
+1EG8300,Egypt - Al Wahat Al Baharia,EG
+1EG8400,Egypt - Oseem,EG
+1EG8500,Egypt - Al Warak,EG
+1EG8600,Egypt - Shiekh Zaid,EG
+1EG8700,Egypt - Kerdasa,EG
+1EG8800,Egypt - 6th October second,EG
+1EG8900,Egypt - Damitta First,EG
+1EG9000,Egypt - Damitta,EG
+1EG9100,Egypt - Faraskour,EG
+1EG9200,Egypt - Kafr Saad,EG
+1EG9300,Egypt - New Damitta City,EG
+1EG9400,Egypt - Ras Al Bar,EG
+1EG9500,Egypt - Al Zarfa,EG
+1EG9600,Egypt - Damitta Second,EG
+1EG9700,Egypt - Mansoura First,EG
+1EG9800,Egypt - Mansoura Second,EG
+1EG9900,Egypt - Al Mansoura,EG
+1QA0000,Qatar - Doha,QA
+1QA0100,Qatar - Al Khor,QA
+1QA0200,Qatar - Madinat Al Shamal,QA
+1QA0300,Qatar - Al Rayyan Al Jadeed,QA
+1QA0400,Qatar - Umm Slal,QA
+1QA0500,Qatar - Al Wakra,QA
+1QA0600,Qatar - Al Daayen,QA
+1QA0700,Qatar - Al Jasra,QA
+1QA0800,Qatar - Al Diwan,QA
+1QA0900,Qatar - Mohammed Bin Jasim,QA
+1QA1100,Qatar - Al Najada,QA
+1QA1200,Qatar - Al Ghanim Al Qadeem (North),QA
+1QA1300,Qatar - New Markets,QA
+1QA1400,Qatar - Wadi Al Sail (East),QA
+1QA1500,Qatar - Al Rumeila (East),QA
+1QA1600,Qatar - Al Bidda,QA
+1QA1700,Qatar - Musheireb,QA
+1QA1800,Qatar - Fareeq Abdul Aziz,QA
+1QA1900,Qatar - Al Doha Al Jadeeda,QA
+1QA2000,Qatar - Al Ghanim Al Qadeem (South),QA
+1QA2100,Qatar - Al Hitmi Al Qadeem,QA
+1QA2200,Qatar - Al Salata,QA
+1QA2300,Qatar - Doha Port,QA
+1QA2400,Qatar - Wadi Al Sail (West),QA
+1QA2500,Qatar - Al Rumeila (West),QA
+1QA2600,Qatar - Bin Mahmoud (North),QA
+1QA2700,Qatar - Bin Mahmoud (South),QA
+1QA2800,Qatar - Al Muntazah,QA
+1QA2900,Qatar - Al Mansoura/Bin Dirhem,QA
+1QA3000,Qatar - Najma,QA
+1QA3100,Qatar - Umm Ghuwailina,QA
+1QA3200,Qatar - Al Khulaifat,QA
+1QA3300,Qatar - Ras Abu Abboud,QA
+1QA3400,Qatar - Al Duhail,QA
+1QA3500,Qatar - Al Duhail South,QA
+1QA3600,Qatar - Madinat Khalifa (North),QA
+1QA3700,Qatar - Al Markhiya,QA
+1QA3800,Qatar - Madinat Khalifa (South),QA
+1QA3900,Qatar - Kulaib,QA
+1QA4000,Qatar - Al Messila,QA
+1QA4100,Qatar - Bin Omran/Al Hitmi Al Jadeed,QA
+1QA4200,Qatar - Al Sadd,QA
+1QA4300,Qatar - Al Mirqab Al Jadeed/Al Nasr,QA
+1QA4400,Qatar - Al Salata Al Jadeeda /Al Asiri,QA
+1QA4500,Qatar - Al Hilal (West),QA
+1QA4600,Qatar - Al Hilal (East),QA
+1QA4700,Qatar - Al Nuaija (West),QA
+1QA4800,Qatar - Al Nuaija (East),QA
+1QA4900,Qatar - Al Matar Al Qadeem,QA
+1QA5000,Qatar - Musaimeer,QA
+1QA5100,Qatar - Al Rawda,QA
+1QA5200,Qatar - Doha International Airport,QA
+1QA5300,Qatar - Doha International Airport(East),QA
+1QA5400,Qatar - Al Gharrafa/Bani Hajer/Al Zaghwa,QA
+1QA5500,Qatar - Al Luqta/Al Rayyan Al Qadeem,QA
+1QA5600,Qatar - Al Rayyan Al Jadeed/Muaither North,QA
+1QA5700,Qatar - Fareeq Al Amir/Muraykh/Al Soudan Nort,QA
+1QA5800,Qatar - Al Soudan South/Al Aziziya/Al Ghanim,QA
+1QA5900,Qatar - Al Khulaifat Al Jadeeda/Al Maamoura/AbuH,QA
+1QA6000,Qatar - Industrial Area,QA
+1QA6100,Qatar - New District Of Doha 60,QA
+1QA6200,Qatar - Diplomatic District,QA
+1QA6300,Qatar - New District Of Doha 62,QA
+1QA6400,Qatar - New District Of Doha 63,QA
+1QA6500,Qatar - New District Of Doha 64,QA
+1QA6600,Qatar - New District Of Doha 65,QA
+1QA6700,Qatar - New District Of Doha 66,QA
+1QA6800,Qatar - New District Of Doha 67,QA
+1QA6900,Qatar - Qatar University,QA
+1QA7000,Qatar - New District Of Doha 69,QA
+1QA7100,Qatar - Al Kheesa,QA
+1QA7200,Qatar - Umm Slal/Al Kharaitiyat,QA
+1QA7400,Qatar - Al Jemailiya,QA
+1QA7600,Qatar - Al Thakhira,QA
+1QA7700,Qatar - Al Ghuwairiya,QA
+1QA7800,Qatar - Fuwairit/Al Jassasiya,QA
+1QA7900,Qatar - Abu Dhalouf/Al Zubara,QA
+1QA8000,Qatar - Madinat Al Shamal/Al Ruwais,QA
+1QA8100,Qatar - Al Shahhniya,QA
+1QA8200,Qatar - Abu Nakhla / Mukainess,QA
+1QA8300,Qatar - Rawdat Rashed,QA
+1QA8400,Qatar - Al Karaana,QA
+1QA8500,Qatar - Umm Bab,QA
+1QA8600,Qatar - Al Nasraniya,QA
+1QA8700,Qatar - Dukhan,QA
+1QA8900,Qatar - Al Wukair,QA
+1QA9000,Qatar - Mesaieed (town),QA
+1QA9100,Qatar - Mesaieed (Industrial Area),QA
+1QA9200,Qatar - Shaqra,QA
+1QA9300,Qatar - Al Kharrara,QA
+1QA9400,Qatar - Abu Samra,QA
+1QA9500,Qatar - Sawda Natheel,QA
+1QA9600,Qatar - Khor Al Adaid,QA
+1SA0000,Saudi Arabia - ENTIRE COUNTRY(E.Q.),SA
+1SA0100,Saudi Arabia - RIYADH,SA
+1SA0200,Saudi Arabia - KHARJ,SA
+1SA0300,Saudi Arabia - JEDDAH,SA
+1SA0400,Saudi Arabia - MECCA,SA
+1SA0500,Saudi Arabia - TAIF,SA
+1SA0600,Saudi Arabia - DAMMAM,SA
+1SA0700,Saudi Arabia - KOBBAR,SA
+1SA0800,Saudi Arabia - JUBAIL,SA
+1SA0900,Saudi Arabia - DHAHRAN,SA
+1SA1000,Saudi Arabia - HAFUF,SA
+1SA10000,Saudi Arabia - Arrayth,SA
+1SA10100,Saudi Arabia - Baysh,SA
+1SA10200,Saudi Arabia - Farasan,SA
+1SA10300,Saudi Arabia - Addair,SA
+1SA10400,Saudi Arabia - Ahad Almasarihah,SA
+1SA10500,Saudi Arabia - Alaydabi,SA
+1SA10600,Saudi Arabia - Alaridah,SA
+1SA10700,Saudi Arabia - Addarb,SA
+1SA10900,Saudi Arabia - Sharurah,SA
+1SA1100,Saudi Arabia - YANBU,SA
+1SA11000,Saudi Arabia - Hubuna,SA
+1SA11100,Saudi Arabia - Badr Aljanub,SA
+1SA11200,Saudi Arabia - Yadamah,SA
+1SA11300,Saudi Arabia - Thar,SA
+1SA11400,Saudi Arabia - Khubash,SA
+1SA11500,Saudi Arabia - Al-Kharkhir,SA
+1SA11600,Saudi Arabia - Al Baha,SA
+1SA11700,Saudi Arabia - Biljurashi,SA
+1SA11800,Saudi Arabia - Al Mandag,SA
+1SA11900,Saudi Arabia - Al Mukhwah,SA
+1SA1200,Saudi Arabia - ABHA,SA
+1SA12000,Saudi Arabia - Al Aqiq,SA
+1SA12100,Saudi Arabia - Qilwah,SA
+1SA12200,Saudi Arabia - Al Qara,SA
+1SA12300,Saudi Arabia - Sakaka,SA
+1SA12400,Saudi Arabia - Alquryyat,SA
+1SA12500,Saudi Arabia - Dawmat Aljandeal,SA
+1SA1300,Saudi Arabia - NAJRAN,SA
+1SA1400,Saudi Arabia - JIZAN,SA
+1SA1500,Saudi Arabia - BURAYDAH,SA
+1SA1600,Saudi Arabia - HAIL,SA
+1SA1700,Saudi Arabia - TABUK,SA
+1SA1800,Saudi Arabia - ALL OTHER ZONES,SA
+1SA1900,Saudi Arabia - Addiriyah,SA
+1SA2100,Saudi Arabia - Adduwadimi,SA
+1SA2200,Saudi Arabia - Almajmaah,SA
+1SA2300,Saudi Arabia - Alquwayiyah,SA
+1SA2400,Saudi Arabia - Wadi Addawasir,SA
+1SA2500,Saudi Arabia - Alaflaj,SA
+1SA2600,Saudi Arabia - Azulfi,SA
+1SA2700,Saudi Arabia - Shagra,SA
+1SA2800,Saudi Arabia - Hawtat Bani Tamim,SA
+1SA2900,Saudi Arabia - Afif,SA
+1SA3000,Saudi Arabia - Assulayyil,SA
+1SA3100,Saudi Arabia - Duruma,SA
+1SA3200,Saudi Arabia - Almuzahimiyah,SA
+1SA3300,Saudi Arabia - Rumah,SA
+1SA3400,Saudi Arabia - Thadiq,SA
+1SA3500,Saudi Arabia - Huraymila,SA
+1SA3600,Saudi Arabia - Alhariq,SA
+1SA3700,Saudi Arabia - Alghat,SA
+1SA3800,Saudi Arabia - Attaif,SA
+1SA3900,Saudi Arabia - Al Qunfidhah,SA
+1SA4000,Saudi Arabia - Al Lith,SA
+1SA4100,Saudi Arabia - Rabigh,SA
+1SA4200,Saudi Arabia - Al Jmumum,SA
+1SA4300,Saudi Arabia - Khulays,SA
+1SA4400,Saudi Arabia - Al Kamil,SA
+1SA4500,Saudi Arabia - Al Khurmah,SA
+1SA4600,Saudi Arabia - Ranyah,SA
+1SA4700,Saudi Arabia - Turubah,SA
+1SA4800,Saudi Arabia - Al Madinah Al Monawarah,SA
+1SA4900,Saudi Arabia - Alula,SA
+1SA5000,Saudi Arabia - Almahd,SA
+1SA5100,Saudi Arabia - Badr,SA
+1SA5200,Saudi Arabia - Khaybar,SA
+1SA5300,Saudi Arabia - Alhinakiyah,SA
+1SA5500,Saudi Arabia - Unayzah,SA
+1SA5600,Saudi Arabia - Arrass,SA
+1SA5700,Saudi Arabia - Almidhnab,SA
+1SA5800,Saudi Arabia - Albukayriyah,SA
+1SA5900,Saudi Arabia - Albadai,SA
+1SA6000,Saudi Arabia - Alasyah,SA
+1SA6100,Saudi Arabia - Annabhaniyah,SA
+1SA6200,Saudi Arabia - Uyun Aljiwa,SA
+1SA6300,Saudi Arabia - Riadh Alkhabra,SA
+1SA6400,Saudi Arabia - Ashshimasiyah,SA
+1SA6500,Saudi Arabia - Alahsa,SA
+1SA6600,Saudi Arabia - Hafr Albatin,SA
+1SA6700,Saudi Arabia - Alqatif,SA
+1SA6800,Saudi Arabia - Alkhafji,SA
+1SA6900,Saudi Arabia - Ras Tannurah,SA
+1SA7000,Saudi Arabia - Buqayq,SA
+1SA7100,Saudi Arabia - Annuayriyah,SA
+1SA7200,Saudi Arabia - Qaryah Alulya,SA
+1SA7300,Saudi Arabia - Khamis Mushayt,SA
+1SA7400,Saudi Arabia - Bishah,SA
+1SA7500,Saudi Arabia - Annamas,SA
+1SA7600,Saudi Arabia - Muhayil,SA
+1SA7700,Saudi Arabia - Sarat Abidah,SA
+1SA7800,Saudi Arabia - Tathlith,SA
+1SA7900,Saudi Arabia - Rijal Alma,SA
+1SA8000,Saudi Arabia - Ahad Rufaydah,SA
+1SA8100,Saudi Arabia - Dahran Aljanub,SA
+1SA8200,Saudi Arabia - Balqarn,SA
+1SA8300,Saudi Arabia - Almajardah,SA
+1SA8400,Saudi Arabia - Alwajh,SA
+1SA8500,Saudi Arabia - Dhuba,SA
+1SA8600,Saudi Arabia - Tayma,SA
+1SA8700,Saudi Arabia - Umluj,SA
+1SA8800,Saudi Arabia - Haqil,SA
+1SA8900,Saudi Arabia - Baqa,SA
+1SA9000,Saudi Arabia - Alghazalah,SA
+1SA9100,Saudi Arabia - Ashshinan,SA
+1SA9200,Saudi Arabia - Arar,SA
+1SA9300,Saudi Arabia - Rafha,SA
+1SA9500,Saudi Arabia - Sabya,SA
+1SA9600,Saudi Arabia - Abu Arish,SA
+1SA9700,Saudi Arabia - Samtah,SA
+1SA9900,Saudi Arabia - Damad,SA
+2AE0000,United Arab Emirates - ENTIRE COUNTRY ( EQ.),AE
+2BH0000,Bahrain - ENTIRE COUNTRY,BH
+2KW0000,Kuwait - ENTIRE COUNTRY ( EQ.),KW
+2OM0000,Oman - ENTIRE COUNTRY ( EQ.),OM
+2QA0000,Qatar - ENTIRE COUNTRY ( EQ.),QA
+3IQ0000,Iraq - ENTIRE COUNTRY ( EQ ).,IQ
+3JO0000,Jordan - ENTIRE COUNTRY ( EQ.),JO
+3JO0100,Jordan - IRBID,JO
+3JO0200,Jordan - AMMAN,JO
+3JO0300,Jordan - ZARKA,JO
+3JO0400,Jordan - REST OF AMMAN DISTRICT,JO
+3JO0500,Jordan - KARAK,JO
+3JO0600,Jordan - MA'AN,JO
+3JO0700,Jordan - AQUABA,JO
+3JO0800,Jordan - WEST BANKS,JO
+3LB0000,Lebanon - ENTIRE COUNTRY ( EQ.),LB
+3LB0101,Lebanon - BEIRUT,LB
+3LB0201,Lebanon - TRIPOLI,LB
+3LB0301,Lebanon - ASH-SHAMAL (EXCL. TRIPOLI),LB
+3LB0401,Lebanon - JABAL LUBNAN (EXCL. BEIRUT),LB
+3LB0501,Lebanon - AL-JANUB,LB
+3LB0601,Lebanon - AL-BIGA,LB
+3PI0000,"Palestine, State Of - ENTIRE COUNTRY ( EQ ).",PS
+3PI0100,"Palestine, State Of - NORTH ZONE",PS
+3PI0200,"Palestine, State Of - HALFA AND HALFA BAY",PS
+3PI0300,"Palestine, State Of - CENTRAL ZONE",PS
+3PI0400,"Palestine, State Of - GREATER TEL AVIV",PS
+3PI0500,"Palestine, State Of - JERUSALEM ZONE",PS
+3PI0600,"Palestine, State Of - SOUTH ZONE",PS
+3PI0700,"Palestine, State Of - WITHOUT DISTRIBUTION",PS
+3SY0000,Syrian Arab Republic - ENTIRE COUNTRY ( EQ ).,SY
+4DZ0000,Algeria - ENTIRE COUNTRY ( EQ ).,DZ
+4DZ0100,Algeria - TLEMCEN/SIDI BEL ABBES,DZ
+4DZ0200,Algeria - ORAN/MASCARA,DZ
+4DZ0300,Algeria - MOSTAGANEM,DZ
+4DZ0400,Algeria - ECH CHELIFF,DZ
+4DZ0500,Algeria - BLIDA,DZ
+4DZ0600,Algeria - ALGER,DZ
+4DZ0700,Algeria - TIZI OUZOU/JILEL,DZ
+4DZ0800,Algeria - SKIKDA/CONSTANTINE,DZ
+4DZ0900,Algeria - ANNABA/GUELMA,DZ
+4DZ1000,Algeria - MECHERIA/BECHAR/ARDAR,DZ
+4DZ1100,Algeria - TIARET,DZ
+4DZ1200,Algeria - MEDEA/AIN BESSAM/M'SILA/DJELFA,DZ
+4DZ1300,Algeria - SETIF/BATNA/TEBESSA,DZ
+4DZ1400,Algeria - BISKRA/OUARGLA/TAMANRASSET,DZ
+4DZ1500,Algeria - LAGHOUAT,DZ
+4EG0000,Egypt - ENTIRE COUNTRY ( EQ.),EG
+4EG0100,Egypt - CAIRO AND GIZA,EG
+4EG0200,Egypt - ALEXANDRIA,EG
+4EG0300,"Egypt - NILE DELTA (DAMANHUR, TANTA, EL MANSURA.",EG
+4EG0400,Egypt - SUEZ,EG
+4EG0500,Egypt - REST OF COUNTRY,EG
+4LY0000,Libya - ENTIRE COUNTRY(E.Q.),LY
+4MA0000,Morocco - ENTIRE COUNTRY(E.Q.),MA
+4MA0100,Morocco - TANGER,MA
+4MA0200,Morocco - TETOUAN,MA
+4MA0300,Morocco - LARACHE,MA
+4MA0400,Morocco - CHAOUENE,MA
+4MA0500,Morocco - KENITRA,MA
+4MA0600,Morocco - SIDI KACEM,MA
+4MA0700,Morocco - TAOUNATE,MA
+4MA0800,Morocco - AL HOCEIMA,MA
+4MA0900,Morocco - NADOR,MA
+4MA1000,Morocco - OUJDA,MA
+4MA1100,Morocco - TAZA,MA
+4MA1200,Morocco - FES,MA
+4MA1300,Morocco - MEKNES,MA
+4MA1400,Morocco - KHEMISSET,MA
+4MA1500,Morocco - RABAT,MA
+4MA1600,Morocco - IFRANE,MA
+4MA1700,Morocco - CASABLANCA,MA
+4MA1800,Morocco - BEN SLIMANE,MA
+4MA1900,Morocco - SETTAT,MA
+4MA2000,Morocco - EL JADIDA,MA
+4MA2100,Morocco - SAFI,MA
+4MA2200,Morocco - KELAAT SRAGHNA,MA
+4MA2300,Morocco - KHOURIBGA,MA
+4MA2400,Morocco - BENI MELLAL,MA
+4MA2500,Morocco - AZILAL,MA
+4MA2600,Morocco - KHENIFRA,MA
+4MA2700,Morocco - BOULMANE,MA
+4MA2800,Morocco - FIGUIG,MA
+4MA2900,Morocco - ERRACHIDIA,MA
+4MA3000,Morocco - OUARZAZATE,MA
+4MA3100,Morocco - MARRAKECH,MA
+4MA3200,Morocco - ESSAOUIRA,MA
+4MA3300,Morocco - AGADIR,MA
+4MA3400,Morocco - TAROUDANT,MA
+4MA3500,Morocco - TIZNIT,MA
+4MA3600,Morocco - TATA,MA
+4MA3700,Morocco - GUELMIM,MA
+4MA3800,Morocco - ASSA-ZAG,MA
+4MA3900,Morocco - TAN TAN,MA
+4MA4000,Morocco - SMARA,MA
+4MA4100,Morocco - LAAYOUNE,MA
+4MA4200,Morocco - BOUJDOUR,MA
+4MA4300,Morocco - ED DAKHLA,MA
+4MR0000,Mauritania - ENTIRE COUNTRY ( EQ.),MR
+4SD0000,Sudan - ENTIRE COUNTRY(E.Q.),SD
+4SD0100,Sudan - KHARTOUM,SD
+4SD0200,Sudan - PORT SUDAN,SD
+4SD0300,Sudan - KASSAKA,SD
+4SD0400,Sudan - CENTRAL ZONE (EXCL. KHARTOUM & KASSALA),SD
+4SD0500,Sudan - NORTH SUDAN ( EXCL. PORT SUDAN),SD
+4SD0600,Sudan - SOUTHERN ZONE,SD
+4SO0000,Somalia - ENTIRE COUNTRY ( EQ.),SO
+4TN0000,Tunisia - ENTIRE COUNTRY ( EQ.),TN
+4YE0000,Yemen - ENTIRE COUNTRY,YE
+4YE0100,Yemen - HODEIDA,YE
+4YE0200,Yemen - SANA'A,YE
+4YE0300,Yemen - ADEN,YE
+4YE0400,Yemen - TAIZ,YE
+4YE0500,Yemen - OTHERS,YE
+5BD0000,Bangladesh - ENTIRE COUNTRY (EQ),BD
+5BD9900,Bangladesh - ENTIRE COUNTRY (WINDSTORM),BD
+5IN0000,India - ENTIRE COUNTRY (EQ),IN
+5IN0100,India - JAMMU,IN
+5IN0200,"India - HIMACHAL-PRADESH,PUNJAB,HARYANA",IN
+5IN0300,India - UTTAR PRADESH,IN
+5IN0400,India - RAJASTHAN,IN
+5IN0500,India - MADHYA PRADESH,IN
+5IN0600,India - BIHAR,IN
+5IN0700,India - WEST BENGAL,IN
+5IN0800,India - NAGA PRADESH,IN
+5IN0900,India - ASSAM,IN
+5IN1000,India - GUJARAT,IN
+5IN1100,India - MAHARASHTRA,IN
+5IN1200,India - ORISSA,IN
+5IN1300,India - ANDHRA PRADESH,IN
+5IN1400,India - KARNATAKA,IN
+5IN1500,India - MADRAS(CHENNAI),IN
+5IN1600,India - KERALA,IN
+5IN1700,India - GOA,IN
+5IN1800,India - ANDAMAN ISLANDS,IN
+5IN1900,India - NICOBAR ISLAND,IN
+5IR0000,Iran (Islamic Republic of) - ENTIRE COUNTRY ( EQ.),IR
+5IR0100,Iran (Islamic Republic of) - AZARBAIJAN GHARBI,IR
+5IR0200,Iran (Islamic Republic of) - AZARBAIJAN SHARGHI/CITY OF TABRIZ,IR
+5IR0300,Iran (Islamic Republic of) - KORDESTAN,IR
+5IR0400,Iran (Islamic Republic of) - ZANJAN/CITY OF QAZVIN,IR
+5IR0500,Iran (Islamic Republic of) - GILAN,IR
+5IR0600,Iran (Islamic Republic of) - MAZANDARAN,IR
+5IR0700,Iran (Islamic Republic of) - BAKHTARAN,IR
+5IR0800,Iran (Islamic Republic of) - HAMADAN,IR
+5IR0900,Iran (Islamic Republic of) - MARKAZI/CITY OF ARAK,IR
+5IR1000,Iran (Islamic Republic of) - TEHRAN/CITY OF TEHRAN,IR
+5IR1100,Iran (Islamic Republic of) - SEMNAN,IR
+5IR1200,Iran (Islamic Republic of) - KHORASAN/CITY OF MASHHAD,IR
+5IR1300,Iran (Islamic Republic of) - ILAM,IR
+5IR1400,Iran (Islamic Republic of) - LORESTAN,IR
+5IR1500,Iran (Islamic Republic of) - ISFAHAN/CITY OF ISFAHAN,IR
+5IR1600,Iran (Islamic Republic of) - KHOOZESTAN,IR
+5IR1700,Iran (Islamic Republic of) - CHAHARMAHAL VA BAKHTIYARI,IR
+5IR1800,Iran (Islamic Republic of) - KOHKILOYEH VA BOYER AHMAD,IR
+5IR1900,Iran (Islamic Republic of) - YAZD,IR
+5IR2000,Iran (Islamic Republic of) - BUSHEHR,IR
+5IR2100,Iran (Islamic Republic of) - FARS,IR
+5IR2200,Iran (Islamic Republic of) - HORMOZGAN,IR
+5IR2300,Iran (Islamic Republic of) - KERMAN,IR
+5IR2400,Iran (Islamic Republic of) - SISTAN VA BALOUCHESTAN,IR
+5KZ0000,Kazakhstan - ENTIRE COUNTRY (EQ),KZ
+5PK0000,Pakistan - ENTIRE COUNTRY(E.Q.),PK
+5PK1000,Pakistan - MIRPUR (AJK),PK
+5PK1100,Pakistan - KOTLI,PK
+5PK1200,Pakistan - RAWALAKOT(AJ),PK
+5PK1300,Pakistan - MUZAFARABAD(AJK),PK
+5PK1400,Pakistan - DIA MIR,PK
+5PK1500,Pakistan - GILGIT,PK
+5PK1600,Pakistan - SKARDU,PK
+5PK1700,Pakistan - CHITRAL,PK
+5PK1800,Pakistan - DIR,PK
+5PK1900,Pakistan - SWAT,PK
+5PK2000,Pakistan - KOHISTAN,PK
+5PK2100,Pakistan - MANSHORA,PK
+5PK2200,Pakistan - ABBOTABAD,PK
+5PK2300,Pakistan - MARDAN,PK
+5PK2400,Pakistan - NOWSHERA/CHARSADDA,PK
+5PK2500,Pakistan - PESHAWAR,PK
+5PK2600,Pakistan - KOHAT,PK
+5PK2700,Pakistan - KAARAK,PK
+5PK2800,Pakistan - BANNU,PK
+5PK2900,Pakistan - DERA ISMAIL KHAN,PK
+5PK3000,Pakistan - BHAKKAR,PK
+5PK3100,Pakistan - LIAH,PK
+5PK3200,Pakistan - DERA GHAZI KHAN,PK
+5PK3300,Pakistan - RAJANPUR,PK
+5PK3400,Pakistan - MUZAFARGARH,PK
+5PK3500,Pakistan - JHANG,PK
+5PK3600,Pakistan - TOB TEK SINGH,PK
+5PK3700,Pakistan - FAISALABAD/SURROUNDINGS,PK
+5PK3800,Pakistan - FAISALABAD,PK
+5PK3900,Pakistan - SHEIKHPURA,PK
+5PK4000,Pakistan - SARGHODA,PK
+5PK4100,Pakistan - KHUSAB,PK
+5PK4200,Pakistan - MIANWALI,PK
+5PK4300,Pakistan - ATTOCK,PK
+5PK4400,Pakistan - ISLAMABAD/SURROUNDINGS,PK
+5PK4500,Pakistan - ISLAMABAD,PK
+5PK4600,Pakistan - RAWALPINDI,PK
+5PK4700,Pakistan - RAWALPINDI/TAXILA/WAH,PK
+5PK4800,Pakistan - CHAKWAL,PK
+5PK4900,Pakistan - JHELUM,PK
+5PK5000,Pakistan - GUJRAT,PK
+5PK5100,Pakistan - SIALKOT,PK
+5PK5200,Pakistan - GUJRANWALA,PK
+5PK5300,Pakistan - LAHORE/SURROUNDINGS,PK
+5PK5400,Pakistan - LAHORE,PK
+5PK5500,Pakistan - KASUR,PK
+5PK5600,Pakistan - OKARA,PK
+5PK5700,Pakistan - SAHIWAL,PK
+5PK5800,Pakistan - KHANEWAL,PK
+5PK5900,Pakistan - MULTAN/SURROUNDINGS,PK
+5PK6000,Pakistan - MULTAN,PK
+5PK6100,Pakistan - VEHARI,PK
+5PK6200,Pakistan - BAHAWAL NAGAR,PK
+5PK6300,Pakistan - BAHAWALPUR,PK
+5PK6400,Pakistan - RAHIMYAR KHAN,PK
+5PK6500,Pakistan - SUKKUR,PK
+5PK6600,Pakistan - KHAIRPUR,PK
+5PK6700,Pakistan - NAWABSHAH,PK
+5PK6800,Pakistan - SANGHAR,PK
+5PK6900,Pakistan - THARPARKAR,PK
+5PK7000,Pakistan - HYDERABAD/SURROUNDINGS,PK
+5PK7100,Pakistan - HYDERABAD,PK
+5PK7200,Pakistan - BADIN,PK
+5PK7300,Pakistan - THATTA,PK
+5PK7400,Pakistan - KARACHI,PK
+5PK7500,Pakistan - KARACHI/SURROUNDINGS,PK
+5PK7600,Pakistan - DADU,PK
+5PK7700,Pakistan - LARKANA,PK
+5PK7800,Pakistan - SHIKARPUR,PK
+5PK7900,Pakistan - JACOBABAD,PK
+5PK8000,Pakistan - NASIRABAD,PK
+5PK8100,Pakistan - KUTCHCHI,PK
+5PK8200,Pakistan - SIBI,PK
+5PK8300,Pakistan - KOHLOO,PK
+5PK8400,Pakistan - LORALAI,PK
+5PK8500,Pakistan - ZHOEB,PK
+5PK8600,Pakistan - PISHIN,PK
+5PK8700,Pakistan - QUETTA,PK
+5PK8800,Pakistan - KALAT,PK
+5PK8900,Pakistan - KHUZDAR,PK
+5PK9000,Pakistan - LASBELA,PK
+5PK9100,Pakistan - MAKRAN,PK
+5PK9200,Pakistan - TURBAT,PK
+5PK9300,Pakistan - PANJGOOR,PK
+5PK9400,Pakistan - KHARAN,PK
+5PK9500,Pakistan - CHANGHI,PK
+5PK9600,Pakistan - ZIARAT,PK
+5SL0000,Sierra Leone - ENTIRE COUNTRY ( EQ.),SL
+5TR0000,Turkey - ENTIRE COUNTRY ( EQ.),TR
+5TR0100,Turkey - ISTANBUL (EXCL YALOVA),TR
+5TR0200,Turkey - EDIRNE/KIRKLARELI/TEKIRDAG/CANAKKALE,TR
+5TR0300,Turkey - IZMIT/ADAPAZARI/YALOVA,TR
+5TR0400,Turkey - BURSA/BILECIK/BALIKESIR,TR
+5TR0500,Turkey - IZMER/MANISA/AYDIN,TR
+5TR0600,Turkey - ESKISEHIR/KUTAHYA/USAK/AFYON/DENIZLI/BUR,TR
+5TR0700,Turkey - MUGLA/ANTALYA,TR
+5TR0800,Turkey - MERSIN/ADANA/MARAS/GAZIANTEP,TR
+5TR0900,Turkey - KONYA/KIRSEHIR,TR
+5TR1000,Turkey - ANKARA,TR
+5TR1100,Turkey - BOLU/ZONGULDAK/CORUM/SINOP,TR
+5TR1200,Turkey - SAMSUN/AMASYA/TOKAT/SIVAS/ORDU,TR
+5TR1300,Turkey - RIZE/ARTVIN/ERZURUM/KARAS,TR
+5TR1400,Turkey - MALATYA/TUNCELI,TR
+5TR1500,Turkey - ADIYAMAN/URFA/MARDIN/HAKKARI,TR
+6GU9900,Guam - ENTIRE COUNTRY (WINDSTORM),GU
+6HK0100,Hong Kong - HONG KONG/LANTAU,HK
+6HK0200,Hong Kong - KOWLOON/NEW TERRITORIES,HK
+6HK9800,Hong Kong - ENTIRE COUNTRY (FLOOD),HK
+6ID0000,Indonesia - ENTIRE COUNTRY ( EQ.),ID
+6ID0100,"Indonesia - NORTH SUMATRA (ACEH, SUMATRA VTARA)",ID
+6ID0101,Indonesia - BANDA ACEH,ID
+6ID0102,Indonesia - MEDAN,ID
+6ID0103,Indonesia - OTHERS THAN 1.1 AND 1.2,ID
+6ID0200,"Indonesia - SOUTH SUMATRA (RIAU, JAMBI, SUM-BAR ETC)",ID
+6ID0201,Indonesia - PADANG,ID
+6ID0202,Indonesia - PALEMBANG,ID
+6ID0203,Indonesia - OTHERS THAN 2.1 AND 2.2,ID
+6ID0300,Indonesia - WEST JAWA (JAWA BARAT),ID
+6ID0301,Indonesia - JAKARTA,ID
+6ID0302,Indonesia - BANDUNG,ID
+6ID0303,Indonesia - OTHERS THAN 3.1 AND 3.2,ID
+6ID0400,"Indonesia - CENTRAL JAWA (JAWA TENGAH, YOGYAKARTA)",ID
+6ID0401,Indonesia - SEMARANG,ID
+6ID0402,Indonesia - YOGYAKARTA,ID
+6ID0403,Indonesia - OTHERS THAN 4.1 AND 4.2,ID
+6ID0500,Indonesia - EAST JAVA (JAWA TIMUR),ID
+6ID0501,Indonesia - SURABAYA,ID
+6ID0502,Indonesia - OTHERS THAN 5.1,ID
+6ID0600,Indonesia - KALIMANTHAN,ID
+6ID0700,Indonesia - SULAWESI,ID
+6ID0701,Indonesia - UJUNG PANDANG,ID
+6ID0702,Indonesia - OTHERS THAN 7.1,ID
+6ID0800,Indonesia - OTHER ISLANDS AND IRIAN JAYA,ID
+6ID0900,Indonesia - REST OF WEST JAVA,ID
+6ID1000,Indonesia - CITY OF SEMARANG,ID
+6ID1100,Indonesia - CITY OF YOGJAKARTA,ID
+6ID1200,Indonesia - REST OF CENTRAL JAVA,ID
+6ID1300,Indonesia - CITY OF SURABAYA,ID
+6ID1400,Indonesia - REST OF EAST JARVA,ID
+6ID1500,Indonesia - KALIMANTAN,ID
+6ID1600,Indonesia - CITY OF UJUNG PANDANG,ID
+6ID1700,Indonesia - REST OF SULAWESI,ID
+6MY9900,Malaysia - ENTIRE COUNTRY(WINDSTORM),MY
+6PH0000,Philippines - ENTIRE COUNTRY(EQ),PH
+6PH0100,Philippines - ABRA/AURORA/BANTANES,PH
+6PH0101,Philippines - ABRA,PH
+6PH0102,Philippines - AURORA,PH
+6PH0103,Philippines - BATANES,PH
+6PH0104,Philippines - BENGUET,PH
+6PH0105,Philippines - CAGAYAN,PH
+6PH0106,Philippines - IFUAGAO,PH
+6PH0107,Philippines - ILOCOS NORTE,PH
+6PH0108,Philippines - ILOCOS SUR (QUIRINO),PH
+6PH0109,Philippines - ISABELA,PH
+6PH0110,Philippines - KALINGO-APAYAO,PH
+6PH0111,Philippines - LA UNION,PH
+6PH0112,Philippines - MOUNTAIN PROVINCE,PH
+6PH0113,Philippines - NUEVA VIZCAYA,PH
+6PH0114,Philippines - PANGASINAN,PH
+6PH0200,Philippines - MAKATI (MANILA),PH
+6PH0300,"Philippines - MANILA BAY, RECLAMATION AREA",PH
+6PH0400,Philippines - SANTA CRUZ/BINONDO AREA,PH
+6PH0500,Philippines - METROPOLITAN MANILA,PH
+6PH0600,Philippines - ALBAY/BATAAN/BATANGAS/BULACAN,PH
+6PH0601,Philippines - ALBAY,PH
+6PH0602,Philippines - BATAAN,PH
+6PH0603,Philippines - BATANGAS,PH
+6PH0604,Philippines - BULACAN,PH
+6PH0605,Philippines - CAMARINES NORTE,PH
+6PH0606,Philippines - CAMARINES SUR,PH
+6PH0607,Philippines - CATANDUANES,PH
+6PH0608,Philippines - CAVITE,PH
+6PH0609,Philippines - LAGUNA,PH
+6PH0610,Philippines - MARINDUQUE,PH
+6PH0611,Philippines - MASBATE,PH
+6PH0612,Philippines - NUEVA ECIJA,PH
+6PH0613,Philippines - OCCIDENTAL MINDARO,PH
+6PH0614,Philippines - ORIENTAL MINDORO,PH
+6PH0615,Philippines - PAMPANGA,PH
+6PH0616,Philippines - QUEZON,PH
+6PH0617,Philippines - RIZAL,PH
+6PH0618,Philippines - RAMBLON,PH
+6PH0619,Philippines - SORSOGON,PH
+6PH0620,Philippines - TARLAC,PH
+6PH0621,Philippines - ZAMBALES,PH
+6PH0700,Philippines - AKLAN/ANTIQUE/BILIRAN,PH
+6PH0701,Philippines - AKLAN,PH
+6PH0702,Philippines - ANTIQUE,PH
+6PH0703,Philippines - BILIRAN,PH
+6PH0704,Philippines - BOHOL,PH
+6PH0705,Philippines - CAMOTES,PH
+6PH0706,Philippines - CAPIZ,PH
+6PH0707,Philippines - CEBU,PH
+6PH0708,Philippines - EASTERN SAMAR,PH
+6PH0709,Philippines - GUIMARAS,PH
+6PH0710,Philippines - ILOILO,PH
+6PH0711,Philippines - LEYTE,PH
+6PH0712,Philippines - NEGROS OCCIDENTAL,PH
+6PH0713,Philippines - NEGROS ORIENTAL,PH
+6PH0714,Philippines - NORTHERN SAMAR,PH
+6PH0715,Philippines - PALAWAN,PH
+6PH0716,Philippines - SIQUIJOR,PH
+6PH0717,Philippines - SOUTHERN LEYTE,PH
+6PH0718,Philippines - WESTERN SAMAR,PH
+6PH0800,Philippines - AGUSAN DEL NORTE/BASILAN/CAMIGUIN,PH
+6PH0802,Philippines - AGUSAN DEL SUR,PH
+6PH0803,Philippines - BASILAN,PH
+6PH0804,Philippines - BUKIDNON,PH
+6PH0805,Philippines - CAMIGUIN,PH
+6PH0806,Philippines - LANAO DEL NORTE,PH
+6PH0807,Philippines - LANAO DEL SUR,PH
+6PH0808,Philippines - MISAMIS OCCIDENTAL,PH
+6PH0809,Philippines - MISAMIS ORIENTAL,PH
+6PH0810,Philippines - SURIGAO DEL NORTE,PH
+6PH0811,Philippines - SURIGAO DEL SUR,PH
+6PH0812,Philippines - ZAMBOANGA DEL NORTE,PH
+6PH0813,Philippines - ZAMBOANGA DEL SUR,PH
+6PH0900,Philippines - DAVAO DEL NORTE/DAVAO ORIENTAL/SULU,PH
+6PH0902,Philippines - DAVAO ORIENTAL,PH
+6PH0903,Philippines - DAVAO DEL SUR,PH
+6PH0904,Philippines - MAGUINDANAO,PH
+6PH0905,Philippines - NORTH COTABATO,PH
+6PH0906,Philippines - SOUTH COTABATO,PH
+6PH0907,Philippines - SULTAN KUDARAT,PH
+6PH0908,Philippines - SULU,PH
+6PH0909,Philippines - TAWI - TAWI,PH
+6PH1000,Philippines - FLOATER,PH
+6TH9800,Thailand - ENTIRE COUNTRY (FLOOD),TH
+7CN0000,China - ENTIRE COUNTRY (EQ),CN
+7CN0100,China - BEIJING,CN
+7CN0200,China - TIANJIN,CN
+7CN0300,China - HEBEI,CN
+7CN0400,China - LIAONING,CN
+7CN0500,China - JILIN,CN
+7CN0600,China - HEILONGJIANG,CN
+7CN0700,China - NEI MONGGOL,CN
+7CN0800,China - SHANXI,CN
+7CN0900,China - SHAANXI,CN
+7CN1000,China - SHANDONG,CN
+7CN1100,China - HENAN,CN
+7CN1200,China - JIANGSU,CN
+7CN1300,China - SHANGHAI,CN
+7CN1400,China - ZHEJIANG,CN
+7CN1500,China - HUBEI,CN
+7CN1600,China - ANHUI,CN
+7CN1700,China - JIANGXI,CN
+7CN1800,China - FUJIAN,CN
+7CN1900,China - HUNAN,CN
+7CN2000,China - GUANGDONG,CN
+7CN2100,China - HAINAN,CN
+7CN2200,China - GUANGXI,CN
+7CN2300,China - GUIZHOU,CN
+7CN2400,China - YUNNAN,CN
+7CN2500,China - SICHUAN,CN
+7CN2600,China - GANSU,CN
+7CN2700,China - NINGXIA,CN
+7CN2800,China - QINGHAI,CN
+7CN2900,China - XINJIANG,CN
+7CN3000,China - XIZANG(TIBET),CN
+7JP0000,Japan - ENTIRE COUNTRY(E.Q.),JP
+7JP0100,Japan - ISLAND OF HOKKAIDO,JP
+7JP0200,Japan - AOMORI/AKITA/YAMAGATA/NIIGATA,JP
+7JP0201,Japan - AOMORI,JP
+7JP0202,Japan - AKITA,JP
+7JP0203,Japan - YAMAGATA,JP
+7JP0204,Japan - NIIGATA,JP
+7JP0300,Japan - IWATE/MIYAGI/FUKUSHIMA,JP
+7JP0301,Japan - IWATE,JP
+7JP0302,Japan - MIYAGI,JP
+7JP0303,Japan - FUKUSHIMA,JP
+7JP0400,Japan - GUMMA/TOCHIGI/SAITAMA/IBARAKI,JP
+7JP0401,Japan - GUMMA,JP
+7JP0402,Japan - TOCHIGI,JP
+7JP0403,Japan - SAITAMA,JP
+7JP0404,Japan - IBARAKI,JP
+7JP0500,Japan - CHIBA/TOKYO METROPOLIS/KANAKAWA,JP
+7JP0501,Japan - CHILBA,JP
+7JP0502,Japan - TOKYO METROPOLIS,JP
+7JP0503,Japan - KANAGAWA,JP
+7JP0504,Japan - KAWASAKI,JP
+7JP0505,Japan - YOKOHAMA,JP
+7JP0506,Japan - REST OF KANAGAWA,JP
+7JP0600,Japan - GIFU/NAGANO/YAMANASHI/AICHI/MIE,JP
+7JP0601,Japan - GIFU,JP
+7JP0602,Japan - NAGANO,JP
+7JP0603,Japan - YAMANASHI,JP
+7JP0604,Japan - SHIZUOKA,JP
+7JP0605,Japan - AICHI,JP
+7JP0606,Japan - MIE,JP
+7JP0700,Japan - TOYAMA/ISHIKAWA/FUKUI,JP
+7JP0701,Japan - TOYAMA,JP
+7JP0702,Japan - ISHIKAWA,JP
+7JP0703,Japan - FUKUI,JP
+7JP0800,Japan - HYOGO/KYOTO/SHIGA/OSAKA/NARA/WAKAYAMA,JP
+7JP0801,Japan - HYOGO,JP
+7JP0802,Japan - KYOTO,JP
+7JP0803,Japan - SHIGA,JP
+7JP0804,Japan - OSAKA,JP
+7JP0805,Japan - NARA,JP
+7JP0806,Japan - WAKAYAMA,JP
+7JP0900,Japan - TOTTORI/OKAYAMA/HIROSHIMA/SHIMANE,JP
+7JP0901,Japan - TATTARI,JP
+7JP0902,Japan - OKAYAMA,JP
+7JP0903,Japan - HIR OSHIMA,JP
+7JP0904,Japan - SHIMANE,JP
+7JP0905,Japan - YAMAGUCHI,JP
+7JP1000,Japan - ISLAND OF SHIKOKU,JP
+7JP1100,Japan - ISLAND OF KYUSHU,JP
+7JP1200,Japan - ISLAND OF OKINAWA,JP
+7JP1300,Japan - FLOATER,JP
+7JP9800,Japan - ENTIRE COUNTRY ( FLOOD ),JP
+7KP9800,Korea (Democratic People's Republic of) - ENTIRE COUNTRY(FLOOD),KP
+7KR0000,Korea (the Republic of) - ENTIRE COUNTRY (EARTHQUAKE),KR
+7KR0100,Korea (the Republic of) - SEOUL,KR
+7KR0200,Korea (the Republic of) - PUSAN,KR
+7KR0300,Korea (the Republic of) - KYONGGI-DO,KR
+7KR0400,Korea (the Republic of) - KANG-WON-DO,KR
+7KR0500,Korea (the Republic of) - CHUNGCHONG-NAM-DO,KR
+7KR0600,Korea (the Republic of) - CHUNGCHONG-BUK-DO,KR
+7KR0700,Korea (the Republic of) - KYONGSANG-BUK-DO,KR
+7KR0800,Korea (the Republic of) - KYONGSANG-NAM-DO,KR
+7KR0900,Korea (the Republic of) - CHOLLA-BUK-DO,KR
+7KR1000,Korea (the Republic of) - CHOLLA-NAM-DO,KR
+7KR1100,Korea (the Republic of) - CHEJU-DO,KR
+7TW0000,Taiwan (Province of China) - ENTIRE COUNTRY(E.Q.),TW
+7TW0100,Taiwan (Province of China) - CITY OF TAIPEI,TW
+7TW0101,"Taiwan (Province of China) - REST OF TAIPEI, KEELUNG",TW
+7TW0200,Taiwan (Province of China) - TAOYUAN,TW
+7TW0300,Taiwan (Province of China) - HSINCHU,TW
+7TW0400,Taiwan (Province of China) - MIAOLI,TW
+7TW0500,Taiwan (Province of China) - TAICHUNG,TW
+7TW0600,Taiwan (Province of China) - NANTAO,TW
+7TW0700,Taiwan (Province of China) - CHANGHUA,TW
+7TW0800,Taiwan (Province of China) - YUNLIN,TW
+7TW0900,Taiwan (Province of China) - CHIAYI-TAINAN,TW
+7TW1000,Taiwan (Province of China) - KAO HSIUNG-PINGTUNG-PENGHU,TW
+7TW1100,Taiwan (Province of China) - HUALIEN-TAITUNG,TW
+7TW1200,Taiwan (Province of China) - IIAN,TW
+7TW1300,Taiwan (Province of China) - FLOATER,TW
+7TW9900,Taiwan (Province of China) - ENTIRE COUNTRY(WINDSTORM),TW
+8AM0000,Armenia - ENTIRE COUNTRY (EQ),AM
+8BU0000,Bhutan - ENTIRE COUNTRY (EQ),BT
+8CI0000,Côte d'Ivoire - ENTIRE COUNTRY ( EQ ).,CI
+8CM0000,Cameroon - ENTIRE COUNTRY(EQ),CM
+8CM9900,Cameroon - ENTIRE COUNTRY(WINDSTORM),CM
+8EH0000,Western Sahara* - ENTIRE COUNTRY ( EQ ).,EH
+8ET0000,Ethiopia - ENTIRE COUNTRY ( EQ).,ET
+8FJ0000,Fiji - ENTIRE COUNTRY(EQ),FJ
+8GH0000,Ghana - ENTIRE COUNTRY ( EQ ).,GH
+8KE0000,Kenya - ENTIRE COUNTRY ( EQ ).,KE
+8KE0100,Kenya - WESTERN KENYA,KE
+8KE0200,Kenya - RIFT VALLEY,KE
+8KE0300,Kenya - CENTRAL VALLEY,KE
+8KE0400,Kenya - NAIROBI AREA,KE
+8KE0500,Kenya - COASTAL REGION,KE
+8KH9800,Cambodia - ENTIRE COUNTRY (FLOOD),KH
+8LK9800,Sierra Leone - ENTIRE COUNTRY(FLOOD),SL
+8MN0000,Mongolia - ENTIRE COUNTRY (EQ),MN
+8MO0000,Macao - ENTIRE COUNTRY (EQ),MO
+8MU0000,Mauritius - ENTIRE COUNTRY ( EQ ).,MU
+8MU0100,Mauritius - PORT LOUIS,MU
+8MU0200,Mauritius - REST OF MAURITIUS ISLAND,MU
+8MU0300,Mauritius - RODRIGUEZ ISLAND,MU
+8MU9800,Mauritius - ENTIRE COUNTRY ( FLOOD ).,MU
+8MW0000,Malawi - ENTIRE COUNTRY ( EQ ).,MW
+8MZ9800,Mozambique - ENTIRE COUNTRY ( FLOOD ).,MZ
+8NA9800,Namibia - ENTIRE COUNTRY ( FLOOD ).,NA
+8NE0000,Niger - ENTIRE COUNTRY (EQ),NE
+8NE0100,Niger - LAGOS,NE
+8NE0200,Niger - SOUTHERN STATES (EXCL. LAGOS),NE
+8NE0300,Niger - CENTRAL STATES,NE
+8NE0400,Niger - NOTHERN STATES,NE
+8NE0500,Niger - EASTERN STATES,NE
+8NP0000,Nepal - ENTIRE COUNTRY (EQ),NP
+8PG0000,Papua New Guinea - ENTIRE COUNTRY(EQ),PG
+8PG0100,Papua New Guinea - NATIONAL CAPITAL DISTRICT,PG
+8PG0200,Papua New Guinea - CENTRAL PROVINCE,PG
+8PG0300,Papua New Guinea - CHIMBU PROVINCE,PG
+8PG0400,Papua New Guinea - ENGA PROVINCE,PG
+8PG0500,Papua New Guinea - GULF PROVINCE,PG
+8PG0600,Papua New Guinea - EASTERN HIGHLANDS PROVINCE,PG
+8PG0700,Papua New Guinea - SOUTHERN HIGHLANDS PROVINCE,PG
+8PG0800,Papua New Guinea - WESTERNHIGHLANDS PROVINCE,PG
+8PG0900,Papua New Guinea - MADANG PROVINCE,PG
+8PG1000,Papua New Guinea - MANUS PROVINCE,PG
+8PG1100,Papua New Guinea - MILNE BAY PROVINCE,PG
+8PG1200,Papua New Guinea - MOROBE PROVINCE,PG
+8PG1300,Papua New Guinea - NEW IRELAND PROVINCE,PG
+8PG1400,Papua New Guinea - EAST NEW BRITTAIN PROVINCE,PG
+8PG1500,Papua New Guinea - WEST NEW BRITAIN PROVINCE,PG
+8PG1600,Papua New Guinea - NORTHERN PROVINCE,PG
+8PG1700,Papua New Guinea - EASTSEPIK PROVINCE,PG
+8PG1800,Papua New Guinea - WEST SEPIK PROVINCE,PG
+8PG1900,Papua New Guinea - NORTH SOLOMONS,PG
+8PG2000,Papua New Guinea - WESTERN PROVINCE,PG
+8SN9900,Senegal - ENTIRE COUNTRY ( WINDSTORM ) .,SN
+8TZ0000,"Tanzania, the United Republic of - ENTIRE COUNTRY ( EQ ).",TZ
+8UG0000,Uganda - ENTIRE COUNTRY(E.Q.),UG
+8UG0100,Uganda - KAMPALA,UG
+8UG0200,Uganda - CENTRAL BUGANDA,UG
+8UG0300,Uganda - NORTH BUGANDA,UG
+8UG0400,Uganda - SOUTH BUGANDA,UG
+8UG0500,Uganda - SOUTHERN,UG
+8UG0600,Uganda - WESTERN,UG
+8UG0700,Uganda - NILE,UG
+8UG0800,Uganda - NORTHERN,UG
+8UG0900,Uganda - KARAMOJA,UG
+8UG1000,Uganda - EASTERN,UG
+8UG1100,Uganda - BUSOGA,UG
+8VN0000,Viet Nam - ENTIRE COUNTRY(E.Q.),VN
+8VN0100,Viet Nam - HANOI,VN
+8VN0200,Viet Nam - T.P. HO CHI MINH,VN
+8VN0300,Viet Nam - HAI PHONG,VN
+8VN0400,Viet Nam - CAO BANG,VN
+8VN0500,Viet Nam - HA GIANG,VN
+8VN0600,Viet Nam - TUYEN QUANG,VN
+8VN0700,Viet Nam - LNG SON,VN
+8VN0800,Viet Nam - LAI CHAU,VN
+8VN0900,Viet Nam - LAO CAI,VN
+8VN1000,Viet Nam - YEN BAI,VN
+8VN1100,Viet Nam - THAI NGUYEN,VN
+8VN1200,Viet Nam - BAC CAN,VN
+8VN1300,Viet Nam - SON LA,VN
+8VN1400,Viet Nam - VINH PHUC,VN
+8VN1500,Viet Nam - PHU THO,VN
+8VN1600,Viet Nam - BAC GIANG,VN
+8VN1700,Viet Nam - BAC NINH,VN
+8VN1800,Viet Nam - QUANG NINH,VN
+8VN1900,Viet Nam - HOA BINH,VN
+8VN2000,Viet Nam - HA TAY,VN
+8VN2100,Viet Nam - HAI DUONG,VN
+8VN2200,Viet Nam - HUANG YEN,VN
+8VN2300,Viet Nam - THAI BINH,VN
+8VN2400,Viet Nam - HA NAM,VN
+8VN2500,Viet Nam - NAM DINH,VN
+8VN2600,Viet Nam - NINH BINH,VN
+8VN2700,Viet Nam - THANH HOA,VN
+8VN2800,Viet Nam - NGHE AN,VN
+8VN2900,Viet Nam - HA TINH,VN
+8VN3000,Viet Nam - QUANG BINH,VN
+8VN3100,Viet Nam - QUANG TRI,VN
+8VN3200,Viet Nam - THUA THIEN HUE,VN
+8VN3300,Viet Nam - QUANG NAM,VN
+8VN3400,Viet Nam - DA NANG,VN
+8VN3500,Viet Nam - QUANG NGAI,VN
+8VN3600,Viet Nam - BINH DINH,VN
+8VN3700,Viet Nam - PHU YEN,VN
+8VN3800,Viet Nam - KHANH HOA,VN
+8VN3900,Viet Nam - NINH THUAN,VN
+8VN4000,Viet Nam - BINH THUAN,VN
+8VN4100,Viet Nam - GIA LAI,VN
+8VN4200,Viet Nam - KON TUM,VN
+8VN4300,Viet Nam - DAC LAC,VN
+8VN4400,Viet Nam - LAM DONG,VN
+8VN4500,Viet Nam - BINH DUONG,VN
+8VN4600,Viet Nam - BINH PHUOC,VN
+8VN4700,Viet Nam - TAY NINH,VN
+8VN4800,Viet Nam - DONG NAI,VN
+8VN4900,Viet Nam - LONG AN,VN
+8VN5000,Viet Nam - DONG THAP,VN
+8VN5100,Viet Nam - AN GIANG,VN
+8VN5200,Viet Nam - TIEN GIANG,VN
+8VN5300,Viet Nam - BEN TRE,VN
+8VN5400,Viet Nam - VINH LONG,VN
+8VN5500,Viet Nam - TRA VINH,VN
+8VN5600,Viet Nam - CAN THO,VN
+8VN5700,Viet Nam - SOC TRANG,VN
+8VN5800,Viet Nam - KIEN GIANG,VN
+8VN5900,Viet Nam - BAC LIEU,VN
+8VN6000,Viet Nam - CA MAU,VN
+8VN6100,Viet Nam - BA RIA-VUNG TAU,VN
+8ZA0000,South Africa - ENTIRE COUNTRY ( EQ.),ZA
+8ZA0100,"South Africa - BUSHVELD,TRANSVAAL NORTH,TRANSVAAL EAST",ZA
+8ZA0200,South Africa - CAPE PROVINCE-KAROO 2,ZA
+8ZA0300,South Africa - NATAL,ZA
+8ZA0400,South Africa - ORANJE FREE STATE,ZA
+8ZA0500,South Africa - TRANSVALL,ZA
+8ZA0600,South Africa - JOHANNESBURG,ZA
+8ZA0700,South Africa - RAND EAST,ZA
+8ZA0800,South Africa - CAPE PROVINCE-CAPE TOWN,ZA
+8ZA0900,South Africa - DURBAN,ZA
+8ZA1000,South Africa - CAPE PROVINCE-EAST AND NORTH OF CT,ZA
+8ZA1100,South Africa - KAROO 1,ZA
+8ZA1200,South Africa - LANGKLOOF,ZA
+8ZA1300,South Africa - PORT ELIZABETH,ZA
+8ZA1400,South Africa - CISKEI,ZA
+8ZA1500,South Africa - EAST LONDON,ZA
+8ZA1600,South Africa - TEMBU 2,ZA
+8ZM9800,Zambia - ENTIRE COUNTRY ( FLOOD ).,ZM
+8ZW0000,Zimbabwe - ENTIRE COUNTRY ( EQ ).,ZW
+9UK0000,Uganda - ENTIRE COUNTRY(E.Q),UG
+9UKAB00,Uganda - ABERDEEN,UG
+9UKAL00,Uganda - ST.ALBANS,UG
+9UKB 00,Uganda - BIRMINGHAM,UG
+9UKBA00,Uganda - BATH,UG
+9UKBB00,Uganda - BLACKBURN,UG
+9UKBD00,Uganda - BRADFORD,UG
+9UKBH00,Uganda - BOURNEMOUTH,UG
+9UKBL00,Uganda - BOLTON,UG
+9UKBN00,Uganda - BRIGHTON,UG
+9UKBR00,Uganda - BROMLEY,UG
+9UKBS00,Uganda - BRISTOL,UG
+9UKBT00,Uganda - BELFAST,UG
+9UKCA00,Uganda - CARLISLE,UG
+9UKCB00,Uganda - CAMBRIDGE,UG
+9UKCF00,Uganda - CARDIFF,UG
+9UKCH00,Uganda - CHESTER,UG
+9UKCM00,Uganda - CHELMSFORD,UG
+9UKCO00,Uganda - COLCHESTER,UG
+9UKCR00,Uganda - CROYDON,UG
+9UKCT00,Uganda - CANTERBURY,UG
+9UKCV00,Uganda - COVENTRY,UG
+9UKCW00,Uganda - CREWE,UG
+9UKDA00,Uganda - DARTFORD,UG
+9UKDD00,Uganda - DUNDEE,UG
+9UKDE00,Uganda - DERBY,UG
+9UKDG00,Uganda - DUMFRIES,UG
+9UKDH00,Uganda - DURHAM,UG
+9UKDL00,Uganda - DARLINGTON,UG
+9UKDN00,Uganda - DONCASTER,UG
+9UKDT00,Uganda - DORCHESTER,UG
+9UKDY00,Uganda - DUDLEY,UG
+9UKEH00,Uganda - EDINBURGH,UG
+9UKEN00,Uganda - ENFIELD,UG
+9UKEX00,Uganda - EXETER,UG
+9UKFK00,Uganda - FALKIRK,UG
+9UKFY00,Uganda - BLACKPOOL,UG
+9UKG 00,Uganda - GLASGOW,UG
+9UKGL00,Uganda - GLOUCESTER,UG
+9UKGU00,Uganda - GUILDFORD,UG
+9UKHA00,Uganda - HARROW,UG
+9UKHD00,Uganda - HUDDERSFIELD,UG
+9UKHG00,Uganda - HARROGATE,UG
+9UKHP00,Uganda - HEMEL HEMSTEAD,UG
+9UKHR00,Uganda - HEREFORD,UG
+9UKHU00,Uganda - HULL,UG
+9UKHX00,Uganda - HALIFAX,UG
+9UKIG00,Uganda - ILFORD,UG
+9UKIP00,Uganda - IPSWICH,UG
+9UKIV00,Uganda - IVERNESS,UG
+9UKKA00,Uganda - KILMARNOCK,UG
+9UKKT00,Uganda - KINGSTON-UPON-THAMES,UG
+9UKKW00,Uganda - KIRKWALL,UG
+9UKKY00,Uganda - KIRKCALDY,UG
+9UKL 00,Uganda - LIVERPOOL,UG
+9UKLA00,Uganda - LANCASTER,UG
+9UKLD00,Uganda - LLANDRINDOD WELLS,UG
+9UKLE00,Uganda - LEICESTER,UG
+9UKLL00,Uganda - LLANDUDNO,UG
+9UKLN00,Uganda - LINCOLN,UG
+9UKLS00,Uganda - LEEDS,UG
+9UKLU00,Uganda - LUTON,UG
+9UKM 00,Uganda - MANCHESTER,UG
+9UKME00,Uganda - MEDWAY,UG
+9UKMK00,Uganda - MILTON KEYNES,UG
+9UKML00,Uganda - MOTHERWELL,UG
+9UKNE00,Uganda - NEWCASTLE UPON TYNE,UG
+9UKNG00,Uganda - NOTTINGHAM,UG
+9UKNN00,Uganda - NORTHAMPTON,UG
+9UKNP00,Uganda - NEWPORT,UG
+9UKNR00,Uganda - NORWICH,UG
+9UKOL00,Uganda - OLDHAM,UG
+9UKOX00,Uganda - OXFORD,UG
+9UKPA00,Uganda - PAISLEY,UG
+9UKPE00,Uganda - PETERBOROUGH,UG
+9UKPH00,Uganda - PERTH,UG
+9UKPL00,Uganda - PLYMOUTH,UG
+9UKPO00,Uganda - PORTSMOUTH,UG
+9UKPR00,Uganda - PRESTON,UG
+9UKRG00,Uganda - READING,UG
+9UKRH00,Uganda - REDHILL,UG
+9UKRM00,Uganda - ROMFORD,UG
+9UKS 00,Uganda - SHEFFIELD,UG
+9UKSA00,Uganda - SWANSEA,UG
+9UKSG00,Uganda - STEVENAGE,UG
+9UKSK00,Uganda - STOCKPORT,UG
+9UKSL00,Uganda - SLOUGH,UG
+9UKSM00,Uganda - SUTTON,UG
+9UKSN00,Uganda - SWINDON,UG
+9UKSO00,Uganda - SOUTHAMPTON,UG
+9UKSP00,Uganda - SALISBURY,UG
+9UKSR00,Uganda - SUNDERLAND,UG
+9UKSS00,Uganda - SOUTHEND-ON-SEA,UG
+9UKST00,Uganda - STOKE-ON-TRENT,UG
+9UKSY00,Uganda - SHREWSBURY,UG
+9UKTA00,Uganda - TAUNTON,UG
+9UKTD00,Uganda - GALASHIELS,UG
+9UKTF00,Uganda - TELFORD,UG
+9UKTN00,Uganda - TUNBRIDGE WELLS,UG
+9UKTQ00,Uganda - TORQUAY,UG
+9UKTR00,Uganda - TRURO,UG
+9UKTS00,Uganda - CLEVELAND,UG
+9UKTW00,Uganda - TWICKENHAM,UG
+9UKUB00,Uganda - SOUTHALL,UG
+9UKWA00,Uganda - WARRINGTON,UG
+9UKWD00,Uganda - WATFORD,UG
+9UKWF00,Uganda - WAKEFIELD,UG
+9UKWN00,Uganda - WIGAN,UG
+9UKWR00,Uganda - WORCESTER,UG
+9UKWS00,Uganda - WALSALL,UG
+9UKWV00,Uganda - WOLVERHAMPTON,UG
+9UKYO00,Uganda - YORK,UG
+9UKZE00,Uganda - LERWICK,UG
+AAL0000,Albania - ENTIRE COUNTRY(E.Q.),AL
+AAT0000,Austria - ENTIRE COUNTRY,AT
+AAZ0000,Azerbaijan - ENTIRE COUNTRY ( EQ ).,AZ
+ABE0000,Belgium - ENTIRE COUNTRY(E.Q),BE
+ABE0100,Belgium - ZONE DE BRUXELLES,BE
+ABE0200,Belgium - ZONE D'ANVERS MECHELEN,BE
+ABE0300,Belgium - ZONE DE LOUVAIN,BE
+ABE0400,Belgium - ZONE DE LIEGE,BE
+ABE0500,Belgium - ZONE DE NAMUR,BE
+ABE0600,Belgium - ZONE DE CHARLEROI,BE
+ABE0700,Belgium - ZONE DE TOURNAI,BE
+ABE0800,Belgium - ZONE DE OOSTENDE/BRUGGE/KORTRIJK,BE
+ABE0900,Belgium - ZONE DE GENT,BE
+ABG0000,Bulgaria - ENTIRE COUNTRY (EQ),BG
+ABG0100,Bulgaria - GRAD SOFIYA,BG
+ABG0200,Bulgaria - SOFIYA,BG
+ABG0300,Bulgaria - PERNIK,BG
+ABG0400,Bulgaria - KYUSTENDIL,BG
+ABG0500,Bulgaria - BLAGOEVGRAD,BG
+ABG0600,Bulgaria - PAZARDZHIK,BG
+ABG0700,Bulgaria - SMOLYAN,BG
+ABG0800,Bulgaria - PLOVDIV,BG
+ABG0900,Bulgaria - KURDZAHLI,BG
+ABG1000,Bulgaria - KHASKOVO,BG
+ABG1100,Bulgaria - STARA ZAGORA,BG
+ABG1200,Bulgaria - SLIVEN,BG
+ABG1300,Bulgaria - YAMBOL,BG
+ABG1400,Bulgaria - BURGAS,BG
+ABG1500,Bulgaria - VARNA,BG
+ABG1600,Bulgaria - TOLBUKIN,BG
+ABG1700,Bulgaria - SHUMEN,BG
+ABG1800,Bulgaria - SILISTRA,BG
+ABG1900,Bulgaria - RAZGRAD,BG
+ABG2000,Bulgaria - TURGOVISHTE,BG
+ABG2100,Bulgaria - RUSE,BG
+ABG2200,Bulgaria - TURNOVO,BG
+ABG2300,Bulgaria - GABROVO,BG
+ABG2400,Bulgaria - LOVECH,BG
+ABG2500,Bulgaria - PLEVEN,BG
+ABG2600,Bulgaria - VRATSA,BG
+ABG2700,Bulgaria - MIKHAYLOVGRAD,BG
+ABG2800,Bulgaria - VIDIN,BG
+ACH0000,Switzerland - ENTIRE COUNTRY(EQ),CH
+ACH0100,Switzerland - AARGAU,CH
+ACH0200,Switzerland - APPENZELL A.,CH
+ACH0400,Switzerland - BASEL(LAND),CH
+ACH0500,Switzerland - BASEL(STADT),CH
+ACH0600,Switzerland - BERN,CH
+ACH0700,Switzerland - FREIBURG,CH
+ACH0800,Switzerland - GENF,CH
+ACH0900,Switzerland - GLARUS,CH
+ACH1000,Switzerland - GRAUBUNDEN,CH
+ACH1100,Switzerland - JURA,CH
+ACH1200,Switzerland - LUZERN,CH
+ACH1300,Switzerland - NEUENBURG,CH
+ACH1400,Switzerland - NIDWALDEN,CH
+ACH1500,Switzerland - OBWALDEN,CH
+ACH1600,Switzerland - SCHAFFHAUSEN,CH
+ACH1700,Switzerland - SCHWYZ,CH
+ACH1800,Switzerland - SOLOTHURN,CH
+ACH1900,Switzerland - ST. GALLEN,CH
+ACH2000,Switzerland - TICINO,CH
+ACH2100,Switzerland - THURGAU,CH
+ACH2200,Switzerland - URI,CH
+ACH2300,Switzerland - WAADT,CH
+ACH2400,Switzerland - WALLIS,CH
+ACH2500,Switzerland - ZURICH,CH
+ACH2600,Switzerland - ZUG,CH
+ACY0000,Cyprus - ENTIRE COUNTRY(E.Q),CY
+ACY0100,Cyprus - NICOSIA NORTH & SOUTH,CY
+ACY0200,Cyprus - LIMASSOL,CY
+ACY0300,Cyprus - LARNAKA,CY
+ACY0400,Cyprus - PAPHOS,CY
+ACY0500,Cyprus - FAMAGUSTA,CY
+ACY0600,Cyprus - KYRENIA,CY
+ACZ9800,Czechia - ENTIRE COUNTRY (FLOOD),CZ
+ADE0000,Germany - ENTIRE COUNTRY (EQ),DE
+ADK0000,Denmark - ENTIRE COUNTRY(E.Q),DK
+ADK0100,Denmark - JYLLAND NORTH,DK
+ADK0200,Denmark - JYLLAND WEST,DK
+ADK0300,Denmark - JYLLAND EAST,DK
+ADK0400,Denmark - JYLLAND SOUTHWEST,DK
+ADK0500,Denmark - JYLLAND SOUTHEAST,DK
+ADK0600,Denmark - FYN,DK
+ADK0700,Denmark - SJAELLAND WEST,DK
+ADK0800,"Denmark - SJAELLAN SOUTHEAST,LOLLAND,FALSTER,MON",DK
+ADK0900,Denmark - FREDERIKSBORG AMT,DK
+ADK1000,Denmark - KOBENHAVN,DK
+ADK1100,Denmark - BORNHOLM,DK
+ADK9800,Denmark - ENTIRE COUNTRY(FLOOD),DK
+AEE9900,Estonia - ENTIRE COUNTRY (WINDSTORM),EE
+AES0000,Spain - ENTIRE COUNTRY,ES
+AFI0000,Finland - ENTIRE COUNTRY,FI
+AFI9900,Finland - ENTIRE COUNTRY(WINDSTORM),FI
+AFR0000,France - ENTIRE COUNTRY(E.Q),FR
+AFR0100,France - AIN,FR
+AFR0200,France - AISNE,FR
+AFR0300,France - ALLIER,FR
+AFR0400,France - ALPES(DE HTE-PROV.),FR
+AFR0500,France - ALPES(HAUTES),FR
+AFR0600,France - ALPES-MARITIMES,FR
+AFR0700,France - ARDECHE,FR
+AFR0800,France - ARDENNES,FR
+AFR0900,France - ARIEGE,FR
+AFR1000,France - AUBE,FR
+AFR1100,France - AUDE,FR
+AFR1200,France - AVEYRON,FR
+AFR1300,France - BOUCHES-DU-RHONE,FR
+AFR1400,France - CALVADOS,FR
+AFR1500,France - CANTAL,FR
+AFR1600,France - CHARENTE,FR
+AFR1700,France - CHARENTE-MARITIME,FR
+AFR1800,France - CHER,FR
+AFR1900,France - CORREZE,FR
+AFR2000,France - CORSE,FR
+AFR2100,France - COTE-D'OR,FR
+AFR2200,France - COTES-D'ARMOR,FR
+AFR2300,France - CREUSE,FR
+AFR2400,France - DORDOGNE,FR
+AFR2500,France - DOUBS,FR
+AFR2600,France - DROME,FR
+AFR2700,France - EURE,FR
+AFR2800,France - EURE-ET-LOIRE,FR
+AFR2900,France - FINISTERE,FR
+AFR3000,France - GARD,FR
+AFR3100,France - GARONNE(HAUTE),FR
+AFR3200,France - GERS,FR
+AFR3300,France - GIRONDE,FR
+AFR3400,France - HERAULT,FR
+AFR3500,France - ILLE-ET-VILAINE,FR
+AFR3600,France - INDRE,FR
+AFR3700,France - INDRE-ET-LOIRE,FR
+AFR3800,France - ISERE,FR
+AFR3900,France - JURA,FR
+AFR4000,France - LANDES,FR
+AFR4100,France - LOIR-ET-CHER,FR
+AFR4200,France - LOIRE,FR
+AFR4300,France - LOIRE(HAUTE),FR
+AFR4400,France - LOIRE-ATLANTIQUE,FR
+AFR4500,France - LOIRET,FR
+AFR4600,France - LOT,FR
+AFR4700,France - LOT-ET-GARONNE,FR
+AFR4800,France - LOZERE,FR
+AFR4900,France - MAINE-ET-LOIRE,FR
+AFR5000,France - MANCHE,FR
+AFR5100,France - MARNE,FR
+AFR5200,France - MARNE(HAUTE),FR
+AFR5300,France - MAYENNE,FR
+AFR5400,France - MEURTHE-ET-MOSELLE,FR
+AFR5500,France - MEUSE,FR
+AFR5600,France - MORBIHAN,FR
+AFR5700,France - MOSELLE,FR
+AFR5800,France - NIEVRE,FR
+AFR5900,France - NORD,FR
+AFR6000,France - OISE,FR
+AFR6100,France - ORNE,FR
+AFR6200,France - PAS-DE-CALAIS,FR
+AFR6300,France - PUY-DE-DOME,FR
+AFR6400,France - PYRENEES-ALTANTIQUE,FR
+AFR6500,France - PYRENEES(HAUTES),FR
+AFR6600,France - PYRENEES-ORIENTALES,FR
+AFR6700,France - RHIN(BAS),FR
+AFR6800,France - RHIN(HAUTE),FR
+AFR6900,France - RHONE,FR
+AFR7000,France - SAONE(HAUTE),FR
+AFR7100,France - SAONE-ET-LOIRE,FR
+AFR7200,France - SARTHE,FR
+AFR7300,France - SAVOIE,FR
+AFR7400,France - SAVOIE(HAUTE),FR
+AFR7500,France - PARIS(VILLE DE),FR
+AFR7600,France - SEINE-MARITIME,FR
+AFR7700,France - SEINE-ET-MARNE,FR
+AFR7800,France - YVELINES,FR
+AFR7900,France - SEVRES(DEUX),FR
+AFR8000,France - SOMME,FR
+AFR8100,France - TARN,FR
+AFR8200,France - TARN-ET-GARONNE,FR
+AFR8300,France - VAR,FR
+AFR8400,France - VAUCLUSE,FR
+AFR8500,France - VENDEE,FR
+AFR8600,France - VIENNE,FR
+AFR8700,France - VIENNE(HAUTE),FR
+AFR8800,France - VOSGES,FR
+AFR8900,France - YONNE,FR
+AFR9000,France - BELFORT(TERRITOIRE DE),FR
+AFR9100,France - ESSONNE,FR
+AFR9200,France - HAUTS-DE-SEINE,FR
+AFR9300,France - SEINE-SAINT-DENIS,FR
+AFR9400,France - VAI-DE-MARNE,FR
+AFR9500,France - VAL-D'OISE,FR
+AGE0000,Georgia - ENTIRE COUNTRY (EQ),GE
+AGI0000,Gibraltar - ENTIRE COUNTRY (EQ),GI
+AGR0000,Greece - ENTIRE COUNTRY(E.Q),GR
+AGR0100,Greece - THRAKI AND ISLAND OF SAMOTHRAKI,GR
+AGR0200,Greece - MAKEDHONIA AND ISLAND OF THASOS,GR
+AGR0300,Greece - CITY OF THESSALONIKI,GR
+AGR0400,Greece - IPIROS AND ISLAND OF KERKIRA,GR
+AGR0500,Greece - THESSALIA (EXCL VOLOS),GR
+AGR0600,Greece - CITY OF VOLOS,GR
+AGR0700,Greece - STEREA ELLAS (EXCL ATHINAI AND PIRAIEVS),GR
+AGR0800,Greece - EVVOIA,GR
+AGR0900,Greece - CITY OF ATHINAI AND PIRAIEVS,GR
+AGR1000,Greece - SOUTHERN IONIAN ISLANDS,GR
+AGR1100,Greece - PELEPONNISOS,GR
+AGR1200,Greece - CITY OF PATRAI,GR
+AGR1300,Greece - VORIAI SPORADHES/LIMNOS/N.SPORADHES,GR
+AGR1400,Greece - KRITI,GR
+AGR1500,Greece - CITY OF IRAKLION,GR
+AGR1600,Greece - RHODES/KOS/SOUTHERN SPORADHES,GR
+AHU0000,Hungary - ENTIRE COUNTRY(EQ),HU
+AHU0100,Hungary - CITY OF BUDAPEST,HU
+AHU0200,Hungary - GYOR-SOPRON,HU
+AHU0300,Hungary - CITY OF GYOR,HU
+AHU0400,Hungary - VAS,HU
+AHU0500,Hungary - ZALA,HU
+AHU0600,Hungary - VESZPREM,HU
+AHU0700,Hungary - SOMOGY,HU
+AHU0800,Hungary - KOMAROM,HU
+AHU0900,Hungary - FEJER,HU
+AHU1000,Hungary - TOLNA,HU
+AHU1100,Hungary - BARANYA,HU
+AHU1200,Hungary - CITY OF PECS,HU
+AHU1300,Hungary - NOGRAD,HU
+AHU1400,Hungary - PEST,HU
+AHU1500,Hungary - BACS-KISKUN,HU
+AHU1600,Hungary - BORSOD-ABAUJ-ZEMPLEN,HU
+AHU1700,Hungary - CITY OF MISKOLC,HU
+AHU1800,Hungary - HEVES,HU
+AHU1900,Hungary - SZOLNOK,HU
+AHU2000,Hungary - CSONGRAD,HU
+AHU2100,Hungary - SZABOLCS-SZATMAR,HU
+AHU2200,Hungary - HADJU-BIHAR,HU
+AHU2300,Hungary - CITY OF DEBRECEN,HU
+AHU2400,Hungary - BEKES,HU
+AIE0000,Ireland - ENTIRE COUNTRY,IE
+AIS0000,Iceland - ENTIRE COUNTRY(EQ),IS
+AIT0000,Italy - ENTIRE COUNTRY(E.Q),IT
+AIT0100,"Italy - PLEMONTE, VALLE D'AOSTA, LIGURIA",IT
+AIT0101,Italy - TORINO,IT
+AIT0200,"Italy - LOMBARDIA, EMILLA-ROMAGNA",IT
+AIT0201,Italy - MILANO,IT
+AIT0202,Italy - BOLOGNA,IT
+AIT0300,"Italy - VENETO,TRENTINO-ALTO ADIGE,FRIULL-VENEZI",IT
+AIT0301,Italy - UDINE E PORDENONE,IT
+AIT0400,Italy - TOSCANA/LAZIO,IT
+AIT0401,Italy - ROMA,IT
+AIT0500,"Italy - MARCHE,UMBRIA,ABRUZZA,MOLISE",IT
+AIT0501,Italy - L'AQULLA,IT
+AIT0600,Italy - PUGLIA,IT
+AIT0601,Italy - FOGGIA,IT
+AIT0700,"Italy - CAMPANIA,BASILICATA,CALABRIA",IT
+AIT0701,Italy - NAPOLI,IT
+AIT0702,Italy - BENEVENTO E AVELLINO,IT
+AIT0703,Italy - POTENZA,IT
+AIT0704,Italy - CATANZARO E REGGIO CALABRIA,IT
+AIT0800,Italy - SICILIA,IT
+AIT0801,Italy - MESSINA E CATANIA,IT
+AIT0802,Italy - SIRACUSA E RAGUSA,IT
+AIT0900,Italy - SARDEGNA,IT
+AKG0000,Kyrgyzstan - ENTIRE COUNTRY (EQ),KG
+ALT9900,Lithuania - ENTIRE COUNTRY (WINDSTORM),LT
+ALU0000,Luxembourg - ENTIRE COUNTRY,LU
+AMC0000,Monaco - ENTIRE COUNTRY (EQ),MC
+AMD0000,Moldova (the Republic of) - ENTIRE COUNTRY (EARTHQUAKE),MD
+AMT0000,Malta - ENTIRE COUNTRY (EQ),MT
+ANL0000,Netherlands - ENTIRE COUNTRY,NL
+ANO0000,Norway - ENTIRE COUNTRY (E.Q. N/A),NO
+APL9800,Poland - ENTIRE COUNTRY (FLOOD),PL
+APT0000,Portugal - ENTIRE COUNTRY(EQ),PT
+APT0100,Portugal - ALOCHETE/LISBOA,PT
+APT0200,Portugal - ALBUFEIRA & SOUTHERN PORTUGAL,PT
+APT0300,Portugal - ABRANTES/LEIRIA/EVORA,PT
+APT0400,Portugal - AGUEDA/ALBERGAIRA-A-VELHA/ANADIA,PT
+APT0500,Portugal - AGUIAR DE BERIA & NORTHERN PORTUGAL,PT
+APT0600,Portugal - AZORES,PT
+APT0700,Portugal - MADEIRA,PT
+ARO0000,Romania - ENTIRE COUNTRY (EQ),RO
+ARO0100,Romania - ALBA,RO
+ARO0200,Romania - ARAD,RO
+ARO0300,Romania - ARGES,RO
+ARO0400,Romania - BACAU,RO
+ARO0500,Romania - BIHOR,RO
+ARO0600,Romania - BISTRITA- NASAUD,RO
+ARO0700,Romania - BOTOSANI,RO
+ARO0800,Romania - BRAILA,RO
+ARO0900,Romania - BRASOV,RO
+ARO1000,Romania - BUZAU,RO
+ARO1100,Romania - CARAS-SEVERIN,RO
+ARO1200,Romania - CALARASI,RO
+ARO1300,Romania - CULJ,RO
+ARO1400,Romania - CONSTANTA,RO
+ARO1500,Romania - COVASNA,RO
+ARO1600,Romania - DIMBOVITA,RO
+ARO1700,Romania - DOLJ,RO
+ARO1800,Romania - GALATI,RO
+ARO1900,Romania - GIURGIU,RO
+ARO2000,Romania - GORJ,RO
+ARO2100,Romania - HARGITA,RO
+ARO2200,Romania - HUNEDOARA,RO
+ARO2300,Romania - IALOMITA,RO
+ARO2400,Romania - IASI,RO
+ARO2500,Romania - MAREMURES,RO
+ARO2600,Romania - MEHEDINTI,RO
+ARO2700,Romania - MURES,RO
+ARO2800,Romania - NEAMT,RO
+ARO2900,Romania - OLT,RO
+ARO3000,Romania - PROHOVA,RO
+ARO3100,Romania - SALAJ,RO
+ARO3200,Romania - SATU MARE,RO
+ARO3300,Romania - SIBIU,RO
+ARO3400,Romania - SUCEAVA,RO
+ARO3500,Romania - TELEORMAN,RO
+ARO3600,Romania - TIMIS,RO
+ARO3700,Romania - TULCEA,RO
+ARO3800,Romania - VASLUI,RO
+ARO3900,Romania - VILCEA,RO
+ARO4000,Romania - VRANCEA,RO
+ARO4100,Romania - BUCURESTI,RO
+ARU0000,Russian Federation - ENTIRE COUNTRY (EQ),RU
+ASE0000,Sweden - ENTIRE COUNTRY(E.Q. ),SE
+ASE0100,Sweden - STOCKHOLMS/UPASALA/SODERMAN,SE
+ASE0200,Sweden - KALMAR/OSTERGOTLANDS/OLAND/GOTLAND,SE
+ASE0300,Sweden - GOTEBORGS/BOHUS/HALLANDS/KRISTLANSTADS,SE
+ASE0400,Sweden - ALVSBORGS/SKARABORGS/JONKOPINGS/KRONOBER,SE
+ASE0500,Sweden - GAVLEBORGS/VASTER NORRLANDS/NORRBOTTENS,SE
+ASK9800,Slovakia - ENTIRE COUNTRY (FLOOD),SK
+ATM0000,Turkmenistan - ENTIRE COUNTRY (EQ),TM
+AUA9800,Ukraine - ENTIRE COUNTRY (FLOOD),UA
+AUZ0000,Uzbekistan - ENTIRE COUNTRY (EQ),UZ
+AYU0000,Mayotte - ENTIRE COUNTRY (EQ),YT
+BCA0000,Canada - ENTIRE COUNTRY(EQ),CA
+BCA0100,"Canada - RICHMOND, FRASER DELTA",CA
+BCA0200,Canada - REST OF GREATER VANCOUVER,CA
+BCA0300,Canada - VICTORIA,CA
+BCA0400,Canada - REST OF VANCOUVER EARTHQUAKE ZONE,CA
+BCA0500,Canada - MONTREAL,CA
+BCA0600,Canada - GREATER MONTREAL,CA
+BCA0700,Canada - SURROUNDINGS OF MONTREAL,CA
+BCA0800,Canada - REST OF MONTREAL EARTHQUAKE ZONE,CA
+BCA0900,Canada - QUEBEC CITY AND EPICENTRAL REGION,CA
+BCA1000,Canada - REST OF QUEBEC EARTHQUAKE ZONE,CA
+BCA1100,Canada - BRITISH COLUMBIA,CA
+BCA1200,Canada - ALBERTA,CA
+BCA1300,Canada - SASKATCHEWAN,CA
+BCA1400,Canada - MANITOBA,CA
+BCA1500,Canada - ONTARIO,CA
+BCA1600,Canada - QUEBEC,CA
+BCA1700,Canada - MARITIME PROVINCES,CA
+BCA1800,Canada - NEWFOUNDLAND,CA
+BCA1900,Canada - YUKON TERITORY,CA
+BCA2000,Canada - NORTHWEST TERITORIES,CA
+BUS0000,United States of America - ENTIRE COUNTRY(EQ),US
+BUS0100,United States of America - CALIFORNIA - ZONE A1,US
+BUS0200,United States of America - CALIFORNIA - ZONE A2,US
+BUS0300,United States of America - CALIFORNIA - ZONE A3,US
+BUS0400,United States of America - CALIFORNIA - ZONE A4,US
+BUS0500,United States of America - CALIFORNIA - ZONE B1,US
+BUS0600,United States of America - CALIFORNIA - ZONE B2,US
+BUS0700,United States of America - CALIFORNIA - ZONE C,US
+BUS0800,United States of America - CALIFORNIA - ZONE D,US
+BUS0900,United States of America - CALIFORNIA - ZONE E,US
+BUS1000,United States of America - CALIFORNIA - ZONE F,US
+BUS1100,United States of America - CALIFORNIA - ZONE G,US
+BUS1200,United States of America - CALIFORNIA - ZONE H,US
+BUS9900,United States of America - ENTIRE COUNTRY(WINDSTORM),US
+CAG0000,Antigua and Barbuda - ENTIRE COUNTRY(EQ),AG
+CAG0100,Antigua and Barbuda - SAINT JOHNS,AG
+CAG0200,Antigua and Barbuda - REST OF ANTIGUA,AG
+CAI0000,Anguilla - ENTIRE COUNTRY (EQ),AI
+CAW0000,Aruba - ENTIRE COUNTRY (EQ),AW
+CBB0000,Barbados - ENTIRE COUNTRY(EQ),BB
+CBB0100,Barbados - GREATER BRIDGETOWN,BB
+CBB0300,Barbados - REMAINDER OF BARBADOS,BB
+CBM9900,Bermuda - ENTIRE COUNTRY (WINDSTORM),BM
+CBS0000,Bahamas - ENTIRE COUNTRY,BS
+CBZ0000,Belize - ENTIRE COUNTRY (EQ),BZ
+CCR0000,Costa Rica - ENTIRE COUNTRY(EQ),CR
+CCR0100,Costa Rica - PROV DE SAN JOSE,CR
+CCR0200,Costa Rica - PROV DE ALAJUELA,CR
+CCR0300,Costa Rica - PROV DE CARTAGO,CR
+CCR0400,Costa Rica - PROV DE HEREDIA,CR
+CCR0500,Costa Rica - PROV DE GUANACASTE,CR
+CCR0600,Costa Rica - PROV DE PUNTARENAS,CR
+CCR0700,Costa Rica - PROV DE LIMON,CR
+CCU9900,Cuba - ENTIRE COUNTRY(WINDSTORM),CU
+CDO0000,Dominican Republic - ENTIRE COUNTRY(EQ),DO
+CDO0100,Dominican Republic - PEDERNALES SOUTH WEST,DO
+CDO0200,Dominican Republic - SAN CRISTOBAL & THE SOUTH EAST,DO
+CDO0300,Dominican Republic - SAMANA & THE NORTH,DO
+CDO0400,Dominican Republic - SANCHEZ RAMIREZ AND THE MIDLANDS,DO
+CDO0500,Dominican Republic - DISTRITO NACIONAL (INCL SANTO DOMINGO),DO
+CGD9900,Grenada - ENTIRE COUNTRY (WINDSTORM),GD
+CGT0000,Guatemala - ENTIRE COUNTRY(EQ),GT
+CGT0100,Guatemala - GUATEMALA CITY,GT
+CGT0200,Guatemala - DEPARTAMENTO DE GUATEMALA,GT
+CGT0300,Guatemala - COSTA PACIFICA,GT
+CGT0301,Guatemala - SAN MARCOS,GT
+CGT0302,Guatemala - QUEZITENANGO,GT
+CGT0303,Guatemala - RETALHULEU,GT
+CGT0304,Guatemala - SOLOLA,GT
+CGT0305,Guatemala - SUCHITEPEQUEZ,GT
+CGT0306,Guatemala - ESCUINTLA,GT
+CGT0307,Guatemala - SANTA ROSA,GT
+CGT0308,Guatemala - JUTIAPA,GT
+CGT0309,Guatemala - CHIMALTENANGO,GT
+CGT0310,Guatemala - SACATEPEQUEZ,GT
+CGT0400,Guatemala - OTROS DEPARTAMENTOS,GT
+CGT0401,Guatemala - TOTONICAPAN,GT
+CGT0402,Guatemala - ELQUICHE,GT
+CGT0403,Guatemala - BAJA VERAPAZ,GT
+CGT0404,Guatemala - ALTA VERAPAZ,GT
+CGT0405,Guatemala - EL PROGRESCO,GT
+CGT0406,Guatemala - JALAPA,GT
+CGT0407,Guatemala - ZACAPA,GT
+CGT0408,Guatemala - IZABAL,GT
+CGT0409,Guatemala - EL PETEN,GT
+CGT0410,Guatemala - CHIQUIMULA,GT
+CGT0411,Guatemala - HUEHUETENANGO,GT
+CHN0000,Honduras - ENTIRE COUNTRY(EQ),HN
+CHN0100,Honduras - DISTRITO CENTRAL INCL. TEGUCIGALPA,HN
+CHN0200,Honduras - DEPTO FRANCISCO MORAZAN,HN
+CHN0300,Honduras - DEPTO. CORTES,HN
+CHN0400,Honduras - DEPTO. VALLE,HN
+CHN0500,Honduras - DEPTO. CHOLUTECA,HN
+CHN0600,Honduras - DEMAS DEPARTAMENTOS DE HONHURAS,HN
+CHT0000,Haiti - ENTIRE COUNTRY (EQ),HT
+CJM0000,Jamaica - ENTIRE COUNTRY(EQ),JM
+CJM0100,Jamaica - KINGSTONE WATERFRONT & NEWPORT AREA,JM
+CJM0200,Jamaica - KINGSTON DOWNTOWN,JM
+CJM0300,Jamaica - REST OF KINGSTON & ST. ANDREW,JM
+CJM0400,Jamaica - MONTEGO BAY,JM
+CJM0500,Jamaica - REST OF JAMAICA,JM
+CKY9900,Cayman Islands - ENTIRE COUNTRY (WINDSTORM),KY
+CLC9900,Saint Lucia - ENTIRE COUNTRY (WINDSTORM),LC
+CMS0000,Montserrat - ENTIRE COUNTRY (EQ),MS
+CMX0000,Mexico - ENTIRE COUNTRY(EQ),MX
+CMX0100,Mexico - DISTRITO FEDERAL (ZONA E),MX
+CMX0200,Mexico - DISTRITO FEDERAL (ZONA F),MX
+CMX0500,Mexico - ESTADO DE MEXICO,MX
+CMX0600,Mexico - TOTAL VALLE DE MEXICO,MX
+CMX0700,Mexico - ACAPULCO ZONE I,MX
+CMX0800,Mexico - ACAPULCO ZONE J,MX
+CMX0900,Mexico - MORELOS,MX
+CMX1000,Mexico - BAJA CALIFORNIA,MX
+CMX1100,Mexico - JALISCO,MX
+CMX1200,Mexico - MICHOACAN,MX
+CMX1300,Mexico - PUEBLA,MX
+CMX1400,Mexico - TLAXCALA,MX
+CMX1500,Mexico - VERACRUZ NORTE,MX
+CMX1600,Mexico - VERACRUZ SUR,MX
+CMX1700,Mexico - TABASCO,MX
+CMX1800,Mexico - CHIAPAS Y OAXACA,MX
+CMX1900,Mexico - RESTA DE LA REPUBLICA,MX
+CMX3a00,Mexico - DISTRITO FEDERAL (ZONA G),MX
+CMX4a00,Mexico - DISTRITO FEDERAL (ZONA H),MX
+CNI0000,Nicaragua - ENTIRE COUNTRY(EQ),NI
+CNI0100,Nicaragua - MANAGUA,NI
+CNI0200,Nicaragua - RESTO DEL PAIS,NI
+CPA0000,Panama - ENTIRE COUNTRY(EQ),PA
+CPA0100,Panama - PROVINCIA DE PANAMA,PA
+CPA0200,"Panama - COLON, ZONA LIBRE",PA
+CPA0300,"Panama - COLON, ZONA LIBRE NUEVA",PA
+CPA0400,Panama - RESTO DE LA PROVINCA DE COLON,PA
+CPA0500,Panama - PERLAS Y OTRAS ISLANDS,PA
+CPA0600,Panama - PROVINCIA OESTA/BOCAS DEL TORO/CHIRIQUI,PA
+CPA0700,Panama - PROVINCIA ESTE/DARIEN/COMARCO/SAN BLAS,PA
+CPR0000,Puerto Rico - ENTIRE COUNTRY(EQ),PR
+CPR0100,Puerto Rico - SAN JUAN ANTIGUO/SANTURCE/RIO PIEDRAS,PR
+CPR0200,Puerto Rico - ISLA GRANDE/CONDADO/CAROLINA,PR
+CPR0300,Puerto Rico - TRUJILLO ALTO/CAGUAS/BAYAMON/CATANO,PR
+CPR0400,Puerto Rico - PONCE,PR
+CPR0500,Puerto Rico - MAYAGUEZ,PR
+CTT0000,Trinidad and Tobago - ENTIRE COUNTRY(EQ),TT
+CTT0100,Trinidad and Tobago - GREATER PORT OF SPAIN,TT
+CTT0102,Trinidad and Tobago - DIEGO MARTIN,TT
+CTT0103,Trinidad and Tobago - ST. ANNES,TT
+CTT0104,Trinidad and Tobago - TACARIGUA,TT
+CTT0105,Trinidad and Tobago - ARIMA,TT
+CTT0200,Trinidad and Tobago - REST OF TRINIDAD,TT
+CTT0300,Trinidad and Tobago - TOBAGO,TT
+DAU0000,Australia - ENTIRE COUNTRY(EQ),AU
+DAU0100,Australia - BRISBANE,AU
+DAU0500,Australia - GLADSTONE/ROCKHAMPTON,AU
+DAU0700,Australia - MACKAY,AU
+DAU0900,Australia - TOWNSVILLE,AU
+DAU1100,Australia - CAIRNS,AU
+DAU1600,Australia - DARWIN,AU
+DAU1900,Australia - DAMPIER/PORT HEADLAND,AU
+DAU2300,Australia - PERTH,AU
+DAU2600,Australia - ADELAIDE,AU
+DAU2900,Australia - TASMANIA,AU
+DAU3200,Australia - MELBOURNE,AU
+DAU4100,Australia - WOLLONGONG,AU
+DAU4200,Australia - SIDNEY (REST OF SIDNEY),AU
+DAU4300,Australia - SIDNEY (NORTHERN SUBURBS),AU
+DAU4400,Australia - SIDNEY (WESTERN SUBURBS),AU
+DAU4500,Australia - SIDNEY (SOUTHERN SUBURBS),AU
+DAU4700,Australia - NEWCASTLE,AU
+DNZ0000,New Zealand - ENTIRE COUNTRY(EQ),NZ
+DNZ0100,New Zealand - NORTHLAND,NZ
+DNZ0200,New Zealand - AUCKLAND,NZ
+DNZ0300,New Zealand - WAIKATO,NZ
+DNZ0400,New Zealand - BAY OF PLENTY,NZ
+DNZ0500,New Zealand - TARANAKI,NZ
+DNZ0600,New Zealand - EAST COAST,NZ
+DNZ0700,New Zealand - MANAWATU,NZ
+DNZ0800,New Zealand - HAWKES BAY,NZ
+DNZ0900,New Zealand - WAIRARAPA,NZ
+DNZ1000,New Zealand - WELLINGTON,NZ
+DNZ1100,New Zealand - NELSON,NZ
+DNZ1200,New Zealand - MARLBOROUGH,NZ
+DNZ1300,New Zealand - CANTERBURY,NZ
+DNZ1400,New Zealand - WESTLAND,NZ
+DNZ1500,New Zealand - OTAGO,NZ
+DNZ1600,New Zealand - SOUTHLAND,NZ
+DNZ1700,New Zealand - PACIFIC ISLANDS,NZ
+DNZ1800,New Zealand - FLOATER,NZ
+XAN0000,Armenia - ENTIRE COUNTRY(EQ),AM
+XAN0101,Armenia - ARUBA,AM
+XAN0201,Armenia - CURACAO,AM
+XAN0301,Armenia - BONAIRE,AM
+XAN0401,Armenia - SABA,AM
+XAN0501,Armenia - ST. EUSTATIUS,AM
+XAN0601,Armenia - ST. MARTIN,AM
+XAR0000,Argentina - ENTIRE COUNTRY(EQ),AR
+XAR0101,Argentina - GUYO AREA,AR
+XAR0102,Argentina - MENDOZA,AR
+XAR0103,Argentina - SAN JUAN,AR
+XAR0104,Argentina - RIOJA,AR
+XAR0105,Argentina - CATAMARCA,AR
+XAR0201,Argentina - SALTA,AR
+XAR0202,Argentina - JUJUY,AR
+XAR0203,Argentina - NEUQUEN,AR
+XAR0301,Argentina - TUCUMAN,AR
+XAR0302,Argentina - CORDOBA,AR
+XAR0303,Argentina - SAN LUIS,AR
+XAR0304,Argentina - TIERRA DEL FUEGO,AR
+XAR0401,Argentina - SANTIAGE DEL ESTERO,AR
+XAR0402,Argentina - MINISIONES,AR
+XAR0403,Argentina - RIO NEGRO,AR
+XAR0404,Argentina - CHUBUT,AR
+XAR0405,Argentina - SANTA CRUZ,AR
+XAR0501,Argentina - BUENOS AIRES,AR
+XAR0502,Argentina - SANTE FE,AR
+XAR0503,Argentina - ENTRE RIOS,AR
+XAR0504,Argentina - LE PAMPA,AR
+XAR0505,Argentina - CHACO,AR
+XAR0506,Argentina - FORMOSA,AR
+XAR0507,Argentina - CORRIENTES,AR
+XBO9800,Bolivia - ENTIRE COUNTRY (FLOOD),BO
+XBR0000,Brazil - ENTIRE COUNTRY,BR
+XCL0000,Chile - ENTIRE COUNTRY(EQ),CL
+XCL0100,Chile - NORTE,CL
+XCL0101,Chile - TARAPACA,CL
+XCL0102,Chile - ANTOFAGASTA,CL
+XCL0103,Chile - ATACAMA,CL
+XCL0104,Chile - COQUIMBO,CL
+XCL0200,Chile - VALPARAISO/ACONCAGUA,CL
+XCL0300,Chile - SANTIAGO,CL
+XCL0400,Chile - CENTRALES,CL
+XCL0401,Chile - O'HIGGINS,CL
+XCL0402,Chile - COLCHAGUA,CL
+XCL0403,Chile - CURICO,CL
+XCL0404,Chile - TALCA,CL
+XCL0405,Chile - MAULE,CL
+XCL0406,Chile - LINARES,CL
+XCL0407,Chile - NUBLE,CL
+XCL0408,Chile - CONCEPCION,CL
+XCL0409,Chile - BIO-BIO,CL
+XCL0410,Chile - ARAUCO,CL
+XCL0500,Chile - AUSTRALES,CL
+XCL0501,Chile - MALLECO,CL
+XCL0502,Chile - CAUTIN,CL
+XCL0503,Chile - VALDIVIA,CL
+XCL0504,Chile - OSORNO,CL
+XCL0505,Chile - LLANQUIHUE,CL
+XCL0506,Chile - CHILOE,CL
+XCL0507,Chile - AISEN,CL
+XCL0508,Chile - MAGLLANESE,CL
+XCL0509,Chile - TIERRA DEL FUEGO,CL
+XCL0510,Chile - ANTARCTICA CHILENA,CL
+XCO0000,Colombia - ENTIRE COUNTRY(EQ),CO
+XCO0100,Colombia - CUNDINAMARCA,CO
+XCO0200,Colombia - CALDAS/QUINDIO/RISARALDA,CO
+XCO0300,Colombia - TOLIMA,CO
+XCO0400,Colombia - VALLE,CO
+XCO0500,Colombia - HUILA/CAUCA/NARINO,CO
+XCO0600,Colombia - PUTUMAYO/CAQUETA/META/CASANARE/VICHADA,CO
+XCO0700,Colombia - BOYACA/ACAUCA/SANTANDER/NORTE DE SANTAND,CO
+XCO0800,Colombia - MAGDALENA/BOLIVAR/ATLANTICO/SUCRE/CORDOB,CO
+XCO0900,Colombia - ANTIOQUIA/CHOCO,CO
+XEC0000,Ecuador - ENTIRE COUNTRY(EQ),EC
+XEC0100,Ecuador - GUAYAS,EC
+XEC0200,Ecuador - PICHINCHA,EC
+XEC0300,Ecuador - RESTO DEL PAIS,EC
+XGP9900,Guadeloupe - ENTIRE COUNTRY (WINDSTORM),GP
+XIL0000,Israel - ENTIRE COUNTRY ( EQ ).,IL
+XKN0100,Saint Kitts and Nevis - NEVIS-ANGU - BASSETERRE,KN
+XKN0200,Saint Kitts and Nevis - NEVIS-ANGU - REST OF ST. KITTS,KN
+XKN0300,Saint Kitts and Nevis - NEVIS-ANGU - NEVIS,KN
+XKN0400,Saint Kitts and Nevis - NEVIS-ANGU - ANGUILLA,KN
+XKN9900,Saint Kitts and Nevis - NEVIS-ANGU - ENTIRE COUNTRY(WINDSTORM),KN
+XPE0000,Peru - ENTIRE COUNTRY(EQ),PE
+XPE0100,Peru - VENTANILLA,PE
+XPE0102,Peru - CALLAO,PE
+XPE0103,Peru - CARMEN DE LA LEGUA,PE
+XPE0104,Peru - BELLAVISTA,PE
+XPE0105,Peru - LA PERLA,PE
+XPE0200,Peru - SAN MARTIN DE PORRAS,PE
+XPE0202,Peru - LIMA,PE
+XPE0203,Peru - SAN MIGUEL,PE
+XPE0204,Peru - MAGDALENA DEL MAR,PE
+XPE0205,Peru - JESUS MARIA,PE
+XPE0206,Peru - PUEBLO LIBRE,PE
+XPE0207,Peru - BRENA,PE
+XPE0208,Peru - LA VICTORIA,PE
+XPE0209,Peru - SAN LUIS,PE
+XPE0300,Peru - LINCE,PE
+XPE0302,Peru - SAN ISIDRO,PE
+XPE0303,Peru - MIRAFLORES,PE
+XPE0400,Peru - EL AUGUSTINO,PE
+XPE0402,Peru - ATE,PE
+XPE0500,"Peru - BARRANCO,CHORRILLOS,REST OF THE CITY",PE
+XPE0600,Peru - TUMBES,PE
+XPE0602,Peru - PIURA,PE
+XPE0603,Peru - LAMBAYEQUE,PE
+XPE0700,Peru - CAJAMARCA,PE
+XPE0702,Peru - LA LIBERTAD,PE
+XPE0800,Peru - LORETO,PE
+XPE0802,Peru - AMAZONAS,PE
+XPE0803,Peru - SAN MARTINS,PE
+XPE0804,Peru - HUANUCO,PE
+XPE0805,Peru - UCAYALI,PE
+XPE0806,Peru - MADRE DE DIOS,PE
+XPE0807,Peru - CUZ00,PE
+XPE0808,Peru - PUNO,PE
+XPE0900,Peru - ANCASH,PE
+XPE1000,Peru - PASCO,PE
+XPE1002,Peru - JUNIN,PE
+XPE1003,Peru - HUANCAVELICA,PE
+XPE1004,Peru - AYACUCHO,PE
+XPE1005,Peru - APURIMAC,PE
+XPE1100,Peru - ICA,PE
+XPE1200,Peru - AREQUIPA,PE
+XPE1202,Peru - MOQUEGUA,PE
+XPE1203,Peru - TACNA,PE
+XPY9800,Paraguay - ENTIRE COUNTRY (FLOOD),PY
+XSV0000,El Salvador - ENTIRE COUNTRY(EQ),SV
+XSV0100,El Salvador - DEPARTAMENTO DE SAN SALVADOR,SV
+XSV0200,El Salvador - RESTO DEL PAIS,SV
+XUY9800,Uruguay - ENTIRE COUNTRY (FLOOD),UY
+XVE0000,Venezuela - ENTIRE COUNTRY(EQ),VE
+XVE0100,Venezuela - COUNTRY CLUB/CHACAO/LA CARLOTA,VE
+XVE0200,Venezuela - COTIZA/AVILA/PETARE/EL ROSAL/LA VEGA,VE
+XVE0300,Venezuela - RESTO DEL VALLE DE CARACAS,VE
+XVE0400,Venezuela - DPTO. VARGAS,VE
+XVE0500,Venezuela - DTOS. GUAICAIPURO/PLAZA/ZAMORA/LANDER,VE
+XVE0600,Venezuela - MARACAY,VE
+XVE0700,Venezuela - VALENCIA,VE
+XVE0800,Venezuela - RESTO DE REGION CENTRO - NORTE COSTERA,VE
+XVE0900,Venezuela - BARQUISIMENTO,VE
+XVE1000,Venezuela - RESTO DE REGION CENTRO - OCCIDENTAL,VE
+XVE1100,Venezuela - SAN CRISTOBAL,VE
+XVE1200,Venezuela - RESTO DE REGION DE LOS ANDES,VE
+XVE1300,Venezuela - MARACAIBO,VE
+XVE1400,Venezuela - RESTO DE REGION ZULIANA,VE
+XVE1500,Venezuela - RESTO DE REGION DE LOS LLANOS CENTRALES,VE
+XVE1600,Venezuela - REGION INSULAR,VE
+XVE1700,Venezuela - REGION NOR - ORIENTAL,VE
+XVE1800,Venezuela - CIUDAD BOLIVAR Y CIUDAD GUYANA,VE
+XVE1900,Venezuela - RESTO DE REGION GUAYANA Y REGION SUR,VE
+XVI9900,Virgin Islands (U.S.) - ENTIRE COUNTRY (WINDSTORM),VI
