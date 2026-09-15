@@ -1,7 +1,26 @@
 SELECT
-    COALESCE(rd.external_code,rd.CODE)              AS LSTP_BK,
-    UPPER(rd.NAME)              AS LSTP_NAME,
-    CAST(CASE WHEN rd.IS_ACTIVE       = 'Y' THEN 1 ELSE 0 END AS BIT) AS LSTP_IS_ACTIVE    
-FROM SICS.REFERENCE_DATA AS rd
-WHERE rd.SUBCLASS = 523
-ORDER BY rd.CODE;
+    er.OBJECT_ID,
+    er.SUBCLASS,                    -- day / period / year rate subtype
+    pc.ISO_ALPHA          AS primary_ccy,
+    sc.ISO_ALPHA          AS secondary_ccy,
+    er.FRK_CATEGORY       AS rate_category,   -- ref data table 202, e.g. Period End Rate
+    er.RATE,
+    er.FACTOR,
+    er.IS_FOREIGN_IN_PRIM,
+    er.PRIMARY_UNITS,
+    er.SECONDARY_UNITS,
+    er.RATE_DATE,                   -- populated for day rates
+    er.RATE_YEAR,                   -- populated for year/period rates
+    er.FRK_PERIOD,                  -- booking period (ref data table 10)
+    er.FRK_PERIOD_SET,              -- months / quarters (ref data table 12)
+    er.ORIGIN                       -- P = provisional YE, D = daily, space = none
+FROM dbo.EXCHANGE_RATE er
+LEFT JOIN dbo.CNU_CURRENCY pc
+       ON pc.OBJECT_ID = er.FK_PRIM_CURRENCY
+LEFT JOIN dbo.CNU_CURRENCY sc
+       ON sc.OBJECT_ID = er.FK_SCNDRY_CURRENCY
+ORDER BY
+    er.RATE_DATE DESC,
+    er.RATE_YEAR DESC,
+    pc.ISO_ALPHA,
+    sc.ISO_ALPHA;
