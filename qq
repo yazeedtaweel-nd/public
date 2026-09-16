@@ -1,7 +1,67 @@
-IF COL_LENGTH(N'audit.ETL_PACKAGE_TABLE_EXECUTION', N'ROWS_REJECTED') IS NULL
-BEGIN
-    ALTER TABLE audit.ETL_PACKAGE_TABLE_EXECUTION
-        ADD ROWS_REJECTED BIGINT NULL
-            CONSTRAINT DF_ETL_PACKAGE_TABLE_EXEC_ROWS_REJECTED DEFAULT (0);
-END
+USE [SaudiRe_DW]
 GO
+/****** Object:  StoredProcedure [audit].[usp_LogPackageTableExecution]    Script Date: 16/09/2026 2:34:15 AM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+ALTER   PROCEDURE [audit].[usp_LogPackageTableExecution]
+(
+    @PackageName    NVARCHAR(128),
+    @TableName      NVARCHAR(128),
+    @RowsRead       BIGINT = NULL,
+    @RowsInserted   BIGINT = NULL,
+    @RowsUpdated    BIGINT = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    SET LOCK_TIMEOUT 8000;
+
+    DECLARE @PackageId INT;
+    DECLARE @PackageTableId INT;
+    DECLARE @ExecId BIGINT;
+
+    SET @PackageName = LTRIM(RTRIM(ISNULL(@PackageName, N'')));
+    SET @TableName = LTRIM(RTRIM(ISNULL(@TableName, N'')));
+
+    IF @PackageName = N''
+        THROW 50001, N'usp_LogPackageTableExecution: @PackageName is required.', 1;
+
+    IF @TableName = N''
+        THROW 50002, N'usp_LogPackageTableExecution: @TableName is required.', 1;
+
+    SELECT @PackageId = p.PACKAGE_ID
+    FROM audit.ETL_PACKAGE AS p
+    WHERE p.PACKAGE_NAME = @PackageName
+      AND p.IS_ENABLED = 1;
+
+    IF @PackageId IS NULL
+        THROW 50003, N'usp_LogPackageTableExecution: package not found or disabled in audit.ETL_PACKAGE.', 1;
+
+    SELECT TOP (1)
+        @ExecId = e.EXECUTION_ID
+    FROM audit.ETL_PACKAGE_EXECUTION AS e WITH (READCOMMITTEDLOCK)
+    WHERE e.PACKAGE_ID = @PackageId
+    ORDER BY e.EXECUTION_ID DESC;
+
+    IF @ExecId IS NULL
+        THROW 50004, N'usp_LogPackageTableExecution: no RUNNING execution for this package (Agent_Run must open ETL_PACKAGE_EXECUTION first).', 1;
+
+    SELECT TOP (1)
+        @PackageTableId = pt.PACKAGE_TABLE_ID
+    FROM audit.ETL_PACKAGE_TABLE AS pt
+    WHERE pt.PACKAGE_ID = @PackageId
+      AND pt.TABLE_NAME = @TableName
+      AND pt.IS_ENABLED = 1;
+
+    IF @PackageTableId IS NULL
+        THROW 50005, N'usp_LogPackageTableExecution: table not found or disabled for this package.', 1;
+
+    INSERT INTO audit.ETL_PACKAGE_TABLE_EXECUTION
+        (EXECUTION_ID, PACKAGE_TABLE_ID, ROWS_READ, ROWS_INSERTED, ROWS_UPDATED)
+    VALUES
+        (@ExecId, @PackageTableId, @RowsRead, @RowsInserted, @RowsUpdated);
+END;
