@@ -1,83 +1,195 @@
-USE [SaudiRe_DW]
-GO
+DECLARE @ContractNumber nvarchar(50) = N'PUT_BUSINESS_IDENTIFIER_HERE';
 
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
+SELECT
+    b.IDENTIFIER                            AS POLICY_CONTRACT_NUMBER,
+    CAST(
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
+            LTRIM(RTRIM(ip.BUS_INS_PER_ID))
+        ) AS nvarchar(50)
+    )                                       AS POLICY_BK,
+    bsr.IS_CURRENT_LCP,
+    bsr.IS_CURRENT_AM,
+    bsr.SEQUENCE_NUMBER                     AS LCP_SEQ,
+    am.AMNDMNT_NMBR,
+    am.IS_AMND_COMP,
+    am.IS_ACTIVE,
+    am.IS_AMD_REOPENED,
+    am.AMND_COMP_DATE,
+    am_user.USER_ID                         AS AMENDMENT_CHECKED_BY,
+    lcp.IS_CONT_REG_COMP,
+    lcp.REG_COMP_DATE,
+    lcp_user.USER_ID                        AS LCP_CHECKED_BY,
+    ip.CREATE_TIMESTAMP                     AS POLICY_ENTRY_DATE_FROM_IP
+FROM SICS.BUS_STRUCT_REP AS bsr
+INNER JOIN SICS.BUSINESS AS b
+    ON b.OBJECT_ID = bsr.FK_BUSINESS
+INNER JOIN SICS.INSURED_PERIOD AS ip
+    ON ip.OBJECT_ID = bsr.FK_INS_PERIOD
+LEFT JOIN SICS.AMENDMENT AS am
+    ON am.OBJECT_ID = bsr.FK_AMENDMENT
+LEFT JOIN SICS.LIFE_CYCLE_PHASE AS lcp
+    ON lcp.OBJECT_ID = bsr.FK_LC_PHASE
+LEFT JOIN SICS.CNU_USER AS am_user
+    ON am_user.OBJECT_ID = am.FK_AMND_COMP_USER
+LEFT JOIN SICS.CNU_USER AS lcp_user
+    ON lcp_user.OBJECT_ID = lcp.FK_REG_COMP_USER
+WHERE b.IDENTIFIER = @ContractNumber
+ORDER BY ip.CREATE_TIMESTAMP, bsr.SEQUENCE_NUMBER, am.AMNDMNT_NMBR;
 
-ALTER PROCEDURE [audit].[usp_LogPackageTableExecution]
-(
-    @PackageName    NVARCHAR(128),
-    @TableName      NVARCHAR(128),
-    @RowsRead       BIGINT = NULL,
-    @RowsInserted   BIGINT = NULL,
-    @RowsUpdated    BIGINT = NULL,
-    @RejectedRow    BIGINT = NULL
+
+
+
+
+
+
+
+/* ============================================================
+   DIM_POLICY investigation
+   POLICY_CHECKED_BY  +  POLICY_ENTRY_DATE
+   Schema: SICS  (change to dbo if that is your database)
+   ============================================================ */
+
+DECLARE @ContractNumber nvarchar(50) = N'PUT_BUSINESS_IDENTIFIER_HERE';  -- BUSINESS.IDENTIFIER
+DECLARE @PolicyBk       nvarchar(50) = NULL;  -- optional: I_PERIOD_FORMER_ID or BUS_INS_PER_ID
+DECLARE @CurrentOnly    char(1)      = 'Y';   -- Y = same filter as DFT POLICY extract
+
+;WITH policy_spine AS (
+    SELECT
+        b.OBJECT_ID              AS BUSINESS_OID,
+        b.IDENTIFIER             AS POLICY_CONTRACT_NUMBER,
+        b.SUBCLASS               AS BUSINESS_SUBCLASS,
+        CASE
+            WHEN b.SUBCLASS = 6 THEN N'I'
+            WHEN b.SUBCLASS IN (3, 8, 11) THEN N'O'
+            ELSE N'?'
+        END                      AS POLICY_BUSINESS_INDICATOR,
+        ip.OBJECT_ID             AS INSURED_PERIOD_OID,
+        ip.I_PERIOD_FORMER_ID,
+        ip.BUS_INS_PER_ID,
+        CAST(
+            COALESCE(
+                NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
+                LTRIM(RTRIM(ip.BUS_INS_PER_ID))
+            ) AS nvarchar(50)
+        )                        AS POLICY_BK,
+        ip.IP_TITLE,
+        ip.CREATE_TIMESTAMP      AS IP_CREATE_TIMESTAMP,          -- POLICY_ENTRY_DATE candidate
+        ip.CHANGED_DATE          AS IP_CHANGED_DATE,
+        ip.FK_CHANGED_BY         AS IP_FK_CHANGED_BY,
+        bsr.OBJECT_ID            AS BSR_OID,
+        bsr.FK_INS_PERIOD,
+        bsr.FK_LC_PHASE,
+        bsr.FK_AMENDMENT,
+        bsr.SEQUENCE_NUMBER      AS POLICY_LAST_VERSION_NO,
+        bsr.IS_CURRENT_LCP,
+        bsr.IS_CURRENT_AM,
+        bsr.INSRD_PERIOD_START,
+        bsr.INSRD_PERIOD_END,
+        am.OBJECT_ID             AS AMENDMENT_OID,
+        am.AMNDMNT_NMBR,
+        am.EXTN_NUMBER,
+        am.IS_EXTENSION,
+        am.IS_ACTIVE             AS AM_IS_ACTIVE,
+        am.IS_AMND_COMP,
+        am.IS_AMD_REOPENED,
+        am.AMND_COMP_DATE,                                        -- POLICY_CHECKED_DATE candidate
+        am.FK_AMND_COMP_USER,                                     -- POLICY_CHECKED_BY candidate 1
+        am.FK_UNDERWRITER,
+        lcp.OBJECT_ID            AS LCP_OID,
+        lcp.SEQUENCE_NUMBER      AS LCP_SEQUENCE_NUMBER,
+        lcp.IS_CONT_REG_COMP,
+        lcp.REG_COMP_DATE,                                        -- POLICY_CHECKED_DATE alt
+        lcp.FK_REG_COMP_USER                                      -- POLICY_CHECKED_BY candidate 2
+    FROM SICS.BUS_STRUCT_REP AS bsr
+    INNER JOIN SICS.BUSINESS AS b
+        ON b.OBJECT_ID = bsr.FK_BUSINESS
+    INNER JOIN SICS.INSURED_PERIOD AS ip
+        ON ip.OBJECT_ID = bsr.FK_INS_PERIOD
+    LEFT JOIN SICS.AMENDMENT AS am
+        ON am.OBJECT_ID = bsr.FK_AMENDMENT
+    LEFT JOIN SICS.LIFE_CYCLE_PHASE AS lcp
+        ON lcp.OBJECT_ID = bsr.FK_LC_PHASE
+    WHERE (
+            @ContractNumber IS NULL
+            OR b.IDENTIFIER = @ContractNumber
+          )
+      AND (
+            @PolicyBk IS NULL
+            OR COALESCE(
+                   NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
+                   LTRIM(RTRIM(ip.BUS_INS_PER_ID))
+               ) = @PolicyBk
+          )
+      AND (
+            @CurrentOnly <> 'Y'
+            OR (
+                   bsr.IS_CURRENT_LCP = N'Y'
+               AND bsr.IS_CURRENT_AM  = N'Y'
+               )
+          )
 )
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-    SET LOCK_TIMEOUT 8000;
+SELECT
+    s.POLICY_CONTRACT_NUMBER,
+    s.POLICY_BK,
+    s.POLICY_BUSINESS_INDICATOR,
+    s.BUSINESS_SUBCLASS,
+    s.IP_TITLE,
+    s.INSRD_PERIOD_START,
+    s.INSRD_PERIOD_END,
+    s.IS_CURRENT_LCP,
+    s.IS_CURRENT_AM,
+    s.POLICY_LAST_VERSION_NO,
+    s.AMNDMNT_NMBR                          AS POLICY_END_NO_CANDIDATE,
+    s.INSURED_PERIOD_OID,
+    s.AMENDMENT_OID,
+    s.LCP_OID,
 
-    DECLARE @PackageId INT;
-    DECLARE @PackageTableId INT;
-    DECLARE @ExecId BIGINT;
+    /* ---------- POLICY_ENTRY_DATE ---------- */
+    s.IP_CREATE_TIMESTAMP                   AS POLICY_ENTRY_DATE_FROM_IP,      -- agreed primary
+    aud_ip.CREATED_WHEN                     AS POLICY_ENTRY_DATE_FROM_IP_AUDIT, -- alt
+    aud_bus.CREATED_WHEN                    AS POLICY_ENTRY_DATE_FROM_BUS_AUDIT,
+    aud_ip.PARENT_CLASS                     AS IP_AUDIT_PARENT_CLASS,
+    aud_bus.PARENT_CLASS                    AS BUS_AUDIT_PARENT_CLASS,
 
-    SET @PackageName = LTRIM(RTRIM(ISNULL(@PackageName, N'')));
-    SET @TableName = LTRIM(RTRIM(ISNULL(@TableName, N'')));
+    /* ---------- POLICY_CHECKED_BY / DATE ---------- */
+    s.IS_AMND_COMP,
+    s.AMND_COMP_DATE                        AS POLICY_CHECKED_DATE_FROM_AMENDMENT,
+    am_user.USER_ID                         AS POLICY_CHECKED_BY_FROM_AMENDMENT,     -- candidate 1
+    LTRIM(RTRIM(CONCAT(am_user.FIRSTNAME, N' ', am_user.LASTNAME)))
+                                            AS POLICY_CHECKED_BY_AM_NAME,
+    s.IS_CONT_REG_COMP,
+    s.REG_COMP_DATE                         AS POLICY_CHECKED_DATE_FROM_LCP,
+    lcp_user.USER_ID                        AS POLICY_CHECKED_BY_FROM_LCP,           -- candidate 2
+    LTRIM(RTRIM(CONCAT(lcp_user.FIRSTNAME, N' ', lcp_user.LASTNAME)))
+                                            AS POLICY_CHECKED_BY_LCP_NAME,
 
-    IF @PackageName = N''
-        THROW 50001, N'usp_LogPackageTableExecution: @PackageName is required.', 1;
-
-    IF @TableName = N''
-        THROW 50002, N'usp_LogPackageTableExecution: @TableName is required.', 1;
-
-    SELECT @PackageId = p.PACKAGE_ID
-    FROM audit.ETL_PACKAGE AS p
-    WHERE p.PACKAGE_NAME = @PackageName
-      AND p.IS_ENABLED = 1;
-
-    IF @PackageId IS NULL
-        THROW 50003, N'usp_LogPackageTableExecution: package not found or disabled in audit.ETL_PACKAGE.', 1;
-
-    SELECT TOP (1)
-        @ExecId = e.EXECUTION_ID
-    FROM audit.ETL_PACKAGE_EXECUTION AS e WITH (READCOMMITTEDLOCK)
-    WHERE e.PACKAGE_ID = @PackageId
-    ORDER BY e.EXECUTION_ID DESC;
-
-    IF @ExecId IS NULL
-        THROW 50004, N'usp_LogPackageTableExecution: no RUNNING execution for this package (Agent_Run must open ETL_PACKAGE_EXECUTION first).', 1;
-
-    SELECT TOP (1)
-        @PackageTableId = pt.PACKAGE_TABLE_ID
-    FROM audit.ETL_PACKAGE_TABLE AS pt
-    WHERE pt.PACKAGE_ID = @PackageId
-      AND pt.TABLE_NAME = @TableName
-      AND pt.IS_ENABLED = 1;
-
-    IF @PackageTableId IS NULL
-        THROW 50005, N'usp_LogPackageTableExecution: table not found or disabled for this package.', 1;
-
-    INSERT INTO audit.ETL_PACKAGE_TABLE_EXECUTION
-        (
-            EXECUTION_ID,
-            PACKAGE_TABLE_ID,
-            ROWS_READ,
-            ROWS_INSERTED,
-            ROWS_UPDATED,
-            RejectedRow
-        )
-    VALUES
-        (
-            @ExecId,
-            @PackageTableId,
-            @RowsRead,
-            @RowsInserted,
-            @RowsUpdated,
-            COALESCE(@RejectedRow, 0)
-        );
-END;
-GO
+    /* context: who created / last changed the period */
+    ip_chg.USER_ID                          AS PERIOD_CHANGED_BY,
+    aud_ip_user.USER_ID                     AS PERIOD_ENTERED_BY_FROM_AUDIT,
+    aud_bus_user.USER_ID                    AS BUSINESS_ENTERED_BY_FROM_AUDIT,
+    s.IP_CHANGED_DATE
+FROM policy_spine AS s
+OUTER APPLY (
+    SELECT TOP (1) a.CREATED_WHEN, a.FK_CREATED_BY, a.PARENT_CLASS
+    FROM SICS.BASE_AUDIT AS a
+    WHERE a.FK_PARENT = s.INSURED_PERIOD_OID
+    ORDER BY a.CREATED_WHEN
+) AS aud_ip
+OUTER APPLY (
+    SELECT TOP (1) a.CREATED_WHEN, a.FK_CREATED_BY, a.PARENT_CLASS
+    FROM SICS.BASE_AUDIT AS a
+    WHERE a.FK_PARENT = s.BUSINESS_OID
+    ORDER BY a.CREATED_WHEN
+) AS aud_bus
+LEFT JOIN SICS.CNU_USER AS am_user
+    ON am_user.OBJECT_ID = s.FK_AMND_COMP_USER
+LEFT JOIN SICS.CNU_USER AS lcp_user
+    ON lcp_user.OBJECT_ID = s.FK_REG_COMP_USER
+LEFT JOIN SICS.CNU_USER AS ip_chg
+    ON ip_chg.OBJECT_ID = s.IP_FK_CHANGED_BY
+LEFT JOIN SICS.CNU_USER AS aud_ip_user
+    ON aud_ip_user.OBJECT_ID = aud_ip.FK_CREATED_BY
+LEFT JOIN SICS.CNU_USER AS aud_bus_user
+    ON aud_bus_user.OBJECT_ID = aud_bus.FK_CREATED_BY
+ORDER BY s.POLICY_CONTRACT_NUMBER, s.POLICY_BK;
