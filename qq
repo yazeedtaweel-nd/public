@@ -1,26 +1,28 @@
-DECLARE @ContractNumber nvarchar(50) = N'PUT_BUSINESS_IDENTIFIER_HERE';
+DECLARE @BusinessOid nvarchar(32) = N'PASTE_BUSINESS_OBJECT_ID_HERE';
+DECLARE @CurrentOnly char(1)      = 'N';  -- N first, so historic BSR rows also show
 
 SELECT
-    b.IDENTIFIER                            AS POLICY_CONTRACT_NUMBER,
-    CAST(
-        COALESCE(
-            NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
-            LTRIM(RTRIM(ip.BUS_INS_PER_ID))
-        ) AS nvarchar(50)
-    )                                       AS POLICY_BK,
+    b.OBJECT_ID                         AS BUSINESS_OID,
+    b.IDENTIFIER                        AS POLICY_CONTRACT_NUMBER,
+    b.SUBCLASS,
+    ip.OBJECT_ID                        AS INSURED_PERIOD_OID,
+    ip.FK_BUSINESS,
+    ip.I_PERIOD_FORMER_ID,
+    ip.BUS_INS_PER_ID,
+    ip.CREATE_TIMESTAMP                 AS POLICY_ENTRY_DATE_FROM_IP,
+    ip.CHANGED_DATE,
     bsr.IS_CURRENT_LCP,
     bsr.IS_CURRENT_AM,
-    bsr.SEQUENCE_NUMBER                     AS LCP_SEQ,
+    bsr.SEQUENCE_NUMBER,
+    bsr.INSRD_PERIOD_START,
+    bsr.INSRD_PERIOD_END,
     am.AMNDMNT_NMBR,
     am.IS_AMND_COMP,
-    am.IS_ACTIVE,
-    am.IS_AMD_REOPENED,
     am.AMND_COMP_DATE,
-    am_user.USER_ID                         AS AMENDMENT_CHECKED_BY,
+    am_user.USER_ID                     AS POLICY_CHECKED_BY_FROM_AMENDMENT,
     lcp.IS_CONT_REG_COMP,
     lcp.REG_COMP_DATE,
-    lcp_user.USER_ID                        AS LCP_CHECKED_BY,
-    ip.CREATE_TIMESTAMP                     AS POLICY_ENTRY_DATE_FROM_IP
+    lcp_user.USER_ID                    AS POLICY_CHECKED_BY_FROM_LCP
 FROM SICS.BUS_STRUCT_REP AS bsr
 INNER JOIN SICS.BUSINESS AS b
     ON b.OBJECT_ID = bsr.FK_BUSINESS
@@ -34,162 +36,9 @@ LEFT JOIN SICS.CNU_USER AS am_user
     ON am_user.OBJECT_ID = am.FK_AMND_COMP_USER
 LEFT JOIN SICS.CNU_USER AS lcp_user
     ON lcp_user.OBJECT_ID = lcp.FK_REG_COMP_USER
-WHERE b.IDENTIFIER = @ContractNumber
-ORDER BY ip.CREATE_TIMESTAMP, bsr.SEQUENCE_NUMBER, am.AMNDMNT_NMBR;
-
-
-
-
-
-
-
-
-/* ============================================================
-   DIM_POLICY investigation
-   POLICY_CHECKED_BY  +  POLICY_ENTRY_DATE
-   Schema: SICS  (change to dbo if that is your database)
-   ============================================================ */
-
-DECLARE @ContractNumber nvarchar(50) = N'PUT_BUSINESS_IDENTIFIER_HERE';  -- BUSINESS.IDENTIFIER
-DECLARE @PolicyBk       nvarchar(50) = NULL;  -- optional: I_PERIOD_FORMER_ID or BUS_INS_PER_ID
-DECLARE @CurrentOnly    char(1)      = 'Y';   -- Y = same filter as DFT POLICY extract
-
-;WITH policy_spine AS (
-    SELECT
-        b.OBJECT_ID              AS BUSINESS_OID,
-        b.IDENTIFIER             AS POLICY_CONTRACT_NUMBER,
-        b.SUBCLASS               AS BUSINESS_SUBCLASS,
-        CASE
-            WHEN b.SUBCLASS = 6 THEN N'I'
-            WHEN b.SUBCLASS IN (3, 8, 11) THEN N'O'
-            ELSE N'?'
-        END                      AS POLICY_BUSINESS_INDICATOR,
-        ip.OBJECT_ID             AS INSURED_PERIOD_OID,
-        ip.I_PERIOD_FORMER_ID,
-        ip.BUS_INS_PER_ID,
-        CAST(
-            COALESCE(
-                NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
-                LTRIM(RTRIM(ip.BUS_INS_PER_ID))
-            ) AS nvarchar(50)
-        )                        AS POLICY_BK,
-        ip.IP_TITLE,
-        ip.CREATE_TIMESTAMP      AS IP_CREATE_TIMESTAMP,          -- POLICY_ENTRY_DATE candidate
-        ip.CHANGED_DATE          AS IP_CHANGED_DATE,
-        ip.FK_CHANGED_BY         AS IP_FK_CHANGED_BY,
-        bsr.OBJECT_ID            AS BSR_OID,
-        bsr.FK_INS_PERIOD,
-        bsr.FK_LC_PHASE,
-        bsr.FK_AMENDMENT,
-        bsr.SEQUENCE_NUMBER      AS POLICY_LAST_VERSION_NO,
-        bsr.IS_CURRENT_LCP,
-        bsr.IS_CURRENT_AM,
-        bsr.INSRD_PERIOD_START,
-        bsr.INSRD_PERIOD_END,
-        am.OBJECT_ID             AS AMENDMENT_OID,
-        am.AMNDMNT_NMBR,
-        am.EXTN_NUMBER,
-        am.IS_EXTENSION,
-        am.IS_ACTIVE             AS AM_IS_ACTIVE,
-        am.IS_AMND_COMP,
-        am.IS_AMD_REOPENED,
-        am.AMND_COMP_DATE,                                        -- POLICY_CHECKED_DATE candidate
-        am.FK_AMND_COMP_USER,                                     -- POLICY_CHECKED_BY candidate 1
-        am.FK_UNDERWRITER,
-        lcp.OBJECT_ID            AS LCP_OID,
-        lcp.SEQUENCE_NUMBER      AS LCP_SEQUENCE_NUMBER,
-        lcp.IS_CONT_REG_COMP,
-        lcp.REG_COMP_DATE,                                        -- POLICY_CHECKED_DATE alt
-        lcp.FK_REG_COMP_USER                                      -- POLICY_CHECKED_BY candidate 2
-    FROM SICS.BUS_STRUCT_REP AS bsr
-    INNER JOIN SICS.BUSINESS AS b
-        ON b.OBJECT_ID = bsr.FK_BUSINESS
-    INNER JOIN SICS.INSURED_PERIOD AS ip
-        ON ip.OBJECT_ID = bsr.FK_INS_PERIOD
-    LEFT JOIN SICS.AMENDMENT AS am
-        ON am.OBJECT_ID = bsr.FK_AMENDMENT
-    LEFT JOIN SICS.LIFE_CYCLE_PHASE AS lcp
-        ON lcp.OBJECT_ID = bsr.FK_LC_PHASE
-    WHERE (
-            @ContractNumber IS NULL
-            OR b.IDENTIFIER = @ContractNumber
-          )
-      AND (
-            @PolicyBk IS NULL
-            OR COALESCE(
-                   NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
-                   LTRIM(RTRIM(ip.BUS_INS_PER_ID))
-               ) = @PolicyBk
-          )
-      AND (
-            @CurrentOnly <> 'Y'
-            OR (
-                   bsr.IS_CURRENT_LCP = N'Y'
-               AND bsr.IS_CURRENT_AM  = N'Y'
-               )
-          )
-)
-SELECT
-    s.POLICY_CONTRACT_NUMBER,
-    s.POLICY_BK,
-    s.POLICY_BUSINESS_INDICATOR,
-    s.BUSINESS_SUBCLASS,
-    s.IP_TITLE,
-    s.INSRD_PERIOD_START,
-    s.INSRD_PERIOD_END,
-    s.IS_CURRENT_LCP,
-    s.IS_CURRENT_AM,
-    s.POLICY_LAST_VERSION_NO,
-    s.AMNDMNT_NMBR                          AS POLICY_END_NO_CANDIDATE,
-    s.INSURED_PERIOD_OID,
-    s.AMENDMENT_OID,
-    s.LCP_OID,
-
-    /* ---------- POLICY_ENTRY_DATE ---------- */
-    s.IP_CREATE_TIMESTAMP                   AS POLICY_ENTRY_DATE_FROM_IP,      -- agreed primary
-    aud_ip.CREATED_WHEN                     AS POLICY_ENTRY_DATE_FROM_IP_AUDIT, -- alt
-    aud_bus.CREATED_WHEN                    AS POLICY_ENTRY_DATE_FROM_BUS_AUDIT,
-    aud_ip.PARENT_CLASS                     AS IP_AUDIT_PARENT_CLASS,
-    aud_bus.PARENT_CLASS                    AS BUS_AUDIT_PARENT_CLASS,
-
-    /* ---------- POLICY_CHECKED_BY / DATE ---------- */
-    s.IS_AMND_COMP,
-    s.AMND_COMP_DATE                        AS POLICY_CHECKED_DATE_FROM_AMENDMENT,
-    am_user.USER_ID                         AS POLICY_CHECKED_BY_FROM_AMENDMENT,     -- candidate 1
-    LTRIM(RTRIM(CONCAT(am_user.FIRSTNAME, N' ', am_user.LASTNAME)))
-                                            AS POLICY_CHECKED_BY_AM_NAME,
-    s.IS_CONT_REG_COMP,
-    s.REG_COMP_DATE                         AS POLICY_CHECKED_DATE_FROM_LCP,
-    lcp_user.USER_ID                        AS POLICY_CHECKED_BY_FROM_LCP,           -- candidate 2
-    LTRIM(RTRIM(CONCAT(lcp_user.FIRSTNAME, N' ', lcp_user.LASTNAME)))
-                                            AS POLICY_CHECKED_BY_LCP_NAME,
-
-    /* context: who created / last changed the period */
-    ip_chg.USER_ID                          AS PERIOD_CHANGED_BY,
-    aud_ip_user.USER_ID                     AS PERIOD_ENTERED_BY_FROM_AUDIT,
-    aud_bus_user.USER_ID                    AS BUSINESS_ENTERED_BY_FROM_AUDIT,
-    s.IP_CHANGED_DATE
-FROM policy_spine AS s
-OUTER APPLY (
-    SELECT TOP (1) a.CREATED_WHEN, a.FK_CREATED_BY, a.PARENT_CLASS
-    FROM SICS.BASE_AUDIT AS a
-    WHERE a.FK_PARENT = s.INSURED_PERIOD_OID
-    ORDER BY a.CREATED_WHEN
-) AS aud_ip
-OUTER APPLY (
-    SELECT TOP (1) a.CREATED_WHEN, a.FK_CREATED_BY, a.PARENT_CLASS
-    FROM SICS.BASE_AUDIT AS a
-    WHERE a.FK_PARENT = s.BUSINESS_OID
-    ORDER BY a.CREATED_WHEN
-) AS aud_bus
-LEFT JOIN SICS.CNU_USER AS am_user
-    ON am_user.OBJECT_ID = s.FK_AMND_COMP_USER
-LEFT JOIN SICS.CNU_USER AS lcp_user
-    ON lcp_user.OBJECT_ID = s.FK_REG_COMP_USER
-LEFT JOIN SICS.CNU_USER AS ip_chg
-    ON ip_chg.OBJECT_ID = s.IP_FK_CHANGED_BY
-LEFT JOIN SICS.CNU_USER AS aud_ip_user
-    ON aud_ip_user.OBJECT_ID = aud_ip.FK_CREATED_BY
-LEFT JOIN SICS.CNU_USER AS aud_bus_user
-    ON aud_bus_user.OBJECT_ID = aud_bus.FK_CREATED_BY
-ORDER BY s.POLICY_CONTRACT_NUMBER, s.POLICY_BK;
+WHERE b.OBJECT_ID = @BusinessOid
+  AND (
+        @CurrentOnly <> 'Y'
+        OR (bsr.IS_CURRENT_LCP = N'Y' AND bsr.IS_CURRENT_AM = N'Y')
+      )
+ORDER BY ip.CREATE_TIMESTAMP, bsr.SEQUENCE_NUMBER;
