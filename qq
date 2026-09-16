@@ -1,18 +1,19 @@
 USE [SaudiRe_DW]
 GO
-/****** Object:  StoredProcedure [audit].[usp_LogPackageTableExecution]    Script Date: 16/09/2026 2:34:15 AM ******/
+
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 
-ALTER   PROCEDURE [audit].[usp_LogPackageTableExecution]
+ALTER PROCEDURE [audit].[usp_LogPackageTableExecution]
 (
     @PackageName    NVARCHAR(128),
     @TableName      NVARCHAR(128),
     @RowsRead       BIGINT = NULL,
     @RowsInserted   BIGINT = NULL,
-    @RowsUpdated    BIGINT = NULL
+    @RowsUpdated    BIGINT = NULL,
+    @RejectedRow    BIGINT = NULL
 )
 AS
 BEGIN
@@ -61,7 +62,22 @@ BEGIN
         THROW 50005, N'usp_LogPackageTableExecution: table not found or disabled for this package.', 1;
 
     INSERT INTO audit.ETL_PACKAGE_TABLE_EXECUTION
-        (EXECUTION_ID, PACKAGE_TABLE_ID, ROWS_READ, ROWS_INSERTED, ROWS_UPDATED)
+        (
+            EXECUTION_ID,
+            PACKAGE_TABLE_ID,
+            ROWS_READ,
+            ROWS_INSERTED,
+            ROWS_UPDATED,
+            RejectedRow
+        )
     VALUES
-        (@ExecId, @PackageTableId, @RowsRead, @RowsInserted, @RowsUpdated);
+        (
+            @ExecId,
+            @PackageTableId,
+            @RowsRead,
+            @RowsInserted,
+            @RowsUpdated,
+            COALESCE(@RejectedRow, 0)
+        );
 END;
+GO
