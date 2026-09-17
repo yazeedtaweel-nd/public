@@ -1,3 +1,6 @@
+`FRK_OCCUPATION` is a **code**, not `REFERENCE_DATA.OBJECT_ID`. Join on `REFERENCE_DATA.CODE` (and subclass **534**). SICS-only — no DWH, so no `OCC_SRGT` (that key is DW-generated). Use `OCC_BK` instead.
+
+```sql
 SELECT
     CAST(
         COALESCE(
@@ -8,7 +11,6 @@ SELECT
     CAST(CASE WHEN b.SUBCLASS = 6 THEN N'I' ELSE N'O' END AS nvarchar(50)) AS POLICY_BUSINESS_INDICATOR,
     b.IDENTIFIER AS POLICY_CONTRACT_NUMBER,
     CAST(COALESCE(NULLIF(LTRIM(RTRIM(ip.IP_TITLE)), N''), b.TITLE) AS nvarchar(255)) AS POLICY_NAME,
-    occ.OCC_SRGT,
     rd_occ.CODE AS OCC_BK,
     rd_occ.NAME AS OCC_NAME,
     soc.FK_IO,
@@ -37,15 +39,13 @@ LEFT JOIN SICS.IO_ENGINEER AS io_engineer
 LEFT JOIN SICS.IO_ELECTRONIC AS io_electronic
     ON io_electronic.OBJECT_ID = soc.FK_IO
 LEFT JOIN SICS.REFERENCE_DATA AS rd_occ
-    ON rd_occ.OBJECT_ID = COALESCE(
+    ON rd_occ.CODE = COALESCE(
            io_person.FRK_OCCUPATION,
            io_building.FRK_OCCUPATION,
            io_engineer.FRK_ENG_OCC,
            io_electronic.FRK_OCCUPATION
        )
    AND rd_occ.SUBCLASS = 534
-LEFT JOIN SaudiRe_DW.dbo.DIM_OCCUPATION AS occ
-    ON occ.OCC_BK = rd_occ.CODE
 WHERE b.SUBCLASS IN (6, 3, 8, 11)
   AND COALESCE(
         NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
@@ -54,3 +54,4 @@ WHERE b.SUBCLASS IN (6, 3, 8, 11)
   AND bsr.IS_CURRENT_LCP = N'Y'
   AND bsr.IS_CURRENT_AM = N'Y'
 ORDER BY POLICY_BK, POLICY_BUSINESS_INDICATOR;
+```
