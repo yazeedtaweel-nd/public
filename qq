@@ -1,26 +1,40 @@
-/* ============================================================
-   Bootstrap: etl schema + SCHEMA_MIGRATION ledger
-   Run by Apply-Migrations before numbered scripts.
-   Idempotent.
-   ============================================================ */
+DECLARE @BUSINESS_IDENTIFIER nvarchar(50) = N'PUT_IDENTIFIER_HERE';
 
-IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = N'etl')
-    EXEC (N'CREATE SCHEMA etl AUTHORIZATION dbo;');
-GO
-
-IF OBJECT_ID(N'etl.SCHEMA_MIGRATION', N'U') IS NULL
-BEGIN
-    CREATE TABLE etl.SCHEMA_MIGRATION
-    (
-        MIGRATION_ID   INT IDENTITY(1, 1) NOT NULL,
-        SCRIPT_NAME    NVARCHAR(260)      NOT NULL,
-        APPLIED_DATE   DATETIME2(3)       NOT NULL
-            CONSTRAINT DF_SCHEMA_MIGRATION_APPLIED_DATE DEFAULT (SYSUTCDATETIME()),
-        APPLIED_BY     NVARCHAR(128)      NOT NULL
-            CONSTRAINT DF_SCHEMA_MIGRATION_APPLIED_BY   DEFAULT (SUSER_SNAME()),
-
-        CONSTRAINT PK_SCHEMA_MIGRATION PRIMARY KEY CLUSTERED (MIGRATION_ID),
-        CONSTRAINT UQ_SCHEMA_MIGRATION_SCRIPT UNIQUE (SCRIPT_NAME)
-    );
-END
-GO
+SELECT
+    b.IDENTIFIER                         AS BUSINESS_IDENTIFIER,
+    b.SUBCLASS                           AS BUSINESS_SUBCLASS,
+    COALESCE(
+        NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
+        LTRIM(RTRIM(ip.BUS_INS_PER_ID))
+    )                                    AS POLICY_BK,
+    ip.UNDERWR_YEAR,
+    bsr.SEQUENCE_NUMBER                  AS POLICY_LAST_VERSION_NO,
+    bsr.IS_CURRENT_LCP,
+    bsr.IS_CURRENT_AM,
+    soc.NAME                             AS SECTION_NAME,          -- Scope of Cover / Main Section
+    br.FRK_REINST_TYPE                   AS REINSTATEMENT_TYPE,    -- screen: Reinstatements
+    br.IS_CURR_LOSS,                                              -- Currency of Loss vs Premium
+    sng.REINST_NUMBER,                                            -- screen: Number
+    sng.PERCENTAGE                       AS AMOUNT_PCT,            -- screen: Amount %  ← fee candidate
+    sng.EXTRA_PRCTG                      AS TIME_PCT,              -- screen: Time %
+    sng.BROKERAGE                        AS BROKERAGE_PCT,         -- screen: Brokerage %
+    sng.FRK_PAYMENT_RULE,                                         -- screen: Payment Rule
+    sng.FRK_BROKERAGE_TYPE                                        -- screen: Brokerage Type
+FROM SICS.BUSINESS AS b
+INNER JOIN SICS.BUS_STRUCT_REP AS bsr
+    ON bsr.FK_BUSINESS = b.OBJECT_ID
+INNER JOIN SICS.INSURED_PERIOD AS ip
+    ON ip.OBJECT_ID = bsr.FK_INS_PERIOD
+LEFT JOIN SICS.SCOPE_OF_COVER AS soc
+    ON soc.OBJECT_ID = bsr.FK_SOC
+INNER JOIN SICS.BUS_REINSTATEMENT AS br
+    ON br.OBJECT_ID = bsr.FK_PC_REINST
+LEFT JOIN SICS.BUS_SNGL_REINST AS sng
+    ON sng.FK_REINST_COND = br.OBJECT_ID
+WHERE b.IDENTIFIER = @BUSINESS_IDENTIFIER
+  AND bsr.IS_CURRENT_LCP = N'Y'
+  AND bsr.IS_CURRENT_AM  = N'Y'
+ORDER BY
+    ip.UNDERWR_YEAR,
+    soc.NAME,
+    sng.REINST_NUMBER;
