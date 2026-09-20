@@ -11,15 +11,14 @@ SELECT
     bsr.SEQUENCE_NUMBER                  AS POLICY_LAST_VERSION_NO,
     bsr.IS_CURRENT_LCP,
     bsr.IS_CURRENT_AM,
-    soc.NAME                             AS SECTION_NAME,          -- Scope of Cover / Main Section
-    br.FRK_REINST_TYPE                   AS REINSTATEMENT_TYPE,    -- screen: Reinstatements
-    br.IS_CURR_LOSS,                                              -- Currency of Loss vs Premium
-    sng.REINST_NUMBER,                                            -- screen: Number
-    sng.PERCENTAGE                       AS AMOUNT_PCT,            -- screen: Amount %  ← fee candidate
-    sng.EXTRA_PRCTG                      AS TIME_PCT,              -- screen: Time %
-    sng.BROKERAGE                        AS BROKERAGE_PCT,         -- screen: Brokerage %
-    sng.FRK_PAYMENT_RULE,                                         -- screen: Payment Rule
-    sng.FRK_BROKERAGE_TYPE                                        -- screen: Brokerage Type
+    soc.IDENTIFIER                       AS SECTION_IDENTIFIER,
+    soc.UPPER_NAME                       AS SECTION_UPPER_NAME,
+    br.FRK_REINST_TYPE                   AS REINSTATEMENT_TYPE,
+    br.IS_CURR_LOSS,
+    sng.REINST_NUMBER,
+    sng.PERCENTAGE                       AS AMOUNT_PCT,      -- Amount %  ← fee candidate
+    sng.EXTRA_PRCTG                      AS TIME_PCT,        -- Time %
+    sng.BROKERAGE                        AS BROKERAGE_PCT    -- Brokerage %
 FROM SICS.BUSINESS AS b
 INNER JOIN SICS.BUS_STRUCT_REP AS bsr
     ON bsr.FK_BUSINESS = b.OBJECT_ID
@@ -36,5 +35,5 @@ WHERE b.IDENTIFIER = @BUSINESS_IDENTIFIER
   AND bsr.IS_CURRENT_AM  = N'Y'
 ORDER BY
     ip.UNDERWR_YEAR,
-    soc.NAME,
+    soc.IDENTIFIER,
     sng.REINST_NUMBER;
