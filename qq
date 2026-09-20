@@ -1,4 +1,3 @@
-
 DECLARE @BusinessId nvarchar(50) = N'PUT_CONTRACT_ID_HERE';
 
 WITH periods AS (
@@ -8,6 +7,17 @@ WITH periods AS (
         ip.IS_LATEST,
         ip.I_PERIOD_FORMER_ID,
         ip.BUS_INS_PER_ID,
+        CAST(
+            COALESCE(
+                NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
+                CASE
+                    WHEN LEN(LTRIM(RTRIM(ip.BUS_INS_PER_ID))) >= 32
+                     AND LTRIM(RTRIM(ip.BUS_INS_PER_ID)) NOT LIKE N'%[^0-9A-Fa-f]%'
+                    THEN NULL
+                    ELSE NULLIF(LTRIM(RTRIM(ip.BUS_INS_PER_ID)), N'')
+                END
+            ) AS nvarchar(50)
+        ) AS PERIOD_ID,
         CAST(
             COALESCE(
                 NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
@@ -35,6 +45,7 @@ SELECT
     IP_OID,
     I_PERIOD_FORMER_ID,
     BUS_INS_PER_ID,
+    PERIOD_ID,
     POLICY_BK,
     PERIOD_START,
     PERIOD_END,
@@ -47,7 +58,7 @@ SELECT
         WHEN LAG(IP_OID) OVER (ORDER BY PERIOD_START, IP_OID) IS NOT NULL
         THEN N'Y' ELSE N'N'
     END AS POLICY_IS_RENEWAL,
-    LAG(POLICY_BK) OVER (ORDER BY PERIOD_START, IP_OID) AS POLICY_RENEWED_FROM,
-    LEAD(POLICY_BK) OVER (ORDER BY PERIOD_START, IP_OID) AS POLICY_RENEWED_BY
+    LAG(PERIOD_ID) OVER (ORDER BY PERIOD_START, IP_OID) AS POLICY_RENEWED_FROM,
+    LEAD(PERIOD_ID) OVER (ORDER BY PERIOD_START, IP_OID) AS POLICY_RENEWED_BY
 FROM periods
 ORDER BY PERIOD_START, IP_OID;
