@@ -1,19 +1,15 @@
 SELECT
-    ip.I_PERIOD_FORMER_ID,
-    ip.BUS_INS_PER_ID,
-    b.IDENTIFIER                    AS POLICY_CONTRACT_NUMBER,
-    lpc.FK_MAIN_CURRENCY            AS POLICY_CHOSEN_CURRENCY,   -- Main Currency
-    bsr.FK_SOC_CURRENCY             AS SOC_CURRENCY,             -- fallback
-    acc.FK_MAIN_CURR                AS ACCOUNTING_MAIN_CURRENCY, -- admin condition
-    b.FK_FUNCTIONAL_CCY             AS FC1_OVERRIDE,             -- expected NULL
-    b.FK_FUNCTIONAL_CCY2            AS FC2_OVERRIDE              -- expected NULL
+    COALESCE(ip.I_PERIOD_FORMER_ID, ip.BUS_INS_PER_ID) AS POLICY_ID,
+    cc.FRK_CLM_BAS                                     AS LOSB_BK,      -- lookup DIM_LOSS_BASIS on this
+    rd.NAME                                            AS LOSB_NAME
 FROM sics.BUSINESS AS b
 INNER JOIN sics.INSURED_PERIOD AS ip
     ON ip.FK_BUSINESS = b.OBJECT_ID
 INNER JOIN sics.BUS_STRUCT_REP AS bsr
     ON bsr.FK_INS_PERIOD = ip.OBJECT_ID
-LEFT JOIN sics.LPC_LIM_PREM_COND AS lpc
-    ON lpc.OBJECT_ID = bsr.FK_PC_LIM_PREM
-LEFT JOIN sics.BUS_COMMON_ACC AS acc
-    ON acc.OBJECT_ID = bsr.FK_PCLF_ACCOUNTS
-WHERE b.IDENTIFIER = :contract_number;
+LEFT JOIN sics.CLAIM_COND AS cc
+    ON cc.OBJECT_ID = bsr.FK_PC_CLAIM
+LEFT JOIN sics.REFERENCE_DATA AS rd
+    ON  rd.CODE     = cc.FRK_CLM_BAS
+    AND rd.SUBCLASS = 95          -- or: rd.SUBCLASS = cc.FSK_CLM_BAS
+;
