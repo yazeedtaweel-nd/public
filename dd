@@ -6,7 +6,10 @@ WITH CLM_GRP AS (
         c.FRK_CLM_CLASSFCTN                             AS CLAIM_TYPE,
         ISNULL(hl.CLAIM_IDENTIFIER, c.CLAIM_IDENTIFIER) AS CLAIM_GROUP,
         ISNULL(hl.IS_MARKET_LOSS, 'N')                  AS CAT_IND,
-        href.REFERENCE_ID                               AS CLGRP_BK
+        COALESCE(
+            href.REFERENCE_ID,
+            ISNULL(hl.CLAIM_IDENTIFIER, c.CLAIM_IDENTIFIER)
+        )                                               AS CLGRP_BK
     FROM SICS.CLAIMS c
     INNER JOIN SICS.SOC_TO_CLAIM_REL scr
         ON scr.FK_CLAIM = c.OBJECT_ID
