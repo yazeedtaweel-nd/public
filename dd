@@ -5,13 +5,20 @@ WITH CLM_GRP AS (
         c.CLAIM_IDENTIFIER                              AS CLA_BK,
         c.FRK_CLM_CLASSFCTN                             AS CLAIM_TYPE,
         ISNULL(hl.CLAIM_IDENTIFIER, c.CLAIM_IDENTIFIER) AS CLAIM_GROUP,
-        ISNULL(hl.IS_MARKET_LOSS, 'N')                  AS CAT_IND
+        ISNULL(hl.IS_MARKET_LOSS, 'N')                  AS CAT_IND,
+        href.REFERENCE_ID                               AS CLGRP_BK
     FROM SICS.CLAIMS c
     INNER JOIN SICS.SOC_TO_CLAIM_REL scr
         ON scr.FK_CLAIM = c.OBJECT_ID
     LEFT JOIN SICS.CLAIMS hl
         ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
        AND hl.SUBCLASS = 6
+    LEFT JOIN (
+        SELECT FK_PARENT, MIN(REFERENCE_ID) AS REFERENCE_ID
+        FROM SICS.CL_HLOSS_REF
+        GROUP BY FK_PARENT
+    ) href
+        ON href.FK_PARENT = hl.OBJECT_ID
 ),
 CLM_GRP_SMR AS (
     /* empty on this SICS copy until claim worksheets exist */
@@ -31,6 +38,7 @@ CLM_TYP AS (
         cg.CLA_BK,
         cg.CLAIM_TYPE,
         cg.CLAIM_GROUP,
+        cg.CLGRP_BK,
         cg.CAT_IND,
         cs.GROUP_BASE_AMT,
         ISNULL(
@@ -78,7 +86,7 @@ SELECT
     COALESCE(ip.I_PERIOD_FORMER_ID,ip.BUS_INS_PER_ID)       AS POLICY_BK,
 
     /* other dim lookup keys */
-    ct.CLAIM_GROUP                                  AS CLGRP_BK,
+    ct.CLGRP_BK                                     AS CLGRP_BK,
     COALESCE(cs.FRK_STATUS, scr.FRK_STATUS_TYPE)    AS CLST_BK,
     cs.FRK_SUB_STATUS                               AS CLSS_BK,
     ct.CLAIM_TYPE                                   AS CLTP_BK,
@@ -154,4 +162,4 @@ LEFT JOIN (
     GROUP BY bal.FK_CLAIM
 ) mv ON mv.SOC_CLAIM_OID = scr.OBJECT_ID
 
-ORDER BY c.CLAIM_IDENTIFIER, scr.OBJECT_ID
+ORDER BY c.CLAIM_IDENTIFIER, scr.OBJECT_ID;
