@@ -1,15 +1,759 @@
+Field / Value
+Field
+
+Value
+
+SICS Source Table
+
+CLAIMS joined to SOC_TO_CLAIM_REL (SOC_TO_CLAIM_REL.FK_CLAIM = CLAIMS.OBJECT_ID). Live grain is claim–section (OC202210000 returned twice). Current status: CLAIM_STATUS (FK_CLAIM → SOC_TO_CLAIM_REL, IS_CURRENT = 'Y') → REFERENCE_DATA 517 / 518. Cause of loss: CLAIMS.FRK_CAUSE_OF_LOSS → REFERENCE_DATA 523. Group / CAT: CLAIMS.FK_HEADLINE_LOSS → CLAIMS (SUBCLASS = 6), IS_MARKET_LOSS. CLA_SOURCE / CLA_TYPE: legacy SYN rule ported to SICS (FRK_CLM_CLASSFCTN + headline IS_MARKET_LOSS + SUM(AC_LEDGER_DETAIL.EXCH_AMT)). Handler: FK_RES_CL_HDL → CNU_USER. Broker: INSURED_PERIOD.IS_DIRECT / BUSINESS_PRTNR_REL → PARTY. Policy: SOC_TO_CLAIM_REL.FK_SOC → SCOPE_OF_COVER → LIFE_CYCLE_PHASE → INSURED_PERIOD → BUSINESS (join still unconfirmed).
+
+Target DW Table
+
+[SaudiRe_DW].[dbo].[DIM_CLAIM]
+
+Status
+
+Draft — Ready for Team Review
+
+ 
+
+Column Mapping
+DW Column
+
+Sample Value
+
+Likely SICS Source
+
+Confidence
+
+Reasoning
+
+CLA_CLAIM_SRGT
+
+1, 2, 3…
+
+No SICS source — DW-generated identity
+
+None
+
+int identity. SICS PK is UUID CLAIMS.OBJECT_ID.
+
+CLA_BK
+
+IC201910000, OC202210000
+
+CLAIMS.CLAIM_IDENTIFIER
+
+High
+
+Confirmed live. Legacy analogue CLA_UNIFIED_CLAIM_REF.
+
+CLA_DESC
+
+test, Outward claim - occ
+
+CLAIMS.LOSS_NAME; alt SHORT_DESCR
+
+High
+
+Confirmed live on LOSS_NAME.
+
+CLA_BROKER
+
+BPR101 (earlier extract)
+
+CASE WHEN INSURED_PERIOD.IS_DIRECT = 'Y' THEN 'DIRECT' ELSE PARTY.IDENTIFIER END via BUSINESS_PRTNR_REL
+
+Medium
+
+Path returned a party id. Confirm FRK_RELSHIP_TYPE (ref 55) is Broker.
+
+CLA_SOURCE
+
+DW ACC; SICS null
+
+CLAIMS.FRK_CLM_CLASSFCTN → REFERENCE_DATA.CODE (SUBCLASS = 528). Same as legacy CLA_CLAIM_TYPE_CODE
+
+Medium
+
+Synergy maps this 1:1 to claim type code (ACC/NON/NOR/PRO). Live SICS is empty — do not invent. Feeds CLTP_SRGT.
+
+CLA_TYPE
+
+ATT (live); domain CAT/LRG/ATT
+
+Legacy CASE on SICS: ISNULL(CASE WHEN hl.IS_MARKET_LOSS = 'Y' THEN 'CAT' WHEN FRK_CLM_CLASSFCTN = 'ACC' THEN 'ATT' WHEN SUM(EXCH_AMT) < -375000 THEN 'LRG' ELSE 'ATT' END, 'ATT')
+
+High (rule) / Medium (inputs)
+
+Live: no headline, no ACC, no ledger → ATT. Matches DW sample. Amount branch cannot fire until claim worksheets exist.
+
+CLA_STATUS_CODE
+
+Open → DW OPEN
+
+UPPER(REFERENCE_DATA.NAME) where SUBCLASS = 517
+
+High
+
+Confirmed live.
+
+CLA_STATUS
+
+O → DW OP
+
+CLAIM_STATUS.FRK_STATUS 
+
+High
+
+Confirmed live. Code translation 
+
+CLA_HANDLER
+
+N/A (empty in SICS)
+
+CNU_USER.UserID
+
+High
+
+Claim manager field 
+
+CLA_ALT_REF
+
+N/A
+
+CLAIM_REFS.REFERENCE_ID; alt SOC_TO_CLAIM_REL.CL_REF
+
+High
+
+Empty on live rows.
+
+CLA_IS_MOVEMENT
+
+0 / false
+
+1 if claim has any AC_LEDGER_DETAIL; else 0
+
+Medium
+
+Live ledger tables are empty → 0. TO_BE_BOOKED ruled out.
+
+CLA_LOSS_DATE
+
+2026-01-01
+
+CLAIMS.LOSS_START_DT
+
+High
+
+Confirmed live.
+
+CLA_OPEN_DATE
+
+N/A
+
+First CLAIM_STATUS.CHANGE_DATE where 517 name like OPEN%; else 9999-01-01
+
+Medium
+
+Do not filter on 'OP' (SICS code is O).
+
+CLA_REOPEN_DATE
+
+9999-01-01
+
+Latest CHANGE_DATE where 517 name like REOPEN%; else 9999-01-01
+
+Medium
+
+Confirm reopen exists in live 517.
+
+CLA_REPORTED_DATE
+
+2026-08-19
+
+SOC_TO_CLAIM_REL.ADVICE_REC_DATE; alt CLAIM_ADVISED_DT; else 9999-01-01
+
+High
+
+Confirmed live.
+
+CLA_CLOSE_DATE
+
+9999-01-01
+
+Latest CHANGE_DATE where 517 name like CLOS%; else 9999-01-01
+
+Medium
+
+Open claims → sentinel.
+
+CLA_LAST_TRANSACTION
+
+2026-08-19
+
+SOC_TO_CLAIM_REL.LAST_UPDATE_DT
+
+High
+
+Confirmed live.
+
+POLICY_SRGT
+
+DW PK on DIM_POLICY
+
+ETL lookup only. Extract SICS policy natural key, then DIM_POLICY.POLICY_SRGT where DIM_POLICY.POLICY_BK = that key. SICS key (draft DIM_POLICY): preferred INSURED_PERIOD.BUS_INS_PER_ID; alt BUSINESS.IDENTIFIER. Path: SOC_TO_CLAIM_REL.FK_SOC → SCOPE_OF_COVER → LIFE_CYCLE_PHASE → INSURED_PERIOD (FK_BUSINESS → BUSINESS for the alt).
+
+Medium
+
+Confirmed: POLICY_SRGT is not a SICS column. Same pattern as other *_SRGT FKs. Live SOC→LCP join still needs confirmation so the BK is populated. Use IW vs OW DIM_POLICY load to match claim direction (IC* vs OC*).
+
+CLGRP_SRGT
+
+N/A
+
+DW lookup DIM_CLAIM_GROUP on ISNULL(hl.CLAIM_IDENTIFIER, c.CLAIM_IDENTIFIER)
+
+Medium
+
+Live: no headline → group BK = claim BK (IC201910000 / OC202210000). Same as legacy ISNULL(group, claim_ref).
+
+CLST_SRGT
+
+key O
+
+DW lookup DIM_CLAIM_STATUS on current status; translate O→OP
+
+High
+
+Source key confirmed.
+
+CLSS_SRGT
+
+keys NONE, B
+
+DW lookup DIM_CLAIM_SUBSTATUS on CLAIM_STATUS.FRK_SUB_STATUS (518)
+
+High
+
+Confirmed earlier (<None>, Settled - Subrogation…).
+
+CLTP_SRGT
+
+N/A
+
+DW lookup DIM_CLAIM_TYPE on CLA_SOURCE (528 / ACC…)
+
+Medium
+
+Legacy: this dim is the claim type code, not CAT/LRG/ATT. Null source → unknown member.
+
+CLSTP_SRGT
+
+1
+
+DW lookup on derived CLA_TYPE (CAT/LRG/ATT)
+
+Medium
+
+Legacy IND output. Live value ATT.
+
+LSTP_SRGT
+
+keys 108, 93
+
+DW lookup DIM_LOSS_TYPE on CLAIMS.FRK_CAUSE_OF_LOSS (523)
+
+High
+
+Confirmed (Accidental Damage, Aborted Take-Off).
+
+CREATED_DATE_SRGT
+
+20230214
+
+No SICS source — ETL date-dim conversion
+
+None
+
+Load-date key.
+
+UPDATED_DATE_SRGT
+
+N/A
+
+No SICS source — ETL date-dim key
+
+None
+
+Do not use LAST_UPDATE_DT.
+
+ 
+
+Summary
+11 of 26 columns map cleanly to a live-verified SICS source or a proven derivation: CLA_BK, CLA_DESC, CLA_TYPE (default ATT), CLA_STATUS, CLA_STATUS_CODE, CLA_LOSS_DATE, CLA_REPORTED_DATE, CLA_LAST_TRANSACTION, CLA_IS_MOVEMENT, CLST_SRGT, LSTP_SRGT.
+
+10 of 26 columns have a plausible source that is empty or only partly proven here: CLA_BROKER, CLA_SOURCE, CLA_HANDLER, CLA_ALT_REF, CLA_OPEN_DATE / CLA_REOPEN_DATE / CLA_CLOSE_DATE, CLGRP_SRGT, CLSS_SRGT, CLTP_SRGT, CLSTP_SRGT.
+
+2 of 26 columns are weak: POLICY_SRGT (join), and the unused LRG amount input inside CLA_TYPE.
+
+3 of 26 columns are DW-only: CLA_CLAIM_SRGT, CREATED_DATE_SRGT, UPDATED_DATE_SRGT.
+
+This SICS copy has no claim ledger and no headline loss. CLA_TYPE therefore always defaults to ATT. CLA_SOURCE stays null until classification 528 is populated. Grain is claim–section unless ETL collapses OC202210000 to one row. Status / substatus / loss-type codes need translation to legacy DW values (O→OP, numeric cause codes vs 135).
+
+ 
+
+Open Questions for the Team
+#
+
+Question
+
+Status
+
+1
+
+Will FRK_CLM_CLASSFCTN (528) be loaded with ACC/NON/NOR/PRO, or is a migration lookup required for CLA_SOURCE?
+
+Open
+
+2
+
+Keep grain as claim–section (SOC_TO_CLAIM_REL), or one row per CLAIM_IDENTIFIER?
+
+Open
+
+3
+
+Is -375000 still the large-loss threshold, and is SICS EXCH_AMT negative like legacy?
+
+Open — cannot test (ledger empty)
+
+4
+
+Confirm SICS policy natural key for the lookup: INSURED_PERIOD.BUS_INS_PER_ID vs BUSINESS.IDENTIFIER, and that it matches DIM_POLICY.POLICY_BK. Confirm SOC → LCP join so the key is not null.
+
+Open
+
+5
+
+Confirm broker FRK_RELSHIP_TYPE (ref 55).
+
+Open
+
+6
+
+Confirm Closed / Reopen codes in REFERENCE_DATA 517.
+
+Open
+
+ 
+
+Mapping Decision
+Target Column
+
+Final Decision
+
+Approved By
+
+Date
+
+Notes
+
+CLA_CLAIM_SRGT
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLA_BK
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLA_DESC
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLA_BROKER
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLA_SOURCE
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLA_TYPE
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLA_STATUS_CODE
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLA_STATUS
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLA_HANDLER
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLA_ALT_REF
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLA_IS_MOVEMENT
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLA_LOSS_DATE
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLA_OPEN_DATE
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLA_REOPEN_DATE
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLA_REPORTED_DATE
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLA_CLOSE_DATE
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLA_LAST_TRANSACTION
+
+ 
+
+ 
+
+ 
+
+ 
+
+POLICY_SRGT
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLGRP_SRGT
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLST_SRGT
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLSS_SRGT
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLTP_SRGT
+
+ 
+
+ 
+
+ 
+
+ 
+
+CLSTP_SRGT
+
+ 
+
+ 
+
+ 
+
+ 
+
+LSTP_SRGT
+
+ 
+
+ 
+
+ 
+
+ 
+
+CREATED_DATE_SRGT
+
+ 
+
+ 
+
+ 
+
+ 
+
+UPDATED_DATE_SRGT
+
+ 
+
+ 
+
+ 
+
+ 
+
+SICS Query:
+
+
+
+
+WITH CLM_GRP AS (
+    SELECT
+        c.OBJECT_ID                                     AS CLAIM_OID,
+        scr.OBJECT_ID                                   AS SOC_CLAIM_OID,
+        c.CLAIM_IDENTIFIER                              AS CLA_BK,
+        c.FRK_CLM_CLASSFCTN                             AS CLAIM_TYPE,
+        ISNULL(hl.CLAIM_IDENTIFIER, c.CLAIM_IDENTIFIER) AS CLAIM_GROUP,
+        ISNULL(hl.IS_MARKET_LOSS, 'N')                  AS CAT_IND
+    FROM SICS.CLAIMS c
+    INNER JOIN SOC_TO_CLAIM_REL scr
+        ON scr.FK_CLAIM = c.OBJECT_ID
+    LEFT JOIN CLAIMS hl
+        ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
+       AND hl.SUBCLASS = 6
+),
+CLM_GRP_SMR AS (
+    SELECT g.CLAIM_GROUP, SUM(d.EXCH_AMT) AS GROUP_BASE_AMT
+    FROM CLM_GRP g
+    INNER JOIN AC_LEDGER_BALANCE bal
+        ON bal.FK_CLAIM = g.SOC_CLAIM_OID
+    INNER JOIN AC_LEDGER_DETAIL d
+        ON d.FK_BALANCE = bal.OBJECT_ID
+    GROUP BY g.CLAIM_GROUP
+),
+CLM_TYP AS (
+    SELECT
+        cg.SOC_CLAIM_OID,
+        cg.CLA_BK,
+        cg.CLAIM_TYPE,
+        cg.CLAIM_GROUP,
+        cg.CAT_IND,
+        cs.GROUP_BASE_AMT,
+        ISNULL(
+            CASE
+                WHEN cg.CAT_IND = 'Y'             THEN 'CAT'
+                WHEN cg.CLAIM_TYPE = 'ACC'        THEN 'ATT'
+                WHEN cs.GROUP_BASE_AMT < -375000  THEN 'LRG'
+                WHEN cs.GROUP_BASE_AMT >= -375000 THEN 'ATT'
+            END, 'ATT') AS IND
+    FROM SICS.CLM_GRP cg
+    LEFT JOIN CLM_GRP_SMR cs
+        ON cs.CLAIM_GROUP = cg.CLAIM_GROUP
+)
 SELECT
-    c.CLAIM_IDENTIFIER,
-    cr.REFERENCE_ID,
-    rd.CODE AS REF_TYPE_CODE,
-    rd.NAME AS REF_TYPE_NAME
-FROM dbo.CLAIM_REFS AS cr
-LEFT JOIN dbo.REFERENCE_DATA AS rd
-    ON  rd.CODE     = cr.FRK_CLM_REF_TYPE
-    AND rd.SUBCLASS = ISNULL(cr.FSK_CLM_REF_TYPE, 548)
-LEFT JOIN dbo.SOC_TO_CLAIM_REL AS scr
-    ON  scr.OBJECT_ID = cr.FK_SOC_REL
-LEFT JOIN dbo.CLAIMS AS c
-    ON  c.OBJECT_ID = scr.FK_CLAIM
-WHERE cr.FK_SOC_REL IS NOT NULL
-ORDER BY c.CLAIM_IDENTIFIER, rd.CODE, cr.REFERENCE_ID;
+    c.OBJECT_ID                                     AS CLAIMS_OBJECT_ID,
+    scr.OBJECT_ID                                   AS SOC_CLAIM_OBJECT_ID,
+    c.CLAIM_IDENTIFIER                              AS CLA_BK,
+    c.LOSS_NAME                                     AS CLA_DESC,
+    CASE WHEN ip.IS_DIRECT = 'Y' THEN 'DIRECT' ELSE brk.IDENTIFIER END AS CLA_BROKER,
+    CONVERT(NVARCHAR(50), ct.CLAIM_TYPE)            AS CLA_SOURCE,
+    CONVERT(NVARCHAR(50), ct.IND)                   AS CLA_TYPE,
+    st.CODE                                         AS CLA_STATUS,
+    UPPER(st.NAME)                                  AS CLA_STATUS_CODE,
+    u.USER_ID                                     AS CLA_HANDLER,
+    COALESCE(cref.REFERENCE_ID, scr.CL_REF)         AS CLA_ALT_REF,
+    CONVERT(BIT, CASE WHEN mv.DETAIL_ROWS > 0 THEN 1 ELSE 0 END) AS CLA_IS_MOVEMENT,
+    c.LOSS_START_DT                                 AS CLA_LOSS_DATE,
+    COALESCE(sh.OPEN_DATE,   CAST('9999-01-01' AS DATE)) AS CLA_OPEN_DATE,
+    COALESCE(sh.REOPEN_DATE, CAST('9999-01-01' AS DATE)) AS CLA_REOPEN_DATE,
+    COALESCE(scr.ADVICE_REC_DATE, scr.CLAIM_ADVISED_DT, CAST('9999-01-01' AS DATE)) AS CLA_REPORTED_DATE,
+    COALESCE(sh.CLOSE_DATE,  CAST('9999-01-01' AS DATE)) AS CLA_CLOSE_DATE,
+    scr.LAST_UPDATE_DT                              AS CLA_LAST_TRANSACTION,
+    COALESCE(ip.BUS_INS_PER_ID, b.IDENTIFIER)       AS POLICY_BK,
+    ip.BUS_INS_PER_ID                               AS POLICY_INS_PER_ID,
+    b.IDENTIFIER                                    AS POLICY_CONTRACT_NO,
+    soc.IDENTIFIER                                  AS SECTION_IDENTIFIER,
+    ct.CLAIM_GROUP                                  AS CLGRP_BK,
+    st.CODE                                         AS CLST_BK,
+    cs.FRK_SUB_STATUS                               AS CLSS_BK,
+    ct.CLAIM_TYPE                                   AS CLTP_BK,
+    ct.IND                                          AS CLSTP_BK,
+    c.FRK_CAUSE_OF_LOSS                             AS LSTP_BK,
+    lt.NAME                                         AS LSTP_NAME,
+    ct.CAT_IND,
+    ct.GROUP_BASE_AMT
+FROM SICS.CLAIMS c
+INNER JOIN SICS.SOC_TO_CLAIM_REL scr
+    ON scr.FK_CLAIM = c.OBJECT_ID
+INNER JOIN SICS.CLM_TYP ct
+    ON ct.SOC_CLAIM_OID = scr.OBJECT_ID
+LEFT JOIN SICS.CLAIM_STATUS cs
+    ON cs.FK_CLAIM = scr.OBJECT_ID
+   AND cs.IS_CURRENT = 'Y'
+LEFT JOIN SICS.REFERENCE_DATA st
+    ON st.CODE = COALESCE(cs.FRK_STATUS, scr.FRK_STATUS_TYPE)
+   AND st.SUBCLASS = 517
+LEFT JOIN SICS.REFERENCE_DATA lt
+    ON lt.CODE = c.FRK_CAUSE_OF_LOSS
+   AND lt.SUBCLASS = 523
+LEFT JOIN SICS.CNU_USER u
+    ON u.OBJECT_ID = c.FK_RES_CL_HDL
+LEFT JOIN SICS.SCOPE_OF_COVER soc
+    ON soc.OBJECT_ID = scr.FK_SOC
+LEFT JOIN SICS.vLIFE_CYCLE_PHASE lcp1
+    ON lcp1.OBJECT_ID = soc.FK_LIFECYCLEP
+LEFT JOIN SICS.LIFE_CYCLE_PHASE lcp2
+    ON lcp2.FK_SCOPE_OF_CVR = soc.OBJECT_ID
+   AND lcp2.IS_CURRENT = 'Y'
+LEFT JOIN SICS.INSURED_PERIOD ip
+    ON ip.OBJECT_ID = COALESCE(lcp1.FK_INS_PRD, lcp2.FK_INS_PRD)
+LEFT JOIN SICS.BUSINESS b
+    ON b.OBJECT_ID = ip.FK_BUSINESS
+LEFT JOIN (
+    SELECT
+        cs2.FK_CLAIM,
+        MIN(CASE WHEN UPPER(rd2.NAME) LIKE 'OPEN%'   THEN cs2.CHANGE_DATE END) AS OPEN_DATE,
+        MAX(CASE WHEN UPPER(rd2.NAME) LIKE 'REOPEN%' THEN cs2.CHANGE_DATE END) AS REOPEN_DATE,
+        MAX(CASE WHEN UPPER(rd2.NAME) LIKE 'CLOS%'   THEN cs2.CHANGE_DATE END) AS CLOSE_DATE
+    FROM SICS.CLAIM_STATUS cs2
+    LEFT JOIN REFERENCE_DATA rd2
+        ON rd2.CODE = cs2.FRK_STATUS
+       AND rd2.SUBCLASS = 517
+    GROUP BY cs2.FK_CLAIM
+) sh ON sh.FK_CLAIM = scr.OBJECT_ID
+LEFT JOIN (
+    SELECT FK_SOC_REL, MIN(REFERENCE_ID) AS REFERENCE_ID
+    FROM SICS.CLAIM_REFS
+    GROUP BY FK_SOC_REL
+) cref ON cref.FK_SOC_REL = scr.OBJECT_ID
+LEFT JOIN (
+    SELECT bpr.FK_INS_PERIOD, MIN(p.IDENTIFIER) AS IDENTIFIER
+    FROM SICS.BUSINESS_PRTNR_REL bpr
+    INNER JOIN PARTY p ON p.OBJECT_ID = bpr.FK_BUS_PARTNER
+    WHERE p.SUBCLASS = 4
+    GROUP BY bpr.FK_INS_PERIOD
+) brk ON brk.FK_INS_PERIOD = ip.OBJECT_ID
+LEFT JOIN (
+    SELECT bal.FK_CLAIM AS SOC_CLAIM_OID, COUNT(*) AS DETAIL_ROWS
+    FROM SICS.AC_LEDGER_BALANCE bal
+    INNER JOIN AC_LEDGER_DETAIL d ON d.FK_BALANCE = bal.OBJECT_ID
+    GROUP BY bal.FK_CLAIM
+) mv ON mv.SOC_CLAIM_OID = scr.OBJECT_ID
+ORDER BY c.CLAIM_IDENTIFIER, scr.OBJECT_ID
