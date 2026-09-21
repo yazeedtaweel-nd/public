@@ -1,22 +1,65 @@
+WITH CLM_GRP AS (
+    SELECT
+        c.OBJECT_ID                                     AS CLAIM_OID,
+        scr.OBJECT_ID                                   AS SOC_CLAIM_OID,
+        c.CLAIM_IDENTIFIER                              AS CLA_BK,
+        c.FRK_CLM_CLASSFCTN                             AS CLAIM_TYPE,
+        ISNULL(hl.CLAIM_IDENTIFIER, c.CLAIM_IDENTIFIER) AS CLAIM_GROUP,
+        ISNULL(hl.IS_MARKET_LOSS, 'N')                  AS CAT_IND
+    FROM SICS.CLAIMS c
+    INNER JOIN SOC_TO_CLAIM_REL scr
+        ON scr.FK_CLAIM = c.OBJECT_ID
+    LEFT JOIN CLAIMS hl
+        ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
+       AND hl.SUBCLASS = 6
+),
+CLM_GRP_SMR AS (
+    SELECT g.CLAIM_GROUP, SUM(d.EXCH_AMT) AS GROUP_BASE_AMT
+    FROM CLM_GRP g
+    INNER JOIN AC_LEDGER_BALANCE bal
+        ON bal.FK_CLAIM = g.SOC_CLAIM_OID
+    INNER JOIN AC_LEDGER_DETAIL d
+        ON d.FK_BALANCE = bal.OBJECT_ID
+    GROUP BY g.CLAIM_GROUP
+),
+CLM_TYP AS (
+    SELECT
+        cg.SOC_CLAIM_OID,
+        cg.CLA_BK,
+        cg.CLAIM_TYPE,
+        cg.CLAIM_GROUP,
+        cg.CAT_IND,
+        cs.GROUP_BASE_AMT,
+        ISNULL(
+            CASE
+                WHEN cg.CAT_IND = 'Y'             THEN 'CAT'
+                WHEN cg.CLAIM_TYPE = 'ACC'        THEN 'ATT'
+                WHEN cs.GROUP_BASE_AMT < -375000  THEN 'LRG'
+                WHEN cs.GROUP_BASE_AMT >= -375000 THEN 'ATT'
+            END, 'ATT') AS IND
+    FROM SICS.CLM_GRP cg
+    LEFT JOIN CLM_GRP_SMR cs
+        ON cs.CLAIM_GROUP = cg.CLAIM_GROUP
+)
 SELECT
-    c.CLAIM_IDENTIFIER,
-    cs.SEQ_NUMBER,
-    cs.CHANGE_DATE,
-    cs.IS_CURRENT,
-    st.CODE  AS STATUS_CODE,      -- typically O / C
-    st.NAME  AS STATUS_NAME,      -- Open / Closed
-    sst.CODE AS SUBSTATUS_CODE,
-    sst.NAME AS SUBSTATUS_NAME    -- e.g. Reopened if configured
-FROM CLAIM_STATUS cs
-JOIN SOC_TO_CLAIM_REL rel
-  ON rel.OBJECT_ID = cs.FK_CLAIM
-JOIN CLAIMS c
-  ON c.OBJECT_ID = rel.FK_CLAIM
-LEFT JOIN REFERENCE_DATA st
-  ON st.CODE = cs.FRK_STATUS
- AND st.SUBCLASS = 517
-LEFT JOIN REFERENCE_DATA sst
-  ON sst.CODE = cs.FRK_SUB_STATUS
- AND sst.SUBCLASS = 518
-WHERE c.CLAIM_IDENTIFIER = N'<claim id>'
-ORDER BY cs.SEQ_NUMBER;
+    c.OBJECT_ID                                     AS CLAIMS_OBJECT_ID,
+    scr.OBJECT_ID                                   AS SOC_CLAIM_OBJECT_ID,
+    c.CLAIM_IDENTIFIER                              AS CLA_BK,
+    c.LOSS_NAME                                     AS CLA_DESC,
+    CASE WHEN ip.IS_DIRECT = 'Y' THEN 'DIRECT' ELSE brk.IDENTIFIER END AS CLA_BROKER,
+    CONVERT(NVARCHAR(50), ct.CLAIM_TYPE)            AS CLA_SOURCE,
+    CONVERT(NVARCHAR(50), ct.IND)                   AS CLA_TYPE,
+    st.CODE                                         AS CLA_STATUS,
+    UPPER(st.NAME)                                  AS CLA_STATUS_CODE,
+    u.USER_ID                                     AS CLA_HANDLER,
+    COALESCE(cref.REFERENCE_ID, scr.CL_REF)         AS CLA_ALT_REF,
+    CONVERT(BIT, CASE WHEN mv.DETAIL_ROWS > 0 THEN 1 ELSE 0 END) AS CLA_IS_MOVEMENT,
+    c.LOSS_START_DT                                 AS CLA_LOSS_DATE,
+    COALESCE(sh.OPEN_DATE,   CAST('9999-01-01' AS DATE)) AS CLA_OPEN_DATE,
+    CASE
+        WHEN UPPER(st.NAME) LIKE '%REOPEN%'
+          OR UPPER(st.CODE) IN ('RO', 'REOPEN')
+        THEN cs.CHANGE_DATE
+        ELSE CAST('9999-01-01' AS DATE)
+    END AS CLA_REOPEN_DATE,
+    COALESCE(scr.ADVICE_REC_DATE, scr.CLAIM_ADVISED_DT, CAST('9999-01-
