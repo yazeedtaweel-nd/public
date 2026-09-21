@@ -85,8 +85,8 @@ SELECT
     cs.FRK_SUB_STATUS                               AS CLSS_BK,
     ct.CLAIM_TYPE                                   AS CLTP_BK,
     ct.IND                                          AS CLSTP_BK,
-    c.FRK_CAUSE_OF_LOSS                             AS LSTP_BK,
-    lt.NAME                                         AS LSTP_NAME,
+    COALESCE(lt.EXTERNAL_CODE, lt.CODE)             AS LSTP_BK,
+    UPPER(lt.NAME)                                  AS LSTP_NAME,
 
     ct.CAT_IND,
     ct.GROUP_BASE_AMT
