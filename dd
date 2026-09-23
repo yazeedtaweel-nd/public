@@ -1,10 +1,23 @@
-WITH CLM_GRP AS (
+WITH DIM_CLGRP AS (
+    /* same grain/key as the DIM_CLAIM_GROUP extract */
+    SELECT
+        c.OBJECT_ID         AS HEADLINE_OID,
+        MIN(r.REFERENCE_ID) AS CLGRP_BK
+    FROM SICS.CLAIMS AS c
+    INNER JOIN SICS.CL_HLOSS_REF AS r
+        ON r.FK_PARENT = c.OBJECT_ID
+    WHERE c.SUBCLASS = 6
+      AND r.REFERENCE_ID IS NOT NULL
+    GROUP BY c.OBJECT_ID
+),
+CLM_GRP AS (
     SELECT
         c.OBJECT_ID                                     AS CLAIM_OID,
         scr.OBJECT_ID                                   AS SOC_CLAIM_OID,
         c.CLAIM_IDENTIFIER                              AS CLA_BK,
         c.FRK_CLM_CLASSFCTN                             AS CLAIM_TYPE,
-        ISNULL(hl.CLAIM_IDENTIFIER, c.CLAIM_IDENTIFIER) AS CLAIM_GROUP,
+        g.CLGRP_BK                                      AS CLAIM_GROUP,
+        ISNULL(g.CLGRP_BK, c.CLAIM_IDENTIFIER)          AS GROUP_AMT_KEY,
         ISNULL(hl.IS_MARKET_LOSS, 'N')                  AS CAT_IND
     FROM SICS.CLAIMS c
     INNER JOIN SICS.SOC_TO_CLAIM_REL scr
@@ -12,18 +25,20 @@ WITH CLM_GRP AS (
     LEFT JOIN SICS.CLAIMS hl
         ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
        AND hl.SUBCLASS = 6
+    LEFT JOIN DIM_CLGRP g
+        ON g.HEADLINE_OID = hl.OBJECT_ID
 ),
 CLM_GRP_SMR AS (
     /* empty on this SICS copy until claim worksheets exist */
     SELECT
-        g.CLAIM_GROUP,
+        g.GROUP_AMT_KEY,
         SUM(d.EXCH_AMT) AS GROUP_BASE_AMT
     FROM CLM_GRP g
     INNER JOIN SICS.AC_LEDGER_BALANCE bal
         ON bal.FK_CLAIM = g.SOC_CLAIM_OID
     INNER JOIN SICS.AC_LEDGER_DETAIL d
         ON d.FK_BALANCE = bal.OBJECT_ID
-    GROUP BY g.CLAIM_GROUP
+    GROUP BY g.GROUP_AMT_KEY
 ),
 CLM_TYP AS (
     SELECT
@@ -42,7 +57,7 @@ CLM_TYP AS (
             END, 'ATT') AS IND
     FROM CLM_GRP cg
     LEFT JOIN CLM_GRP_SMR cs
-        ON cs.CLAIM_GROUP = cg.CLAIM_GROUP
+        ON cs.GROUP_AMT_KEY = cg.GROUP_AMT_KEY
 )
 SELECT
     /* identity / keys */
