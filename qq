@@ -1,172 +1,218 @@
-WITH DIM_CLGRP AS (
-    SELECT
-        c.OBJECT_ID              AS HEADLINE_OID,
-        c.CLAIM_IDENTIFIER       AS HEADLINE_BK,
-        c.FK_HL_LOSS_GRP         AS HL_GRP,
-        c.LOSS_NAME              AS LOSS_NAME,
-        MIN(r.REFERENCE_ID)      AS CLGRP_BK
-    FROM SICS.CLAIMS AS c
-    INNER JOIN SICS.CL_HLOSS_REF AS r
-        ON r.FK_PARENT = c.OBJECT_ID
-    WHERE c.SUBCLASS = 6
-      AND r.REFERENCE_ID IS NOT NULL
-    GROUP BY c.OBJECT_ID, c.CLAIM_IDENTIFIER, c.FK_HL_LOSS_GRP, c.LOSS_NAME
-),
-CLM_GRP AS (
-    SELECT
-        c.OBJECT_ID                                     AS CLAIM_OID,
-        scr.OBJECT_ID                                   AS SOC_CLAIM_OID,
-        c.CLAIM_IDENTIFIER                              AS CLA_BK,
-        c.FRK_CLM_CLASSFCTN                             AS CLAIM_TYPE,
-        CASE
-            WHEN c.FK_HEADLINE_LOSS IS NULL THEN NULL
-            ELSE g.CLGRP_BK
-        END                                             AS CLAIM_GROUP,
-        ISNULL(
-            CASE WHEN c.FK_HEADLINE_LOSS IS NULL THEN NULL ELSE g.CLGRP_BK END,
-            c.CLAIM_IDENTIFIER
-        )                                               AS GROUP_AMT_KEY,
-        ISNULL(hl.IS_MARKET_LOSS, 'N')                  AS CAT_IND
-    FROM SICS.CLAIMS c
-    INNER JOIN SICS.SOC_TO_CLAIM_REL scr
-        ON scr.FK_CLAIM = c.OBJECT_ID
-    LEFT JOIN SICS.CLAIMS hl
-        ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
-    LEFT JOIN DIM_CLGRP g
-        ON c.FK_HEADLINE_LOSS IS NOT NULL
-       AND (
-            g.HEADLINE_OID = hl.OBJECT_ID
-         OR g.HEADLINE_OID = hl.FK_HEADLINE_LOSS
-         OR g.HEADLINE_BK  = hl.CLAIM_IDENTIFIER
-         OR g.CLGRP_BK     = hl.CLAIM_IDENTIFIER
-         OR g.LOSS_NAME    = hl.LOSS_NAME
-         OR g.LOSS_NAME    = c.LOSS_NAME
-         OR (
-                hl.FK_HL_LOSS_GRP IS NOT NULL
-            AND g.HL_GRP = hl.FK_HL_LOSS_GRP
-         )
-       )
-),
-CLM_GRP_SMR AS (
-    SELECT
-        g.GROUP_AMT_KEY,
-        SUM(d.EXCH_AMT) AS GROUP_BASE_AMT
-    FROM CLM_GRP g
-    INNER JOIN SICS.AC_LEDGER_BALANCE bal
-        ON bal.FK_CLAIM = g.SOC_CLAIM_OID
-    INNER JOIN SICS.AC_LEDGER_DETAIL d
-        ON d.FK_BALANCE = bal.OBJECT_ID
-    GROUP BY g.GROUP_AMT_KEY
-),
-CLM_TYP AS (
-    SELECT
-        cg.SOC_CLAIM_OID,
-        cg.CLA_BK,
-        cg.CLAIM_TYPE,
-        cg.CLAIM_GROUP,
-        cg.CAT_IND,
-        cs.GROUP_BASE_AMT,
-        ISNULL(
-            CASE
-                WHEN cg.CAT_IND = 'Y'             THEN 'CAT'
-                WHEN cg.CLAIM_TYPE = 'ACC'        THEN 'ATT'
-                WHEN cs.GROUP_BASE_AMT < -375000  THEN 'LRG'
-                WHEN cs.GROUP_BASE_AMT >= -375000 THEN 'ATT'
-            END, 'ATT') AS IND
-    FROM CLM_GRP cg
-    LEFT JOIN CLM_GRP_SMR cs
-        ON cs.GROUP_AMT_KEY = cg.GROUP_AMT_KEY
-)
+/* ============================================================
+   Result 1 — the two objects side by side
+   ============================================================ */
 SELECT
-    c.OBJECT_ID                                     AS CLAIMS_OBJECT_ID,
-    scr.OBJECT_ID                                   AS SOC_CLAIM_OBJECT_ID,
-    COALESCE(cref.REFERENCE_ID, c.CLAIM_IDENTIFIER) AS CLA_BK,
-    c.LOSS_NAME                                     AS CLA_DESC,
+    'policy_claim' AS SIDE,
+    c.CLAIM_IDENTIFIER,
+    c.OBJECT_ID,
+    c.SUBCLASS,
+    c.LOSS_NAME,
+    c.FK_HEADLINE_LOSS,
+    c.FK_HL_LOSS_GRP,
+    CAST(NULL AS NVARCHAR(30)) AS REF_ID
+FROM SICS.CLAIMS AS c
+WHERE c.CLAIM_IDENTIFIER = N'IC201910001'
+
+UNION ALL
+SELECT
+    'assigned_parent',
+    hl.CLAIM_IDENTIFIER,
+    hl.OBJECT_ID,
+    hl.SUBCLASS,
+    hl.LOSS_NAME,
+    hl.FK_HEADLINE_LOSS,
+    hl.FK_HL_LOSS_GRP,
+    r.REFERENCE_ID
+FROM SICS.CLAIMS AS c
+INNER JOIN SICS.CLAIMS AS hl
+    ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
+LEFT JOIN SICS.CL_HLOSS_REF AS r
+    ON r.FK_PARENT = hl.OBJECT_ID
+WHERE c.CLAIM_IDENTIFIER = N'IC201910001'
+
+UNION ALL
+SELECT
+    'group_headline',
+    g.CLAIM_IDENTIFIER,
+    g.OBJECT_ID,
+    g.SUBCLASS,
+    g.LOSS_NAME,
+    g.FK_HEADLINE_LOSS,
+    g.FK_HL_LOSS_GRP,
+    r.REFERENCE_ID
+FROM SICS.CLAIMS AS g
+LEFT JOIN SICS.CL_HLOSS_REF AS r
+    ON r.FK_PARENT = g.OBJECT_ID
+WHERE g.SUBCLASS = 6
+ORDER BY SIDE;
+
+
+/* ============================================================
+   Result 2 — what each option would store as CLGRP_BK
+   ============================================================ */
+SELECT
+    c.CLAIM_IDENTIFIER                          AS CLA_BK,
+    c.FK_HEADLINE_LOSS                          AS HAS_ASSIGNMENT,
+    hl.CLAIM_IDENTIFIER                         AS ASSIGNED_HEADLINE_BK,
+    hl.SUBCLASS                                 AS ASSIGNED_SUBCLASS,
+    r_assigned.REFERENCE_ID                     AS REF_ON_ASSIGNED_PARENT,
+    r_group.REFERENCE_ID                        AS GROUP_REF_ID,          /* 324242424 */
+    g.CLAIM_IDENTIFIER                          AS GROUP_HEADLINE_BK,     /* 6CL100001 */
+
+    /* Option 1: same attribute on both dims = headline CLAIM_IDENTIFIER */
     CASE
-        WHEN ip.IS_DIRECT = 'Y' THEN 'DIRECT'
-        ELSE brk.IDENTIFIER
-    END                                             AS CLA_BROKER,
-    CONVERT(NVARCHAR(50), ct.CLAIM_TYPE)            AS CLA_SOURCE,
-    CONVERT(NVARCHAR(50), ct.IND)                   AS CLA_TYPE,
-    UPPER(st.NAME)                                  AS CLA_STATUS_CODE,
-    st.CODE                                         AS CLA_STATUS,
-    u.USER_ID                                       AS CLA_HANDLER,
-    CONVERT(BIT, CASE WHEN mv.DETAIL_ROWS > 0 THEN 1 ELSE 0 END)
-                                                    AS CLA_IS_MOVEMENT,
-    c.LOSS_START_DT                                 AS CLA_LOSS_DATE,
-    COALESCE(sh.OPEN_DATE,   CAST('9999-01-01' AS DATE)) AS CLA_OPEN_DATE,
-    COALESCE(sh.REOPEN_DATE, CAST('9999-01-01' AS DATE)) AS CLA_REOPEN_DATE,
-    COALESCE(scr.ADVICE_REC_DATE, scr.CLAIM_ADVISED_DT, CAST('9999-01-01' AS DATE))
-                                                    AS CLA_REPORTED_DATE,
-    COALESCE(sh.CLOSE_DATE,  CAST('9999-01-01' AS DATE)) AS CLA_CLOSE_DATE,
-    scr.LAST_UPDATE_DT                              AS CLA_LAST_TRANSACTION,
-    COALESCE(ip.I_PERIOD_FORMER_ID, ip.BUS_INS_PER_ID) AS POLICY_BK,
-    ct.CLAIM_GROUP                                  AS CLGRP_BK,
-    COALESCE(cs.FRK_STATUS, scr.FRK_STATUS_TYPE)    AS CLST_BK,
-    cs.FRK_SUB_STATUS                               AS CLSS_BK,
-    ct.CLAIM_TYPE                                   AS CLTP_BK,
-    ct.IND                                          AS CLSTP_BK,
-    COALESCE(lt.EXTERNAL_CODE, lt.CODE)             AS LSTP_BK,
-    UPPER(lt.NAME)                                  AS LSTP_NAME,
-    ct.CAT_IND,
-    ct.GROUP_BASE_AMT
-FROM SICS.CLAIMS c
-INNER JOIN SICS.SOC_TO_CLAIM_REL scr
+        WHEN c.FK_HEADLINE_LOSS IS NULL THEN NULL
+        ELSE hl.CLAIM_IDENTIFIER
+    END                                         AS OPTION1_CLGRP_BK,
+
+    /* Option 2: group dim key, only if assignment IS the subclass-6 headline */
+    CASE
+        WHEN c.FK_HEADLINE_LOSS IS NULL THEN NULL
+        WHEN hl.OBJECT_ID = g.OBJECT_ID THEN r_group.REFERENCE_ID
+        ELSE NULL
+    END                                         AS OPTION2_CLGRP_BK,
+
+    CASE
+        WHEN c.FK_HEADLINE_LOSS IS NULL
+            THEN 'no assignment — stay null'
+        WHEN hl.OBJECT_ID = g.OBJECT_ID
+            THEN 'same object — option 2 works (use REFERENCE_ID)'
+        WHEN hl.CLAIM_IDENTIFIER IS NOT NULL
+            THEN 'different objects — option 1 works (use CLAIM_IDENTIFIER); option 2 needs SICS re-assign to 6CL100001'
+        ELSE
+            'assignment FK does not resolve to a CLAIMS row'
+    END                                         AS DECISION
+FROM SICS.CLAIMS AS c
+INNER JOIN SICS.SOC_TO_CLAIM_REL AS scr
     ON scr.FK_CLAIM = c.OBJECT_ID
-INNER JOIN CLM_TYP ct
-    ON ct.SOC_CLAIM_OID = scr.OBJECT_ID
-LEFT JOIN SICS.CLAIM_STATUS cs
-    ON cs.FK_CLAIM = scr.OBJECT_ID
-   AND cs.IS_CURRENT = 'Y'
-LEFT JOIN SICS.REFERENCE_DATA st
-    ON st.CODE = COALESCE(cs.FRK_STATUS, scr.FRK_STATUS_TYPE)
-   AND st.SUBCLASS = 517
-LEFT JOIN SICS.REFERENCE_DATA lt
-    ON lt.CODE = c.FRK_CAUSE_OF_LOSS
-   AND lt.SUBCLASS = 523
-LEFT JOIN SICS.CNU_USER u
-    ON u.OBJECT_ID = c.FK_RES_CL_HDL
-LEFT JOIN SICS.SCOPE_OF_COVER soc
-    ON soc.OBJECT_ID = scr.FK_SOC
-LEFT JOIN SICS.LIFE_CYCLE_PHASE lcp1
-    ON lcp1.OBJECT_ID = soc.FK_LIFECYCLEP
-LEFT JOIN SICS.LIFE_CYCLE_PHASE lcp2
-    ON lcp2.FK_SCOPE_OF_CVR = soc.OBJECT_ID
-   AND lcp2.IS_CURRENT = 'Y'
-LEFT JOIN SICS.INSURED_PERIOD ip
-    ON ip.OBJECT_ID = COALESCE(lcp1.FK_INS_PRD, lcp2.FK_INS_PRD)
-LEFT JOIN SICS.BUSINESS b
-    ON b.OBJECT_ID = ip.FK_BUSINESS
-LEFT JOIN (
-    SELECT
-        cs2.FK_CLAIM,
-        MIN(CASE WHEN UPPER(rd2.NAME) LIKE 'OPEN%'   THEN cs2.CHANGE_DATE END) AS OPEN_DATE,
-        MAX(CASE WHEN UPPER(rd2.NAME) LIKE 'REOPEN%' THEN cs2.CHANGE_DATE END) AS REOPEN_DATE,
-        MAX(CASE WHEN UPPER(rd2.NAME) LIKE 'CLOS%'   THEN cs2.CHANGE_DATE END) AS CLOSE_DATE
-    FROM SICS.CLAIM_STATUS cs2
-    LEFT JOIN SICS.REFERENCE_DATA rd2
-        ON rd2.CODE = cs2.FRK_STATUS
-       AND rd2.SUBCLASS = 517
-    GROUP BY cs2.FK_CLAIM
-) sh ON sh.FK_CLAIM = scr.OBJECT_ID
-LEFT JOIN (
-    SELECT FK_SOC_REL, MIN(REFERENCE_ID) AS REFERENCE_ID
-    FROM SICS.CLAIM_REFS
-    GROUP BY FK_SOC_REL
-) cref ON cref.FK_SOC_REL = scr.OBJECT_ID
-LEFT JOIN (
-    SELECT bpr.FK_INS_PERIOD, MIN(p.IDENTIFIER) AS IDENTIFIER
-    FROM SICS.BUSINESS_PRTNR_REL bpr
-    INNER JOIN SICS.PARTY p
-        ON p.OBJECT_ID = bpr.FK_BUS_PARTNER
-    WHERE p.SUBCLASS = 4
-    GROUP BY bpr.FK_INS_PERIOD
-) brk ON brk.FK_INS_PERIOD = ip.OBJECT_ID
-LEFT JOIN (
-    SELECT bal.FK_CLAIM AS SOC_CLAIM_OID, COUNT(*) AS DETAIL_ROWS
-    FROM SICS.AC_LEDGER_BALANCE bal
-    INNER JOIN SICS.AC_LEDGER_DETAIL d
-        ON d.FK_BALANCE = bal.OBJECT_ID
-    GROUP BY bal.FK_CLAIM
-) mv ON mv.SOC_CLAIM_OID = scr.OBJECT_ID
+LEFT JOIN SICS.CLAIMS AS hl
+    ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
+LEFT JOIN SICS.CL_HLOSS_REF AS r_assigned
+    ON r_assigned.FK_PARENT = hl.OBJECT_ID
+LEFT JOIN SICS.CLAIMS AS g
+    ON g.SUBCLASS = 6
+   AND g.CLAIM_IDENTIFIER = N'6CL100001'
+LEFT JOIN SICS.CL_HLOSS_REF AS r_group
+    ON r_group.FK_PARENT = g.OBJECT_ID
 ORDER BY c.CLAIM_IDENTIFIER, scr.OBJECT_ID;
+
+
+/* ============================================================
+   Result 3 — is there any bridge? (empty = no option-2 path)
+   ============================================================ */
+SELECT
+    'same_object' AS BRIDGE,
+    c.CLAIM_IDENTIFIER AS CLA_BK,
+    hl.OBJECT_ID AS LEFT_OID,
+    g.OBJECT_ID AS RIGHT_OID
+FROM SICS.CLAIMS AS c
+INNER JOIN SICS.CLAIMS AS hl
+    ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
+INNER JOIN SICS.CLAIMS AS g
+    ON g.SUBCLASS = 6
+   AND g.CLAIM_IDENTIFIER = N'6CL100001'
+WHERE c.CLAIM_IDENTIFIER = N'IC201910001'
+  AND hl.OBJECT_ID = g.OBJECT_ID
+
+UNION ALL
+SELECT
+    'assigned_points_at_group',
+    c.CLAIM_IDENTIFIER,
+    hl.FK_HEADLINE_LOSS,
+    g.OBJECT_ID
+FROM SICS.CLAIMS AS c
+INNER JOIN SICS.CLAIMS AS hl
+    ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
+INNER JOIN SICS.CLAIMS AS g
+    ON g.SUBCLASS = 6
+   AND g.CLAIM_IDENTIFIER = N'6CL100001'
+WHERE c.CLAIM_IDENTIFIER = N'IC201910001'
+  AND hl.FK_HEADLINE_LOSS = g.OBJECT_ID
+
+UNION ALL
+SELECT
+    'same_hl_loss_grp',
+    c.CLAIM_IDENTIFIER,
+    hl.FK_HL_LOSS_GRP,
+    g.FK_HL_LOSS_GRP
+FROM SICS.CLAIMS AS c
+INNER JOIN SICS.CLAIMS AS hl
+    ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
+INNER JOIN SICS.CLAIMS AS g
+    ON g.SUBCLASS = 6
+   AND g.CLAIM_IDENTIFIER = N'6CL100001'
+WHERE c.CLAIM_IDENTIFIER = N'IC201910001'
+  AND hl.FK_HL_LOSS_GRP IS NOT NULL
+  AND hl.FK_HL_LOSS_GRP = g.FK_HL_LOSS_GRP
+
+UNION ALL
+SELECT
+    'same_loss_name',
+    c.CLAIM_IDENTIFIER,
+    hl.LOSS_NAME,
+    g.LOSS_NAME
+FROM SICS.CLAIMS AS c
+INNER JOIN SICS.CLAIMS AS hl
+    ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
+INNER JOIN SICS.CLAIMS AS g
+    ON g.SUBCLASS = 6
+   AND g.CLAIM_IDENTIFIER = N'6CL100001'
+WHERE c.CLAIM_IDENTIFIER = N'IC201910001'
+  AND NULLIF(LTRIM(RTRIM(hl.LOSS_NAME)), '') IS NOT NULL
+  AND hl.LOSS_NAME = g.LOSS_NAME
+
+UNION ALL
+SELECT
+    'claim_link',
+    c.CLAIM_IDENTIFIER,
+    ln.FK_SOURCE_CL,
+    ln.FK_TARGET_CL
+FROM SICS.CLAIMS AS c
+INNER JOIN SICS.CLAIMS AS hl
+    ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
+INNER JOIN SICS.CLAIMS AS g
+    ON g.SUBCLASS = 6
+   AND g.CLAIM_IDENTIFIER = N'6CL100001'
+INNER JOIN SICS.CLAIM_LINK AS ln
+    ON (
+            (ln.FK_SOURCE_CL IN (c.OBJECT_ID, hl.OBJECT_ID) AND ln.FK_TARGET_CL = g.OBJECT_ID)
+         OR (ln.FK_TARGET_CL IN (c.OBJECT_ID, hl.OBJECT_ID) AND ln.FK_SOURCE_CL = g.OBJECT_ID)
+       )
+WHERE c.CLAIM_IDENTIFIER = N'IC201910001';
+
+
+/* ============================================================
+   Result 4 — decision line
+   ============================================================ */
+SELECT
+    CASE
+        WHEN NOT EXISTS (
+            SELECT 1
+            FROM SICS.CLAIMS AS c
+            WHERE c.CLAIM_IDENTIFIER = N'IC201910001'
+              AND c.FK_HEADLINE_LOSS IS NOT NULL
+        )
+            THEN 'No assignment on IC201910001 — cannot populate CLGRP_BK'
+
+        WHEN EXISTS (
+            SELECT 1
+            FROM SICS.CLAIMS AS c
+            INNER JOIN SICS.CLAIMS AS hl ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
+            INNER JOIN SICS.CLAIMS AS g
+                ON g.SUBCLASS = 6 AND g.CLAIM_IDENTIFIER = N'6CL100001'
+            WHERE c.CLAIM_IDENTIFIER = N'IC201910001'
+              AND hl.OBJECT_ID = g.OBJECT_ID
+        )
+            THEN 'Option 2: assignment already is 6CL100001. DIM_CLAIM CLGRP_BK = CL_HLOSS_REF.REFERENCE_ID (324242424).'
+
+        WHEN EXISTS (
+            SELECT 1
+            FROM SICS.CLAIMS AS c
+            INNER JOIN SICS.CLAIMS AS hl ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
+            WHERE c.CLAIM_IDENTIFIER = N'IC201910001'
+        )
+            THEN 'Option 1: assignment is a different claim than 6CL100001. Set both dims to headline CLAIM_IDENTIFIER, OR re-assign IC201910001 to 6CL100001 in SICS for option 2.'
+
+        ELSE
+            'FK_HEADLINE_LOSS is set but that OBJECT_ID is not in CLAIMS — broken FK'
+    END AS DECISION;
