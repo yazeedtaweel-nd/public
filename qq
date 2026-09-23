@@ -1,12 +1,9 @@
 WITH HL_CLGRP AS (
     SELECT
-        c.OBJECT_ID              AS HEADLINE_OID,
-        MIN(r.REFERENCE_ID)      AS CLGRP_BK
-    FROM SICS.CLAIMS AS c
-    LEFT JOIN SICS.CL_HLOSS_REF AS r
-        ON r.FK_PARENT = c.OBJECT_ID
-    WHERE c.SUBCLASS = 6
-    GROUP BY c.OBJECT_ID
+        r.FK_PARENT              AS HEADLINE_OID,
+        MIN(r.REFERENCE_ID)      AS REF_BK
+    FROM SICS.CL_HLOSS_REF AS r
+    GROUP BY r.FK_PARENT
 ),
 CLM_GRP AS (
     SELECT
@@ -14,15 +11,23 @@ CLM_GRP AS (
         scr.OBJECT_ID                                   AS SOC_CLAIM_OID,
         c.CLAIM_IDENTIFIER                              AS CLA_BK,
         c.FRK_CLM_CLASSFCTN                             AS CLAIM_TYPE,
-        grp.CLGRP_BK                                    AS CLAIM_GROUP,
-        ISNULL(grp.CLGRP_BK, c.CLAIM_IDENTIFIER)        AS GROUP_AMT_KEY,
+        CASE
+            WHEN c.FK_HEADLINE_LOSS IS NULL THEN NULL
+            ELSE COALESCE(grp.REF_BK, hl.CLAIM_IDENTIFIER)
+        END                                             AS CLAIM_GROUP,
+        ISNULL(
+            CASE
+                WHEN c.FK_HEADLINE_LOSS IS NULL THEN NULL
+                ELSE COALESCE(grp.REF_BK, hl.CLAIM_IDENTIFIER)
+            END,
+            c.CLAIM_IDENTIFIER
+        )                                               AS GROUP_AMT_KEY,
         ISNULL(hl.IS_MARKET_LOSS, 'N')                  AS CAT_IND
     FROM SICS.CLAIMS c
     INNER JOIN SICS.SOC_TO_CLAIM_REL scr
         ON scr.FK_CLAIM = c.OBJECT_ID
     LEFT JOIN SICS.CLAIMS hl
         ON hl.OBJECT_ID = c.FK_HEADLINE_LOSS
-       AND hl.SUBCLASS = 6
     LEFT JOIN HL_CLGRP grp
         ON grp.HEADLINE_OID = c.FK_HEADLINE_LOSS
 ),
