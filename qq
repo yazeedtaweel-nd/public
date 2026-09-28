@@ -1,11 +1,8 @@
-SELECT
-    s.name,
-    s.product,
-    s.provider,
-    s.is_data_access_enabled,
-    ll.uses_self_credential
-FROM sys.servers AS s
-LEFT JOIN sys.linked_logins AS ll
-    ON ll.server_id = s.server_id
-   AND (ll.local_principal_id = 0 OR ll.local_principal_id = SUSER_ID())
-WHERE s.name = N'HO-DW-DATA';
+pip install -r requirements.txt
+python python/compare_from_csv.py \
+    --tables python/tables.example.csv \
+    --server YourServer \
+    --database DwhCompare \
+    --source-database SaudiRe_DWW \
+    --target-database SaudiRe_DWW \
+    --target-server HO_DWW_UAT
