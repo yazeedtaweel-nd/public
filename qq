@@ -1,8 +1,1 @@
-pip install -r requirements.txt
-python python/compare_from_csv.py \
-    --tables python/tables.example.csv \
-    --server YourServer \
-    --database DwhCompare \
-    --source-database SaudiRe_DWW \
-    --target-database SaudiRe_DWW \
-    --target-server HO_DWW_UAT
+python python/compare_from_csv.py --tables python/tables.csv --server HO-SI-DWH1 --database test1 --source-database SaudiRe_DNW --target-database SaudiRe_DNW --target-server HO_DW_UAT --ignore-case --workbook runs/nightly --workers 4 --persist --persist-schema
