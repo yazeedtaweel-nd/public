@@ -1,1 +1,1 @@
-python python/compare_from_csv.py --tables python/tables.csv --server HO-SI-DWH1 --database test1 --source-database SaudiRe_DNW --target-database SaudiRe_DNW --target-server HO_DW_UAT --ignore-case --workbook runs/nightly --workers 4 --persist --persist-schema
+- script: python python/compare_from_csv.py --config compare.yaml --fail-on-diff --persist-detail --workbook $(Build.ArtifactStagingDirectory)/compare
