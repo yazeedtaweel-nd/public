@@ -1,61 +1,25 @@
-/* REIN_ALLOCATION — SICS read
-   Booked rows only. O/S is excluded until the outstanding filter is confirmed.
-   Grain in Senergy is one allocation row. Sum DTL_AMT to that key.
-   Do not sum LEDGER_BAL_ORG_AMT once per detail line.
-   AUDIT_DATE_SRGT is calculated here; it is not a SICS column.
-*/
-SELECT
-    ws.ID_SERIE_NO                                              AS AUDIT_NUMBER,
-    CAST(ws.BOOKING_DATE AS datetime)                           AS AUDIT_DATE,
-    CONVERT(int, CONVERT(varchar(10), ws.BOOKING_DATE, 112))    AS AUDIT_DATE_SRGT,
-    ec.CODE                                                     AS TRANSACTION_TYPE,
-    dtl.UW_YEAR                                                 AS UW_YEAR,
-    cob.CODE                                                    AS COB_CODE,
-    ru.CODE                                                     AS SYN_USER_NUMBER,
-    CASE rd.EXTERNAL_CODE
-        WHEN N'TP' THEN N'11'
-        WHEN N'TN' THEN N'12'
-        WHEN N'FP' THEN N'21'
-        WHEN N'FN' THEN N'22'
-    END                                                         AS SUG_GROUP_CODE,
-    CASE
-        WHEN ec.CODE IN (N'10', N'20', N'30')
-            THEN CAST(ws.BOOKING_DATE AS datetime)
-        WHEN ec.CODE IN (N'21', N'28', N'51', N'52', N'70', N'80', N'81')
-            THEN CONVERT(datetime,
-                   CONVERT(char(4), bal.BOOKING_YEAR)
-                   + RIGHT('0' + REPLACE(UPPER(LTRIM(RTRIM(bal.FRK_BOOKING_PERIOD))), 'M', ''), 2)
-                   + '01')
-        ELSE NULL   /* entry 49 and batch-timestamp O/S: open */
-    END                                                         AS PROCESSING_PERIOD,
-    bal.FK_CURR                                                 AS ORIG_CCY,
-    CAST(dtl.DTL_AMT AS decimal(22, 3))                         AS ORIG_NET_AMT,
-    COALESCE(sett.FK_CURR, bal.FK_CURR)                         AS SETTLEMENT_CCY,
-    CAST(
-        COALESCE(sett.LEDGER_BAL_ORG_AMT, dtl.DTL_AMT)
-        AS decimal(22, 3)
-    )                                                           AS SETTLEMENT_NET_AMT
-FROM dbo.AC_LEDGER_DETAIL AS dtl
-INNER JOIN dbo.AC_LEDGER_BALANCE AS bal
-    ON bal.OBJECT_ID = dtl.FK_BALANCE
-INNER JOIN dbo.AC_WORKSHEET AS ws
-    ON ws.OBJECT_ID = dtl.FK_WORKSHEET
-INNER JOIN dbo.ENTRY_CODE AS ec
-    ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
-INNER JOIN dbo.ACC_CLASSIFIC AS cls
-    ON cls.OBJECT_ID = dtl.FK_ACCT_CLASS
-LEFT JOIN dbo.RU_LEAF AS ru
-    ON ru.OBJECT_ID = cls.FK_REP_UNIT_1
-   AND ru.FRK_CATEGORY = N'PC'
-   AND ru.FSK_CATEGORY = 42
-LEFT JOIN dbo.REFERENCE_DATA AS cob
-    ON cob.CODE = cls.FRK_REFIC3
-   AND cob.SUBCLASS = cls.FSK_REFIC3
-   AND cls.FSK_REFIC3 = 3
-LEFT JOIN dbo.REFERENCE_DATA AS rd
-    ON rd.CODE = cls.FRK_REFIC46
-   AND rd.SUBCLASS = cls.FSK_REFIC46
-   AND cls.FSK_REFIC46 = 46
-LEFT JOIN dbo.AC_LEDGER_BALANCE AS sett
-    ON sett.OBJECT_ID = bal.FK_SETTLEMENT_BAL
-   AND sett.SUBCLASS = 1;
+WITH T0 AS (
+SELECT [PRI_CPD_POLICY_REF] IW_POLICY_BK
+      ,[PRI_CPD_VERSION_NO] IW_POLICY_VERSION_NO
+      ,[PRI_SEQUENCE_NO]
+      ,[PRI_RPD_POLICY_REF] OW_POLICY_BK
+      ,[PRI_CALC_SEQUENCE_NO]
+      ,[PRI_CEDED_PCNT]
+      ,[PRI_POLICY_TYPE]
+  FROM [SYN1].[dbo].[POLICY_REINSURANCE_LINK]
+)
+, T1 AS (
+SELECT T0.*
+FROM T0 
+		JOIN (SELECT IW_POLICY_BK, MAX(IW_POLICY_VERSION_NO) AS IW_POLICY_VERSION_NO
+				FROM T0
+				GROUP BY IW_POLICY_BK
+			 ) T1
+			 ON T1.IW_POLICY_BK=T0.IW_POLICY_BK AND T1.IW_POLICY_VERSION_NO=T0.IW_POLICY_VERSION_NO
+)
+SELECT DISTINCT N'PROP' AS LINK_TYPE, OWP.POLICY_SRGT AS OW_POLICY_SRGT, IWP.POLICY_SRGT AS IW_POLICY_SRGT
+FROM T1
+		JOIN [SaudiRe_DW].dbo.DIM_POLICY IWP
+			ON IWP.POLICY_BK COLLATE Latin1_General_CI_AS = T1.IW_POLICY_BK COLLATE Latin1_General_CI_AS
+		JOIN [SaudiRe_DW].dbo.DIM_POLICY OWP
+			ON OWP.POLICY_BK COLLATE Latin1_General_CI_AS = T1.OW_POLICY_BK COLLATE Latin1_General_CI_AS
