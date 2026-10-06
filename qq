@@ -1,40 +1,69 @@
-SELECT DISTINCT
-    N'PROP' AS LINK_TYPE,
-    CAST(
-        COALESCE(
-            NULLIF(LTRIM(RTRIM(ip_iw.I_PERIOD_FORMER_ID)), N''),
-            LTRIM(RTRIM(ip_iw.BUS_INS_PER_ID))
-        ) AS nvarchar(50)
-    ) AS IW_POLICY_BK,
-    CAST(
-        COALESCE(
-            NULLIF(LTRIM(RTRIM(ip_ow.I_PERIOD_FORMER_ID)), N''),
-            LTRIM(RTRIM(ip_ow.BUS_INS_PER_ID))
-        ) AS nvarchar(50)
-    ) AS OW_POLICY_BK
-FROM SICS.BUS_STRUCT_REP AS bsr
-INNER JOIN SICS.BUSINESS AS b_iw
-    ON b_iw.OBJECT_ID = bsr.FK_BUSINESS
-   AND b_iw.SUBCLASS = 6
-INNER JOIN SICS.INSURED_PERIOD AS ip_iw
-    ON ip_iw.OBJECT_ID = bsr.FK_INS_PERIOD
-INNER JOIN SICS.BUS_RETRO_IBR AS ibr
-    ON ibr.OBJECT_ID = bsr.FK_PROT_ASS
-   AND ibr.SUBCLASS = 1
-INNER JOIN SICS.BUS_RETRO AS retro
-    ON retro.FK_RETRO_IBR = ibr.OBJECT_ID
-INNER JOIN SICS.INSURED_PERIOD AS ip_ow
-    ON ip_ow.OBJECT_ID = retro.FK_INSURED_PERIOD
-INNER JOIN SICS.BUSINESS AS b_ow
-    ON b_ow.OBJECT_ID = ip_ow.FK_BUSINESS
-   AND b_ow.SUBCLASS IN (3, 8, 11)
-WHERE bsr.IS_CURRENT_LCP = N'Y'
-  AND bsr.IS_CURRENT_AM = N'Y'
-  AND COALESCE(
-        NULLIF(LTRIM(RTRIM(ip_iw.I_PERIOD_FORMER_ID)), N''),
-        NULLIF(LTRIM(RTRIM(ip_iw.BUS_INS_PER_ID)), N'')
-      ) IS NOT NULL
-  AND COALESCE(
-        NULLIF(LTRIM(RTRIM(ip_ow.I_PERIOD_FORMER_ID)), N''),
-        NULLIF(LTRIM(RTRIM(ip_ow.BUS_INS_PER_ID)), N'')
-      ) IS NOT NULL;
+
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM   audit.ETL_PACKAGE
+    WHERE  PACKAGE_NAME = N'APPORTION_PACKAGE'
+)
+BEGIN
+    INSERT INTO audit.ETL_PACKAGE
+        (PACKAGE_NAME, PACKAGE_FILE_NAME, EXECUTION_ORDER, IS_ENABLED, DESCRIPTION)
+    VALUES
+        (N'APPORTION_PACKAGE',
+         N'Apportioning.dtsx',
+         40,
+         1,
+         N'Apportion package: OW premium initial split, OW transaction allocation, IW–OW policy link.');
+END
+ELSE
+BEGIN
+    UPDATE audit.ETL_PACKAGE
+    SET    PACKAGE_FILE_NAME = N'Apportioning.dtsx',
+           EXECUTION_ORDER   = 40,
+           IS_ENABLED        = 1,
+           DESCRIPTION       = N'Apportion package: OW premium initial split, OW transaction allocation, IW–OW policy link.'
+    WHERE  PACKAGE_NAME = N'APPORTION_PACKAGE';
+END
+GO
+
+DECLARE @PackageId INT =
+    (SELECT PACKAGE_ID FROM audit.ETL_PACKAGE WHERE PACKAGE_NAME = N'APPORTION_PACKAGE');
+
+IF @PackageId IS NULL
+BEGIN
+    RAISERROR(N'APPORTION_PACKAGE was not found in audit.ETL_PACKAGE after seed.', 16, 1);
+END
+ELSE
+BEGIN
+    ;WITH src AS (
+        SELECT *
+        FROM (VALUES
+            (N'OW_PREM_INIT_SPLIT',
+             N'SICS.dbo.ACC_CLASSIFIC',
+             N'dbo.OW_PREM_INIT_SPLIT',
+             N'ACC_CLASSIFIC split on outward non-proportional BUSINESS (SUBCLASS 3, 8, 11; type NONPROPTT/NONPROPFA). Replaces REIN_COB_CODE_PREM_SPLIT.'),
+            (N'OW_TRANSACTION_ALLOCATION',
+             N'SICS.dbo.AC_LEDGER_DETAIL',
+             N'dbo.OW_TRANSACTION_ALLOCATION',
+             N'AC_LEDGER_DETAIL joined to AC_LEDGER_BALANCE and AC_WORKSHEET; classification via ACC_CLASSIFIC. Replaces REIN_ALLOCATION.'),
+            (N'OW_IW_POLICY_LINK',
+             N'SICS.dbo.BUS_STRUCT_REP',
+             N'dbo.OW_IW_POLICY_LINK',
+             N'Proportional protection: inward BUS_STRUCT_REP (SUBCLASS 6) to outward BUSINESS (SUBCLASS 3, 8, 11) via BUS_RETRO_IBR and BUS_RETRO. Replaces POLICY_REINSURANCE_LINK.')
+        ) AS v (TABLE_NAME, SOURCE_OBJECT, TARGET_OBJECT, DESCRIPTION)
+    )
+    MERGE audit.ETL_PACKAGE_TABLE AS t
+    USING src
+       ON t.PACKAGE_ID = @PackageId
+      AND t.TABLE_NAME = src.TABLE_NAME
+    WHEN MATCHED THEN
+        UPDATE SET
+            SOURCE_OBJECT = src.SOURCE_OBJECT,
+            TARGET_OBJECT = src.TARGET_OBJECT,
+            DESCRIPTION   = src.DESCRIPTION,
+            IS_ENABLED    = 1
+    WHEN NOT MATCHED THEN
+        INSERT (PACKAGE_ID, TABLE_NAME, SOURCE_OBJECT, TARGET_OBJECT, IS_ENABLED, DESCRIPTION)
+        VALUES (@PackageId, src.TABLE_NAME, src.SOURCE_OBJECT, src.TARGET_OBJECT, 1, src.DESCRIPTION);
+END
+GO
