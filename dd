@@ -1,69 +1,62 @@
-/* IW/OW non-proportional premium split from SICS.
-   Replaces REIN_COB_CODE_PREM_SPLIT (latest version) for RI types X and R. */
-WITH T0 AS (  -- outward non-proportional policies
-    SELECT
-        b.OBJECT_ID AS BUSINESS_ID,
-        COALESCE(
-            NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
-            LTRIM(RTRIM(ip.BUS_INS_PER_ID))
-        ) AS RCS_RPD_POLICY_REF,
-        YEAR(b.INCEPTION_DATE) AS RCS_YEAR,
-        ip.OBJECT_ID AS INSURED_PERIOD_ID
-    FROM SICS.BUSINESS AS b
-    JOIN SICS.REFERENCE_DATA AS tob
-        ON tob.CODE = b.FRK_TYPE_OF_BUS
-       AND tob.SUBCLASS = b.FSK_TYPE_OF_BUS
-       AND tob.SUBCLASS = 46
-       AND tob.CODE IN (N'NONPROPTT', N'NONPROPFA')
-       AND tob.EXTERNAL_CODE IN (N'TN', N'FN')
-    JOIN SICS.INSURED_PERIOD AS ip
-        ON ip.FK_BUSINESS = b.OBJECT_ID
-    WHERE b.SUBCLASS IN (3, 8, 11)
-),
-T1 AS (  -- current accounting-classification split
-    SELECT
-        t0.RCS_RPD_POLICY_REF,
-        t0.RCS_YEAR,
-        CONVERT(VARCHAR(15), ac.FRK_REFIC3) AS RCS_COB_CODE,
-        CASE LTRIM(RTRIM(COALESCE(NULLIF(LTRIM(RTRIM(sug.EXTERNAL_CODE)), N''), sug.CODE)))
-            WHEN N'TP' THEN N'11'
-            WHEN N'TN' THEN N'12'
-            WHEN N'FP' THEN N'21'
-            WHEN N'FN' THEN N'22'
-        END AS RCS_SUG_GROUP_CODE,
-        rl.CODE AS RCS_SYN_USER_NUMBER,
-        ac.SPLIT_PCT AS RCS_PREM_SPLIT_PCNT
-    FROM T0 AS t0
-    JOIN SICS.LIFE_CYCLE_PHASE AS lcp
-        ON lcp.FK_INS_PRD = t0.INSURED_PERIOD_ID
-       AND lcp.IS_CURRENT = 'Y'
-    JOIN SICS.SCOPE_OF_COVER AS soc
-        ON soc.FK_LIFECYCLEP = lcp.OBJECT_ID
-    JOIN SICS.ACC_CLASSIFIC AS ac
-        ON ac.FK_SOURCE_SOC = soc.OBJECT_ID
-       AND ac.FK_BUS = t0.BUSINESS_ID
-       AND ac.IS_ACTIVE = 'Y'
-       AND ac.FSK_REFIC3 = 3
-    JOIN SICS.REFERENCE_DATA AS sug
-        ON sug.CODE = ac.FRK_REFIC46
-       AND sug.SUBCLASS = ac.FSK_REFIC46
-       AND sug.SUBCLASS = 46
-    JOIN SICS.RU_LEAF AS rl
-        ON rl.OBJECT_ID = ac.FK_REP_UNIT_1
-       AND rl.FRK_CATEGORY = 'PC'
-       AND rl.FSK_CATEGORY = 42
-)
+/* REIN_ALLOCATION — SICS read
+   Booked rows only. O/S is excluded until the outstanding filter is confirmed.
+   Grain in Senergy is one allocation row. Sum DTL_AMT to that key.
+   Do not sum LEDGER_BAL_ORG_AMT once per detail line.
+   AUDIT_DATE_SRGT is calculated here; it is not a SICS column.
+*/
+
 SELECT
-    t1.RCS_RPD_POLICY_REF,
-    t1.RCS_YEAR,
-    t1.RCS_COB_CODE,
-    t1.RCS_SUG_GROUP_CODE,
-    t1.RCS_SYN_USER_NUMBER,
-    SUM(t1.RCS_PREM_SPLIT_PCNT) AS RCS_PREM_SPLIT_PCNT
-FROM T1 AS t1
-GROUP BY
-    t1.RCS_RPD_POLICY_REF,
-    t1.RCS_YEAR,
-    t1.RCS_COB_CODE,
-    t1.RCS_SUG_GROUP_CODE,
-    t1.RCS_SYN_USER_NUMBER;
+    ws.ID_SERIE_NO                                              AS AUDIT_NUMBER,
+    CAST(ws.BOOKING_DATE AS datetime)                           AS AUDIT_DATE,
+    CONVERT(int, CONVERT(varchar(10), ws.BOOKING_DATE, 112))    AS AUDIT_DATE_SRGT,
+    ec.CODE                                                     AS TRANSACTION_TYPE,
+    dtl.UW_YEAR                                                 AS UW_YEAR,
+    cob.CODE                                                    AS COB_CODE,
+    ru.CODE                                                     AS SYN_USER_NUMBER,
+    CASE rd.EXTERNAL_CODE
+        WHEN N'TP' THEN N'11'
+        WHEN N'TN' THEN N'12'
+        WHEN N'FP' THEN N'21'
+        WHEN N'FN' THEN N'22'
+    END                                                         AS SUG_GROUP_CODE,
+    CASE
+        WHEN ec.CODE IN (N'10', N'20', N'30')
+            THEN CAST(ws.BOOKING_DATE AS datetime)
+        WHEN ec.CODE IN (N'21', N'28', N'51', N'52', N'70', N'80', N'81')
+            THEN CONVERT(datetime,
+                   CONVERT(char(4), bal.BOOKING_YEAR)
+                   + RIGHT('0' + REPLACE(UPPER(LTRIM(RTRIM(bal.FRK_BOOKING_PERIOD))), 'M', ''), 2)
+                   + '01')
+        ELSE NULL   /* entry 49 and batch-timestamp O/S: open */
+    END                                                         AS PROCESSING_PERIOD,
+    bal.FK_CURR                                                 AS ORIG_CCY,
+    CAST(dtl.DTL_AMT AS decimal(22, 3))                         AS ORIG_NET_AMT,
+    COALESCE(sett.FK_CURR, bal.FK_CURR)                         AS SETTLEMENT_CCY,
+    CAST(
+        COALESCE(sett.LEDGER_BAL_ORG_AMT, dtl.DTL_AMT)
+        AS decimal(22, 3)
+    )                                                           AS SETTLEMENT_NET_AMT
+FROM dbo.AC_LEDGER_DETAIL AS dtl
+INNER JOIN dbo.AC_LEDGER_BALANCE AS bal
+    ON bal.OBJECT_ID = dtl.FK_BALANCE
+INNER JOIN dbo.AC_WORKSHEET AS ws
+    ON ws.OBJECT_ID = dtl.FK_WORKSHEET
+INNER JOIN dbo.ENTRY_CODE AS ec
+    ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
+INNER JOIN dbo.ACC_CLASSIFIC AS cls
+    ON cls.OBJECT_ID = dtl.FK_ACCT_CLASS
+LEFT JOIN dbo.RU_LEAF AS ru
+    ON ru.OBJECT_ID = cls.FK_REP_UNIT_1
+   AND ru.FRK_CATEGORY = N'PC'
+   AND ru.FSK_CATEGORY = 42
+LEFT JOIN dbo.REFERENCE_DATA AS cob
+    ON cob.CODE = cls.FRK_REFIC3
+   AND cob.SUBCLASS = cls.FSK_REFIC3
+   AND cls.FSK_REFIC3 = 3
+LEFT JOIN dbo.REFERENCE_DATA AS rd
+    ON rd.CODE = cls.FRK_REFIC46
+   AND rd.SUBCLASS = cls.FSK_REFIC46
+   AND cls.FSK_REFIC46 = 46
+LEFT JOIN dbo.AC_LEDGER_BALANCE AS sett
+    ON sett.OBJECT_ID = bal.FK_SETTLEMENT_BAL
+   AND sett.SUBCLASS = 1;
