@@ -1,4 +1,5 @@
-/* FACT_TRA_SETTLEMENT — multiple rows per FACT_SETTLEMENT
+```sql
+/* FACT_TRA_SETTLEMENT — SICS extract
 
    Grain:
      One row per AC_LEDGER_DETAIL.OBJECT_ID belonging to a
@@ -79,7 +80,7 @@ SELECT
     settlement_balance.FK_CURR AS CURR_SETT_BK,
     bal.FK_CURR                AS CURR_ORIG_BK,
 
-    /* Dates */
+    /* Audit date key */
     TRY_CONVERT(
         int,
         CONVERT(
@@ -116,7 +117,7 @@ SELECT
         AS date
     ) AS STL_RECONCILED_DATE,
 
-    /* Processing period as YYYYMM01 */
+    /* Processing period key as YYYYMM01 */
     TRY_CONVERT(
         int,
         CONVERT(char(4), bal.BOOKING_YEAR)
@@ -124,12 +125,7 @@ SELECT
             '0' + REPLACE(
                 UPPER(
                     LTRIM(
-                        RTRIM(
-                            COALESCE(
-                                booking_period.CODE,
-                                bal.FRK_BOOKING_PERIOD
-                            )
-                        )
+                        RTRIM(bal.FRK_BOOKING_PERIOD)
                     )
                 ),
                 'M',
@@ -148,11 +144,13 @@ SELECT
         AS STL_BASE2_GROSS_AMT,
 
     /*
-       Parent-level amount repeated for reference only.
+       Provision-level amount repeated across its child rows.
        Do not SUM this column from FACT_TRA_SETTLEMENT.
     */
-    CAST(settlement_balance.LEDGER_BAL_ORG_AMT AS money)
-        AS STL_SETT_GROSS_AMT,
+    CAST(
+        settlement_balance.LEDGER_BAL_ORG_AMT
+        AS money
+    ) AS STL_SETT_GROSS_AMT,
 
     CAST(dtl.DTL_AMT AS money)
         AS STL_ORIG_GROSS_AMT,
@@ -160,7 +158,8 @@ SELECT
     /* Detail-level paid-to-date amounts */
     CAST(
         CASE
-            WHEN NULLIF(dtl.DTL_AMT, 0) IS NULL THEN 0
+            WHEN NULLIF(dtl.DTL_AMT, 0) IS NULL
+                THEN 0
             ELSE
                 dtl.EXCH_AMT
                 * (
@@ -170,12 +169,14 @@ SELECT
                     )
                     / NULLIF(dtl.DTL_AMT, 0)
                 )
-        END AS money
+        END
+        AS money
     ) AS STL_BASE_PTD_AMT,
 
     CAST(
         CASE
-            WHEN NULLIF(dtl.DTL_AMT, 0) IS NULL THEN 0
+            WHEN NULLIF(dtl.DTL_AMT, 0) IS NULL
+                THEN 0
             ELSE
                 dtl.FUNC_AMT2
                 * (
@@ -185,12 +186,13 @@ SELECT
                     )
                     / NULLIF(dtl.DTL_AMT, 0)
                 )
-        END AS money
+        END
+        AS money
     ) AS STL_BASE2_PTD_AMT,
 
     /*
-       Member-level value; it can repeat if one member has
-       multiple AC_LEDGER_DETAIL rows.
+       Member-level amount. It can repeat when one member
+       balance contains multiple detail rows.
     */
     CAST(bal.SETTLED_AMT AS money)
         AS STL_SETT_PTD_AMT,
@@ -204,8 +206,11 @@ SELECT
     /* ETL-derived; transformation not confirmed */
     CAST(NULL AS varchar(50)) AS RECORD_TYPE,
 
-    /* Reference-data list 416 */
-    gl_account.CODE AS STL_ACCOUNT_CODE,
+    /*
+       FRK_GL_ACCOUNT already contains the code from
+       reference-data list 416.
+    */
+    bal.FRK_GL_ACCOUNT AS STL_ACCOUNT_CODE,
 
     /* DIM_CLAIM_GROUP lookup */
     claim_group.CLGRP_BK
@@ -216,7 +221,8 @@ INNER JOIN SICS.AC_LEDGER_BALANCE AS bal
     ON bal.OBJECT_ID = dtl.FK_BALANCE
 
 INNER JOIN SICS.AC_LEDGER_BALANCE AS settlement_balance
-    ON settlement_balance.OBJECT_ID = bal.FK_SETTLEMENT_BAL
+    ON settlement_balance.OBJECT_ID =
+       bal.FK_SETTLEMENT_BAL
    AND settlement_balance.SUBCLASS = 1
 
 LEFT JOIN SICS.AC_WORKSHEET AS ws
@@ -236,29 +242,21 @@ LEFT JOIN SICS.BUSINESS AS bus
     ON bus.OBJECT_ID = ip.FK_BUSINESS
 
 LEFT JOIN SICS.CLAIMS AS claim_direct
-    ON claim_direct.OBJECT_ID = dtl.FK_CLAIM_TO_SOC
+    ON claim_direct.OBJECT_ID =
+       dtl.FK_CLAIM_TO_SOC
 
 LEFT JOIN SICS.SOC_TO_CLAIM_REL AS claim_relation
-    ON claim_relation.OBJECT_ID = bal.FK_CLAIM
+    ON claim_relation.OBJECT_ID =
+       bal.FK_CLAIM
 
 LEFT JOIN SICS.CLAIMS AS claim_from_balance
     ON claim_from_balance.OBJECT_ID =
        claim_relation.FK_CLAIM
 
 LEFT JOIN SICS.CLAIMS AS headline
-    ON headline.OBJECT_ID = dtl.FK_HEADLINE_LOSS
+    ON headline.OBJECT_ID =
+       dtl.FK_HEADLINE_LOSS
    AND headline.SUBCLASS = 6
-
-/* General Ledger Account reference-data list 416 */
-LEFT JOIN SICS.REFERENCE_DATA AS gl_account
-    ON gl_account.OBJECT_ID = bal.FRK_GL_ACCOUNT
-   AND gl_account.SUBCLASS = 416
-
-/* Booking Period reference-data list 10 */
-LEFT JOIN SICS.REFERENCE_DATA AS booking_period
-    ON booking_period.OBJECT_ID =
-       bal.FRK_BOOKING_PERIOD
-   AND booking_period.SUBCLASS = 10
 
 OUTER APPLY
 (
@@ -290,3 +288,4 @@ OUTER APPLY
 
 WHERE bal.FK_SETTLEMENT_BAL IS NOT NULL
   AND bal.IS_PART_SET_BAL = 'Y';
+```
