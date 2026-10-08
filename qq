@@ -1,69 +1,292 @@
+/* FACT_TRA_SETTLEMENT — multiple rows per FACT_SETTLEMENT
 
+   Grain:
+     One row per AC_LEDGER_DETAIL.OBJECT_ID belonging to a
+     Settlement Balance member.
 
-IF NOT EXISTS (
-    SELECT 1
-    FROM   audit.ETL_PACKAGE
-    WHERE  PACKAGE_NAME = N'APPORTION_PACKAGE'
-)
-BEGIN
-    INSERT INTO audit.ETL_PACKAGE
-        (PACKAGE_NAME, PACKAGE_FILE_NAME, EXECUTION_ORDER, IS_ENABLED, DESCRIPTION)
-    VALUES
-        (N'APPORTION_PACKAGE',
-         N'Apportioning.dtsx',
-         40,
-         1,
-         N'Apportion package: OW premium initial split, OW transaction allocation, IW–OW policy link.');
-END
-ELSE
-BEGIN
-    UPDATE audit.ETL_PACKAGE
-    SET    PACKAGE_FILE_NAME = N'Apportioning.dtsx',
-           EXECUTION_ORDER   = 40,
-           IS_ENABLED        = 1,
-           DESCRIPTION       = N'Apportion package: OW premium initial split, OW transaction allocation, IW–OW policy link.'
-    WHERE  PACKAGE_NAME = N'APPORTION_PACKAGE';
-END
-GO
+   Relationship:
+     FACT_SETTLEMENT.SETTLEMENT_BK
+       = FACT_TRA_SETTLEMENT.SETTLEMENT_BK
+*/
 
-DECLARE @PackageId INT =
-    (SELECT PACKAGE_ID FROM audit.ETL_PACKAGE WHERE PACKAGE_NAME = N'APPORTION_PACKAGE');
+SELECT
+    /* Parent link to FACT_SETTLEMENT */
+    settlement_balance.OBJECT_ID AS SETTLEMENT_BK,
 
-IF @PackageId IS NULL
-BEGIN
-    RAISERROR(N'APPORTION_PACKAGE was not found in audit.ETL_PACKAGE after seed.', 16, 1);
-END
-ELSE
-BEGIN
-    ;WITH src AS (
-        SELECT *
-        FROM (VALUES
-            (N'OW_PREM_INIT_SPLIT',
-             N'SICS.dbo.ACC_CLASSIFIC',
-             N'dbo.OW_PREM_INIT_SPLIT',
-             N'ACC_CLASSIFIC split on outward non-proportional BUSINESS (SUBCLASS 3, 8, 11; type NONPROPTT/NONPROPFA). Replaces REIN_COB_CODE_PREM_SPLIT.'),
-            (N'OW_TRANSACTION_ALLOCATION',
-             N'SICS.dbo.AC_LEDGER_DETAIL',
-             N'dbo.OW_TRANSACTION_ALLOCATION',
-             N'AC_LEDGER_DETAIL joined to AC_LEDGER_BALANCE and AC_WORKSHEET; classification via ACC_CLASSIFIC. Replaces REIN_ALLOCATION.'),
-            (N'OW_IW_POLICY_LINK',
-             N'SICS.dbo.BUS_STRUCT_REP',
-             N'dbo.OW_IW_POLICY_LINK',
-             N'Proportional protection: inward BUS_STRUCT_REP (SUBCLASS 6) to outward BUSINESS (SUBCLASS 3, 8, 11) via BUS_RETRO_IBR and BUS_RETRO. Replaces POLICY_REINSURANCE_LINK.')
-        ) AS v (TABLE_NAME, SOURCE_OBJECT, TARGET_OBJECT, DESCRIPTION)
-    )
-    MERGE audit.ETL_PACKAGE_TABLE AS t
-    USING src
-       ON t.PACKAGE_ID = @PackageId
-      AND t.TABLE_NAME = src.TABLE_NAME
-    WHEN MATCHED THEN
-        UPDATE SET
-            SOURCE_OBJECT = src.SOURCE_OBJECT,
-            TARGET_OBJECT = src.TARGET_OBJECT,
-            DESCRIPTION   = src.DESCRIPTION,
-            IS_ENABLED    = 1
-    WHEN NOT MATCHED THEN
-        INSERT (PACKAGE_ID, TABLE_NAME, SOURCE_OBJECT, TARGET_OBJECT, IS_ENABLED, DESCRIPTION)
-        VALUES (@PackageId, src.TABLE_NAME, src.SOURCE_OBJECT, src.TARGET_OBJECT, 1, src.DESCRIPTION);
-END
-GO
+    /* Child source keys */
+    bal.OBJECT_ID AS SETTLEMENT_MEMBER_BK,
+    dtl.OBJECT_ID AS TRA_SETTLEMENT_BK,
+
+    /* DIM_WORK_SHEET lookup */
+    CASE
+        WHEN COALESCE(
+                 ws.BOOKING_DATE,
+                 bal.DATE_OF_BOOKING
+             ) IS NULL
+          OR COALESCE(
+                 ws.ID_SERIE_NO,
+                 bal.ID_SERIE_NO
+             ) IS NULL
+        THEN NULL
+        ELSE
+            CONVERT(
+                char(8),
+                COALESCE(
+                    ws.BOOKING_DATE,
+                    bal.DATE_OF_BOOKING
+                ),
+                112
+            )
+            + '|'
+            + CONVERT(
+                varchar(20),
+                COALESCE(
+                    ws.ID_SERIE_NO,
+                    bal.ID_SERIE_NO
+                )
+            )
+    END AS WRKS_BK,
+
+    /* DIM_TRANSACTION_TYPE lookup */
+    ec.CODE AS TRST_TYPE_BK,
+
+    CASE
+        WHEN bal.IS_OUTWARD = 'Y' THEN 'O'
+        ELSE 'I'
+    END AS TRST_INDICATOR,
+
+    /* DIM_TRANSACTION_CODE lookup */
+    ec.CODE AS TRCD_CODE_BK,
+
+    /* No confirmed lookup rules */
+    CAST(NULL AS int) AS STL_ENTRY_TYPE_SRGT,
+    CAST(NULL AS int) AS STL_STATUS_SRGT,
+
+    /* DIM_POLICY lookup */
+    bus.IDENTIFIER AS POLICY_BK,
+
+    /* DIM_CLAIM lookup */
+    COALESCE(
+        claim_direct.CLAIM_IDENTIFIER,
+        claim_from_balance.CLAIM_IDENTIFIER
+    ) AS CLA_CLAIM_BK,
+
+    /* DIM_BROKER lookup */
+    broker.BROK_BK,
+
+    /* DIM_CURRENCY lookups */
+    bal.FK_AC_FUNC_CCY         AS CURR_BASE_BK,
+    settlement_balance.FK_CURR AS CURR_SETT_BK,
+    bal.FK_CURR                AS CURR_ORIG_BK,
+
+    /* Dates */
+    TRY_CONVERT(
+        int,
+        CONVERT(
+            char(8),
+            COALESCE(
+                ws.BOOKING_DATE,
+                bal.DATE_OF_BOOKING
+            ),
+            112
+        )
+    ) AS STL_AUDIT_DATE_SRGT,
+
+    CAST(
+        COALESCE(
+            ws.BOOKING_DATE,
+            bal.DATE_OF_BOOKING
+        ) AS date
+    ) AS STL_AUDIT_DATE,
+
+    COALESCE(
+        ws.ID_SERIE_NO,
+        bal.ID_SERIE_NO
+    ) AS STL_AUDIT_NUM,
+
+    CAST(
+        COALESCE(
+            bal.VALUE_DATE,
+            bal.DUE_DATE
+        ) AS date
+    ) AS STL_EFFECTIVE_DATE,
+
+    CAST(
+        bal.ACTUAL_SETLMT_DATE
+        AS date
+    ) AS STL_RECONCILED_DATE,
+
+    /* Processing period as YYYYMM01 */
+    TRY_CONVERT(
+        int,
+        CONVERT(char(4), bal.BOOKING_YEAR)
+        + RIGHT(
+            '0' + REPLACE(
+                UPPER(
+                    LTRIM(
+                        RTRIM(
+                            COALESCE(
+                                booking_period.CODE,
+                                bal.FRK_BOOKING_PERIOD
+                            )
+                        )
+                    )
+                ),
+                'M',
+                ''
+            ),
+            2
+        )
+        + '01'
+    ) AS STL_PROCESSING_PERIOD_SRGT,
+
+    /* Detail-level gross amounts */
+    CAST(dtl.EXCH_AMT AS money)
+        AS STL_BASE_GROSS_AMT,
+
+    CAST(dtl.FUNC_AMT2 AS money)
+        AS STL_BASE2_GROSS_AMT,
+
+    /*
+       Parent-level amount repeated for reference only.
+       Do not SUM this column from FACT_TRA_SETTLEMENT.
+    */
+    CAST(settlement_balance.LEDGER_BAL_ORG_AMT AS money)
+        AS STL_SETT_GROSS_AMT,
+
+    CAST(dtl.DTL_AMT AS money)
+        AS STL_ORIG_GROSS_AMT,
+
+    /* Detail-level paid-to-date amounts */
+    CAST(
+        CASE
+            WHEN NULLIF(dtl.DTL_AMT, 0) IS NULL THEN 0
+            ELSE
+                dtl.EXCH_AMT
+                * (
+                    (
+                        dtl.DTL_AMT
+                        - COALESCE(dtl.DTL_UNR_AMT, 0)
+                    )
+                    / NULLIF(dtl.DTL_AMT, 0)
+                )
+        END AS money
+    ) AS STL_BASE_PTD_AMT,
+
+    CAST(
+        CASE
+            WHEN NULLIF(dtl.DTL_AMT, 0) IS NULL THEN 0
+            ELSE
+                dtl.FUNC_AMT2
+                * (
+                    (
+                        dtl.DTL_AMT
+                        - COALESCE(dtl.DTL_UNR_AMT, 0)
+                    )
+                    / NULLIF(dtl.DTL_AMT, 0)
+                )
+        END AS money
+    ) AS STL_BASE2_PTD_AMT,
+
+    /*
+       Member-level value; it can repeat if one member has
+       multiple AC_LEDGER_DETAIL rows.
+    */
+    CAST(bal.SETTLED_AMT AS money)
+        AS STL_SETT_PTD_AMT,
+
+    CAST(
+        dtl.DTL_AMT
+        - COALESCE(dtl.DTL_UNR_AMT, 0)
+        AS money
+    ) AS STL_ORIG_PTD_AMT,
+
+    /* ETL-derived; transformation not confirmed */
+    CAST(NULL AS varchar(50)) AS RECORD_TYPE,
+
+    /* Reference-data list 416 */
+    gl_account.CODE AS STL_ACCOUNT_CODE,
+
+    /* DIM_CLAIM_GROUP lookup */
+    claim_group.CLGRP_BK
+
+FROM SICS.AC_LEDGER_DETAIL AS dtl
+
+INNER JOIN SICS.AC_LEDGER_BALANCE AS bal
+    ON bal.OBJECT_ID = dtl.FK_BALANCE
+
+INNER JOIN SICS.AC_LEDGER_BALANCE AS settlement_balance
+    ON settlement_balance.OBJECT_ID = bal.FK_SETTLEMENT_BAL
+   AND settlement_balance.SUBCLASS = 1
+
+LEFT JOIN SICS.AC_WORKSHEET AS ws
+    ON ws.OBJECT_ID =
+       COALESCE(
+           dtl.FK_WORKSHEET,
+           bal.FK_WORKSHEET
+       )
+
+LEFT JOIN SICS.ENTRY_CODE AS ec
+    ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
+
+LEFT JOIN SICS.INSURED_PERIOD AS ip
+    ON ip.OBJECT_ID = dtl.FK_INS_PER
+
+LEFT JOIN SICS.BUSINESS AS bus
+    ON bus.OBJECT_ID = ip.FK_BUSINESS
+
+LEFT JOIN SICS.CLAIMS AS claim_direct
+    ON claim_direct.OBJECT_ID = dtl.FK_CLAIM_TO_SOC
+
+LEFT JOIN SICS.SOC_TO_CLAIM_REL AS claim_relation
+    ON claim_relation.OBJECT_ID = bal.FK_CLAIM
+
+LEFT JOIN SICS.CLAIMS AS claim_from_balance
+    ON claim_from_balance.OBJECT_ID =
+       claim_relation.FK_CLAIM
+
+LEFT JOIN SICS.CLAIMS AS headline
+    ON headline.OBJECT_ID = dtl.FK_HEADLINE_LOSS
+   AND headline.SUBCLASS = 6
+
+/* General Ledger Account reference-data list 416 */
+LEFT JOIN SICS.REFERENCE_DATA AS gl_account
+    ON gl_account.OBJECT_ID = bal.FRK_GL_ACCOUNT
+   AND gl_account.SUBCLASS = 416
+
+/* Booking Period reference-data list 10 */
+LEFT JOIN SICS.REFERENCE_DATA AS booking_period
+    ON booking_period.OBJECT_ID =
+       bal.FRK_BOOKING_PERIOD
+   AND booking_period.SUBCLASS = 10
+
+OUTER APPLY
+(
+    SELECT TOP (1)
+        broker_party.IDENTIFIER AS BROK_BK
+    FROM SICS.BUSINESS_PRTNR_REL AS bpr
+    INNER JOIN SICS.PARTY AS broker_party
+        ON broker_party.OBJECT_ID =
+           bpr.FK_BUS_PARTNER
+    WHERE bpr.FRK_RELSHIP_TYPE = 'BR'
+      AND bpr.FSK_RELSHIP_TYPE = 55
+      AND
+      (
+          bpr.FK_INS_PERIOD = ip.OBJECT_ID
+          OR bpr.FK_BUSINESS = bus.OBJECT_ID
+      )
+    ORDER BY broker_party.IDENTIFIER
+) AS broker
+
+OUTER APPLY
+(
+    SELECT TOP (1)
+        ref.REFERENCE_ID AS CLGRP_BK
+    FROM SICS.CL_HLOSS_REF AS ref
+    WHERE ref.FK_PARENT = headline.OBJECT_ID
+      AND ref.REFERENCE_ID IS NOT NULL
+    ORDER BY ref.REFERENCE_ID
+) AS claim_group
+
+WHERE bal.FK_SETTLEMENT_BAL IS NOT NULL
+  AND bal.IS_PART_SET_BAL = 'Y';
