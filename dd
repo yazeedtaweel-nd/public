@@ -1,15 +1,231 @@
-DECLARE @ExecutionId BIGINT = 123;  -- replace with the ETL run id
+/* FACT_SETTLEMENT — one row per Settlement Balance/Provision
 
+   Grain:
+     One row per settlement_balance.OBJECT_ID.
+
+   Child-level dimensions such as worksheet, policy, claim and transaction
+   belong in FACT_TRA_SETTLEMENT and are not forced into the parent row.
+*/
+
+WITH EligibleMember AS
+(
+    SELECT
+        bal.OBJECT_ID,
+        bal.FK_SETTLEMENT_BAL,
+        bal.FK_AC_FUNC_CCY,
+        bal.FK_CURR,
+        bal.SETTLED_AMT,
+        gl_account.CODE AS STL_ACCOUNT_CODE
+    FROM SICS.AC_LEDGER_BALANCE AS bal
+    LEFT JOIN SICS.REFERENCE_DATA AS gl_account
+        ON gl_account.OBJECT_ID = bal.FRK_GL_ACCOUNT
+       AND gl_account.SUBCLASS = 416
+    WHERE bal.FK_SETTLEMENT_BAL IS NOT NULL
+      AND bal.IS_PART_SET_BAL = 'Y'
+),
+MemberAggregate AS
+(
+    SELECT
+        FK_SETTLEMENT_BAL AS SETTLEMENT_BK,
+
+        COUNT(*) AS MEMBER_COUNT,
+
+        /* Return currency only when all members have the same value */
+        CASE
+            WHEN MIN(FK_AC_FUNC_CCY) = MAX(FK_AC_FUNC_CCY)
+            THEN MIN(FK_AC_FUNC_CCY)
+        END AS CURR_BASE_BK,
+
+        CASE
+            WHEN MIN(FK_CURR) = MAX(FK_CURR)
+            THEN MIN(FK_CURR)
+        END AS CURR_ORIG_BK,
+
+        /* Do not repeat member values through AC_LEDGER_DETAIL */
+        SUM(CAST(COALESCE(SETTLED_AMT, 0) AS decimal(38, 8)))
+            AS STL_SETT_PTD_AMT,
+
+        /* Return account code only if members have one common code */
+        CASE
+            WHEN MIN(STL_ACCOUNT_CODE) = MAX(STL_ACCOUNT_CODE)
+            THEN MIN(STL_ACCOUNT_CODE)
+        END AS STL_ACCOUNT_CODE
+    FROM EligibleMember
+    GROUP BY FK_SETTLEMENT_BAL
+),
+DetailAggregate AS
+(
+    SELECT
+        member.FK_SETTLEMENT_BAL AS SETTLEMENT_BK,
+
+        COUNT_BIG(*) AS DETAIL_COUNT,
+
+        SUM(CAST(COALESCE(dtl.EXCH_AMT, 0) AS decimal(38, 8)))
+            AS STL_BASE_GROSS_AMT,
+
+        SUM(CAST(COALESCE(dtl.FUNC_AMT2, 0) AS decimal(38, 8)))
+            AS STL_BASE2_GROSS_AMT,
+
+        SUM(CAST(COALESCE(dtl.DTL_AMT, 0) AS decimal(38, 8)))
+            AS STL_ORIG_GROSS_AMT,
+
+        SUM(
+            CAST(
+                CASE
+                    WHEN NULLIF(dtl.DTL_AMT, 0) IS NULL THEN 0
+                    ELSE
+                        dtl.EXCH_AMT
+                        * (
+                            (
+                                dtl.DTL_AMT
+                                - COALESCE(dtl.DTL_UNR_AMT, 0)
+                            )
+                            / NULLIF(dtl.DTL_AMT, 0)
+                        )
+                END
+                AS decimal(38, 8)
+            )
+        ) AS STL_BASE_PTD_AMT,
+
+        SUM(
+            CAST(
+                CASE
+                    WHEN NULLIF(dtl.DTL_AMT, 0) IS NULL THEN 0
+                    ELSE
+                        dtl.FUNC_AMT2
+                        * (
+                            (
+                                dtl.DTL_AMT
+                                - COALESCE(dtl.DTL_UNR_AMT, 0)
+                            )
+                            / NULLIF(dtl.DTL_AMT, 0)
+                        )
+                END
+                AS decimal(38, 8)
+            )
+        ) AS STL_BASE2_PTD_AMT,
+
+        SUM(
+            CAST(
+                dtl.DTL_AMT
+                - COALESCE(dtl.DTL_UNR_AMT, 0)
+                AS decimal(38, 8)
+            )
+        ) AS STL_ORIG_PTD_AMT
+    FROM EligibleMember AS member
+    INNER JOIN SICS.AC_LEDGER_DETAIL AS dtl
+        ON dtl.FK_BALANCE = member.OBJECT_ID
+    GROUP BY member.FK_SETTLEMENT_BAL
+)
 SELECT
-    te.TABLE_NAME,
-    pe.STATUS,
-    te.ROWS_READ,
-    te.ROWS_INSERTED,
-    te.ROWS_UPDATED,
-    te.ROWS_REJECTED,
-    te.LOGGED_DATE
-FROM audit.ETL_PACKAGE_TABLE_EXECUTION AS te
-INNER JOIN audit.ETL_PACKAGE_EXECUTION AS pe
-    ON pe.EXECUTION_ID = te.EXECUTION_ID
-WHERE te.EXECUTION_ID = @ExecutionId
-ORDER BY te.TABLE_NAME;
+    /* Stable source key linking to FACT_TRA_SETTLEMENT */
+    settlement_balance.OBJECT_ID AS SETTLEMENT_BK,
+
+    /* Child-level dimensions belong in FACT_TRA_SETTLEMENT */
+    CAST(NULL AS varchar(50)) AS WRKS_BK,
+    CAST(NULL AS varchar(50)) AS TRST_TYPE_BK,
+    CAST(NULL AS char(1))     AS TRST_INDICATOR,
+    CAST(NULL AS varchar(50)) AS TRCD_CODE_BK,
+    CAST(NULL AS int)         AS STL_ENTRY_TYPE_SRGT,
+    CAST(NULL AS int)         AS STL_STATUS_SRGT,
+    CAST(NULL AS varchar(50)) AS POLICY_BK,
+    CAST(NULL AS varchar(50)) AS CLA_CLAIM_BK,
+    CAST(NULL AS varchar(50)) AS BROK_BK,
+    CAST(NULL AS varchar(50)) AS CLGRP_BK,
+
+    /* Currency */
+    members.CURR_BASE_BK,
+    settlement_balance.FK_CURR AS CURR_SETT_BK,
+    members.CURR_ORIG_BK,
+
+    /* Header dates */
+    TRY_CONVERT(
+        int,
+        CONVERT(char(8), settlement_balance.DATE_OF_BOOKING, 112)
+    ) AS STL_AUDIT_DATE_SRGT,
+
+    CAST(settlement_balance.DATE_OF_BOOKING AS date)
+        AS STL_AUDIT_DATE,
+
+    settlement_balance.ID_SERIE_NO
+        AS STL_AUDIT_NUM,
+
+    CAST(
+        COALESCE(
+            settlement_balance.VALUE_DATE,
+            settlement_balance.DUE_DATE
+        ) AS date
+    ) AS STL_EFFECTIVE_DATE,
+
+    CAST(settlement_balance.ACTUAL_SETLMT_DATE AS date)
+        AS STL_RECONCILED_DATE,
+
+    TRY_CONVERT(
+        int,
+        CONVERT(char(4), settlement_balance.BOOKING_YEAR)
+        + RIGHT(
+            '0' + REPLACE(
+                UPPER(
+                    LTRIM(
+                        RTRIM(
+                            COALESCE(
+                                booking_period.CODE,
+                                settlement_balance.FRK_BOOKING_PERIOD
+                            )
+                        )
+                    )
+                ),
+                'M',
+                ''
+            ),
+            2
+        )
+        + '01'
+    ) AS STL_PROCESSING_PERIOD_SRGT,
+
+    /* Aggregated detail amounts */
+    CAST(details.STL_BASE_GROSS_AMT AS money)
+        AS STL_BASE_GROSS_AMT,
+
+    CAST(details.STL_BASE2_GROSS_AMT AS money)
+        AS STL_BASE2_GROSS_AMT,
+
+    /* Header amount: returned once */
+    CAST(settlement_balance.LEDGER_BAL_ORG_AMT AS money)
+        AS STL_SETT_GROSS_AMT,
+
+    CAST(details.STL_ORIG_GROSS_AMT AS money)
+        AS STL_ORIG_GROSS_AMT,
+
+    CAST(details.STL_BASE_PTD_AMT AS money)
+        AS STL_BASE_PTD_AMT,
+
+    CAST(details.STL_BASE2_PTD_AMT AS money)
+        AS STL_BASE2_PTD_AMT,
+
+    CAST(members.STL_SETT_PTD_AMT AS money)
+        AS STL_SETT_PTD_AMT,
+
+    CAST(details.STL_ORIG_PTD_AMT AS money)
+        AS STL_ORIG_PTD_AMT,
+
+    members.STL_ACCOUNT_CODE,
+
+    /* Useful validation columns */
+    members.MEMBER_COUNT,
+    details.DETAIL_COUNT
+
+FROM SICS.AC_LEDGER_BALANCE AS settlement_balance
+
+INNER JOIN MemberAggregate AS members
+    ON members.SETTLEMENT_BK = settlement_balance.OBJECT_ID
+
+LEFT JOIN DetailAggregate AS details
+    ON details.SETTLEMENT_BK = settlement_balance.OBJECT_ID
+
+LEFT JOIN SICS.REFERENCE_DATA AS booking_period
+    ON booking_period.OBJECT_ID =
+       settlement_balance.FRK_BOOKING_PERIOD
+   AND booking_period.SUBCLASS = 10
+
+WHERE settlement_balance.SUBCLASS = 1;
