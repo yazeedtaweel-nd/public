@@ -1,17 +1,10 @@
-/* REIN_ALLOCATION — SICS read
-   Booked rows only. O/S is excluded until the outstanding filter is confirmed.
-   Grain in Senergy is one allocation row. Sum DTL_AMT to that key.
-   Do not sum LEDGER_BAL_ORG_AMT once per detail line.
-   AUDIT_DATE_SRGT is calculated here; it is not a SICS column.
-*/
-
 SELECT
     ws.ID_SERIE_NO                                              AS AUDIT_NUMBER,
     CAST(ws.BOOKING_DATE AS datetime)                           AS AUDIT_DATE,
     CONVERT(int, CONVERT(varchar(10), ws.BOOKING_DATE, 112))    AS AUDIT_DATE_SRGT,
     ec.CODE                                                     AS TRANSACTION_TYPE,
     dtl.UW_YEAR                                                 AS UW_YEAR,
-    cob.CODE                                                    AS COB_CODE,
+    CONVERT(VARCHAR(15), cob.CODE)                              AS COB_CODE,
     ru.CODE                                                     AS SYN_USER_NUMBER,
     CASE rd.EXTERNAL_CODE
         WHEN N'TP' THEN N'11'
