@@ -1,291 +1,2062 @@
-```sql
-/* FACT_TRA_SETTLEMENT — SICS extract
+#!/usr/bin/env python3
+"""Compare many tables from a CSV or Excel list and write one workbook per group."""
 
-   Grain:
-     One row per AC_LEDGER_DETAIL.OBJECT_ID belonging to a
-     Settlement Balance member.
+from __future__ import annotations
 
-   Relationship:
-     FACT_SETTLEMENT.SETTLEMENT_BK
-       = FACT_TRA_SETTLEMENT.SETTLEMENT_BK
-*/
+import argparse
+import csv
+import hashlib
+import json
+import os
+import re
+import shutil
+import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Callable, Iterable, Sequence, TextIO, TypeVar
 
-SELECT
-    /* Parent link to FACT_SETTLEMENT */
-    settlement_balance.OBJECT_ID AS SETTLEMENT_BK,
+EXCEL_MAX_ROWS = 1_048_576
+EXCEL_MAX_SHEET = 31
+PROGRESS_EVERY = 100_000
+INVALID_SHEET_CHARS = re.compile(r"[\[\]*:/\\?]")
+INVALID_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*]')
+RESERVED_SHEETS = ("_Summary", "_Schema", "_Duplicates")
+DEFAULT_GROUP_NAME = "Ungrouped"
+T = TypeVar("T")
 
-    /* Child source keys */
-    bal.OBJECT_ID AS SETTLEMENT_MEMBER_BK,
-    dtl.OBJECT_ID AS TRA_SETTLEMENT_BK,
+DETAIL_HEADERS = ("Table", "Key", "Status", "Column", "SourceValue", "TargetValue")
+DUPLICATE_HEADERS = ("Table", "Key", "Status", "RecordCount")
+SCHEMA_HEADERS = ("Table", "Column", "Side", "Role", "SourceType", "TargetType")
+SUMMARY_HEADERS = (
+    "Group",
+    "Table",
+    "Schema",
+    "KeyColumns",
+    "ExcludedColumns",
+    "IncludedColumns",
+    "ExcludePatterns",
+    "Filter",
+    "Status",
+    "HasDifferences",
+    "DurationSec",
+    "SourceRowCount",
+    "TargetRowCount",
+    "CountDifference",
+    "MatchingRows",
+    "OnlyInSource",
+    "OnlyInTarget",
+    "ValueMismatch",
+    "DuplicateSourceKeys",
+    "DuplicateTargetKeys",
+    "DetailRows",
+    "DuplicateRows",
+    "SchemaRows",
+    "OverflowFile",
+    "Error",
+)
 
-    /* DIM_WORK_SHEET lookup */
-    CASE
-        WHEN COALESCE(
-                 ws.BOOKING_DATE,
-                 bal.DATE_OF_BOOKING
-             ) IS NULL
-          OR COALESCE(
-                 ws.ID_SERIE_NO,
-                 bal.ID_SERIE_NO
-             ) IS NULL
-        THEN NULL
-        ELSE
-            CONVERT(
-                char(8),
-                COALESCE(
-                    ws.BOOKING_DATE,
-                    bal.DATE_OF_BOOKING
-                ),
-                112
-            )
-            + '|'
-            + CONVERT(
-                varchar(20),
-                COALESCE(
-                    ws.ID_SERIE_NO,
-                    bal.ID_SERIE_NO
-                )
-            )
-    END AS WRKS_BK,
+_LOG_FILE: TextIO | None = None
+_LOG_LOCK = threading.Lock()
 
-    /* DIM_TRANSACTION_TYPE lookup */
-    ec.CODE AS TRST_TYPE_BK,
+COLUMN_ALIASES = {
+    "tablename": "table_name",
+    "table": "table_name",
+    "table_name": "table_name",
+    "keycolumns": "key_columns",
+    "keycolumn": "key_columns",
+    "key": "key_columns",
+    "keys": "key_columns",
+    "key_columns": "key_columns",
+    "excludedcolumns": "excluded_columns",
+    "excludedcolumn": "excluded_columns",
+    "excluded": "excluded_columns",
+    "exclude": "excluded_columns",
+    "excludes": "excluded_columns",
+    "excluded_columns": "excluded_columns",
+    "includedcolumns": "included_columns",
+    "includedcolumn": "included_columns",
+    "included": "included_columns",
+    "include": "included_columns",
+    "includecolumns": "included_columns",
+    "included_columns": "included_columns",
+    "excludepatterns": "exclude_patterns",
+    "excludepattern": "exclude_patterns",
+    "patterns": "exclude_patterns",
+    "autoexclude": "exclude_patterns",
+    "autoexcluded": "exclude_patterns",
+    "exclude_patterns": "exclude_patterns",
+    "schemaname": "schema_name",
+    "schema": "schema_name",
+    "schema_name": "schema_name",
+    "output": "output",
+    "includematches": "include_matches",
+    "include_matches": "include_matches",
+    "ignorecase": "ignore_case",
+    "ignore_case": "ignore_case",
+    "ignoreblank": "ignore_blank",
+    "ignore_blank": "ignore_blank",
+    "filter": "row_filter",
+    "where": "row_filter",
+    "predicate": "row_filter",
+    "rowfilter": "row_filter",
+    "row_filter": "row_filter",
+    "group": "group_name",
+    "package": "group_name",
+    "groupname": "group_name",
+    "packagename": "group_name",
+    "group_name": "group_name",
+    "module": "group_name",
+    "subject": "group_name",
+    "subjectarea": "group_name",
+    "domain": "group_name",
+    "area": "group_name",
+}
 
-    CASE
-        WHEN bal.IS_OUTWARD = 'Y' THEN 'O'
-        ELSE 'I'
-    END AS TRST_INDICATOR,
+GENERIC_SHEET_NAMES = {"sheet", "sheet1", "sheet2", "sheet3", "tables", "table", "list", "data"}
 
-    /* DIM_TRANSACTION_CODE lookup */
-    ec.CODE AS TRCD_CODE_BK,
+ODBC_DRIVERS = (
+    "ODBC Driver 18 for SQL Server",
+    "ODBC Driver 17 for SQL Server",
+    "ODBC Driver 13 for SQL Server",
+    "SQL Server",
+)
 
-    /* No confirmed lookup rules */
-    CAST(NULL AS int) AS STL_ENTRY_TYPE_SRGT,
-    CAST(NULL AS int) AS STL_STATUS_SRGT,
 
-    /* DIM_POLICY lookup */
-    bus.IDENTIFIER AS POLICY_BK,
+@dataclass
+class TableJob:
+    table_name: str
+    key_columns: str
+    excluded_columns: str | None = None
+    included_columns: str | None = None
+    exclude_patterns: str | None = None
+    schema_name: str | None = None
+    output: str | None = None
+    include_matches: bool | None = None
+    ignore_case: bool | None = None
+    ignore_blank: bool | None = None
+    row_filter: str | None = None
+    group_name: str | None = None
+    line_number: int = 0
 
-    /* DIM_CLAIM lookup */
-    COALESCE(
-        claim_direct.CLAIM_IDENTIFIER,
-        claim_from_balance.CLAIM_IDENTIFIER
-    ) AS CLA_CLAIM_BK,
 
-    /* DIM_BROKER lookup */
-    broker.BROK_BK,
+@dataclass
+class ResultSet:
+    kind: str
+    columns: list[str]
+    rows: list[tuple[Any, ...]]
 
-    /* DIM_CURRENCY lookups */
-    bal.FK_AC_FUNC_CCY         AS CURR_BASE_BK,
-    settlement_balance.FK_CURR AS CURR_SETT_BK,
-    bal.FK_CURR                AS CURR_ORIG_BK,
 
-    /* Audit date key */
-    TRY_CONVERT(
-        int,
-        CONVERT(
-            char(8),
-            COALESCE(
-                ws.BOOKING_DATE,
-                bal.DATE_OF_BOOKING
-            ),
-            112
+@dataclass
+class TableResult:
+    job: TableJob
+    status: str
+    schema_name: str = "dbo"
+    duration_sec: float = 0.0
+    error: str | None = None
+    detail_columns: list[str] = field(default_factory=lambda: list(DETAIL_HEADERS))
+    detail_rows: list[tuple[Any, ...]] = field(default_factory=list)
+    duplicate_rows: list[tuple[Any, ...]] = field(default_factory=list)
+    summary: dict[str, Any] = field(default_factory=dict)
+    schema_rows: list[tuple[Any, ...]] = field(default_factory=list)
+    overflow_file: str | None = None
+    output: str | None = None
+    skipped: bool = False
+
+
+class ResumeError(ValueError):
+    """The --resume folder is missing, corrupt, or was created with different compare settings."""
+
+
+class PersistError(ValueError):
+    """SQL history tables are missing or a persist write failed."""
+
+
+class ConfigError(ValueError):
+    """The --config file is missing, invalid, or contains an unknown setting."""
+
+
+PERSIST_BATCH = 500
+
+
+@dataclass
+class PlannedJob:
+    job: TableJob
+    cached: TableResult | None = None
+
+
+def log(message: str) -> None:
+    with _LOG_LOCK:
+        print(message, flush=True)
+        handle = _LOG_FILE
+        if handle is not None:
+            handle.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  {message}\n")
+            handle.flush()
+
+
+def resolve_log_path(log_path: Path | None, workbook: Path | None, use_groups: bool) -> Path:
+    if log_path is not None:
+        return log_path
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    if workbook is None:
+        return Path(f"compare-{stamp}.log")
+    folder = workbook.parent if workbook.suffix.lower() == ".xlsx" else workbook
+    if use_groups or workbook.suffix.lower() != ".xlsx":
+        return Path(folder) / f"compare-{stamp}.log"
+    return workbook.with_suffix(".log")
+
+
+def run_exit_code(results: Sequence[TableResult], fail_on_diff: bool) -> int:
+    failed = sum(1 for result in results if result.status != "OK")
+    if failed:
+        return 2
+    if fail_on_diff and any(has_differences(result) == "Yes" for result in results):
+        return 3
+    return 0
+
+
+def normalize_header(name: str | None) -> str:
+    if name is None:
+        return ""
+    return re.sub(r"[\s_\-]+", "", str(name).strip().lower())
+
+
+def parse_bool(value: Any) -> bool | None:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if text in {"", "none"}:
+        return None
+    if text in {"1", "true", "yes", "y"}:
+        return True
+    if text in {"0", "false", "no", "n"}:
+        return False
+    raise ValueError(f"Cannot parse boolean value {value!r}.")
+
+
+def blank_to_none(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def map_row(headers: Sequence[str], values: Sequence[Any], line_number: int) -> TableJob | None:
+    mapped: dict[str, Any] = {}
+    for header, value in zip(headers, values):
+        key = COLUMN_ALIASES.get(normalize_header(header))
+        if key:
+            mapped[key] = value
+
+    table_name = blank_to_none(mapped.get("table_name"))
+    key_columns = blank_to_none(mapped.get("key_columns"))
+    if table_name is None and key_columns is None:
+        return None
+    if table_name is None:
+        raise ValueError(f"Row {line_number}: TableName is required.")
+    if key_columns is None:
+        raise ValueError(f"Row {line_number}: KeyColumns is required for {table_name}.")
+
+    output = blank_to_none(mapped.get("output"))
+    if output:
+        output = output.upper()
+
+    return TableJob(
+        table_name=table_name,
+        key_columns=key_columns,
+        excluded_columns=blank_to_none(mapped.get("excluded_columns")),
+        included_columns=blank_to_none(mapped.get("included_columns")),
+        exclude_patterns=blank_to_none(mapped.get("exclude_patterns")),
+        schema_name=blank_to_none(mapped.get("schema_name")),
+        output=output,
+        include_matches=parse_bool(mapped.get("include_matches")),
+        ignore_case=parse_bool(mapped.get("ignore_case")),
+        ignore_blank=parse_bool(mapped.get("ignore_blank")),
+        row_filter=blank_to_none(mapped.get("row_filter")),
+        group_name=blank_to_none(mapped.get("group_name")),
+        line_number=line_number,
+    )
+
+
+def header_values(row: Sequence[Any] | None) -> list[str]:
+    if row is None:
+        return []
+    return ["" if value is None else str(value) for value in row]
+
+
+def mapped_header(name: str) -> str | None:
+    return COLUMN_ALIASES.get(normalize_header(name))
+
+
+def looks_like_header_row(row: Sequence[Any] | None) -> bool:
+    mapped = {mapped_header(header) for header in header_values(row)}
+    return "table_name" in mapped and "key_columns" in mapped
+
+
+def ensure_group_header(headers: list[str]) -> list[str]:
+    if any(mapped_header(header) == "group_name" for header in headers):
+        return headers
+    if headers and mapped_header(headers[0]) is None:
+        headers = list(headers)
+        headers[0] = "Group"
+    return headers
+
+
+def pad_values(values: Sequence[Any], length: int) -> list[Any]:
+    padded = list(values)
+    if len(padded) < length:
+        padded.extend([None] * (length - len(padded)))
+    return padded[:length]
+
+
+def sheet_default_group(title: str | None) -> str | None:
+    name = blank_to_none(title)
+    if name is None or normalize_header(name) in GENERIC_SHEET_NAMES:
+        return None
+    return name
+
+
+def parse_table_rows(
+    rows: Sequence[Sequence[Any] | None],
+    default_group: str | None = None,
+) -> list[TableJob]:
+    header_index = next((index for index, row in enumerate(rows) if looks_like_header_row(row)), None)
+    if header_index is None:
+        raise ValueError("The table list must have TableName and KeyColumns columns.")
+
+    headers = ensure_group_header(header_values(rows[header_index]))
+    jobs: list[TableJob] = []
+    last_group = default_group
+    for index, raw in enumerate(rows[header_index + 1 :], start=header_index + 2):
+        if raw is None:
+            continue
+        values = pad_values(raw, len(headers))
+        first = blank_to_none(values[0]) if values else None
+        if first and first.startswith("#"):
+            continue
+        job = map_row(headers, values, index)
+        if not job:
+            continue
+        if job.group_name:
+            last_group = job.group_name
+        elif last_group:
+            job.group_name = last_group
+        jobs.append(job)
+    return jobs
+
+
+def read_table_list(path: Path) -> list[TableJob]:
+    suffix = path.suffix.lower()
+    if suffix in {".xlsx", ".xlsm"}:
+        jobs = _read_excel_jobs(path)
+    elif suffix in {".csv", ".txt"}:
+        jobs = parse_table_rows(_read_csv_rows(path))
+    else:
+        raise ValueError(f"Unsupported table list type: {path.suffix}. Use .csv or .xlsx.")
+
+    if not jobs:
+        raise ValueError(f"{path} has a header row but no tables.")
+    return jobs
+
+
+def _read_csv_rows(path: Path) -> list[list[Any]]:
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        return [list(row) for row in csv.reader(handle)]
+
+
+def _read_excel_jobs(path: Path) -> list[TableJob]:
+    from openpyxl import load_workbook
+
+    workbook = load_workbook(path, read_only=True, data_only=True)
+    try:
+        jobs: list[TableJob] = []
+        found_header = False
+        for sheet in workbook.worksheets:
+            rows = [tuple(row) for row in sheet.iter_rows(values_only=True)]
+            if not any(looks_like_header_row(row) for row in rows):
+                continue
+            found_header = True
+            jobs.extend(parse_table_rows(rows, default_group=sheet_default_group(sheet.title)))
+        if not found_header:
+            raise ValueError("The table list must have TableName and KeyColumns columns.")
+        return jobs
+    finally:
+        workbook.close()
+
+
+def classify_result_set(columns: Sequence[str]) -> str:
+    names = {str(column) for column in columns}
+    if {"SourceValue", "TargetValue"} <= names:
+        return "detail"
+    if {"Side", "Role"} <= names:
+        return "schema"
+    if "RecordCount" in names:
+        return "duplicates"
+    if "SourceRowCount" in names:
+        return "summary"
+    return "unknown"
+
+
+def safe_filename(name: str) -> str:
+    cleaned = INVALID_FILENAME_CHARS.sub("_", name).strip(" .")
+    return cleaned or DEFAULT_GROUP_NAME
+
+
+def group_sort_key(name: str | None) -> str | None:
+    return name.casefold() if name else None
+
+
+def group_by_name(
+    items: Sequence[T],
+    get_name: Callable[[T], str | None],
+) -> list[tuple[str | None, list[T]]]:
+    grouped: dict[str | None, list[T]] = {}
+    labels: dict[str | None, str | None] = {}
+    order: list[str | None] = []
+    for item in items:
+        name = get_name(item)
+        key = group_sort_key(name)
+        if key not in grouped:
+            grouped[key] = []
+            labels[key] = name
+            order.append(key)
+        grouped[key].append(item)
+    return [(labels[key], grouped[key]) for key in order]
+
+
+def group_jobs(jobs: Sequence[TableJob]) -> list[tuple[str | None, list[TableJob]]]:
+    return group_by_name(jobs, lambda job: job.group_name)
+
+
+def group_results(results: Sequence[TableResult]) -> list[tuple[str | None, list[TableResult]]]:
+    return group_by_name(results, lambda result: result.job.group_name)
+
+
+def has_named_groups(items: Sequence[TableJob] | Sequence[TableResult]) -> bool:
+    return any(
+        item.group_name if isinstance(item, TableJob) else item.job.group_name
+        for item in items
+    )
+
+
+def grouped_workbook_path(base: Path, group_name: str | None, use_groups: bool) -> Path:
+    if not use_groups:
+        return base if base.suffix.lower() == ".xlsx" else base.with_suffix(".xlsx")
+    name = safe_filename(group_name) if group_name else DEFAULT_GROUP_NAME
+    folder = base.parent if base.suffix.lower() == ".xlsx" else base
+    return folder / f"{name}.xlsx"
+
+
+def excel_sheet_name(name: str, used: set[str]) -> str:
+    cleaned = INVALID_SHEET_CHARS.sub("_", name).strip("' ") or "Sheet"
+    cleaned = cleaned[:EXCEL_MAX_SHEET]
+    candidate = cleaned
+    index = 2
+    while candidate.lower() in used:
+        suffix = f"_{index}"
+        candidate = f"{cleaned[: EXCEL_MAX_SHEET - len(suffix)]}{suffix}"
+        index += 1
+    used.add(candidate.lower())
+    return candidate
+
+
+def cell_value(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        return value.hex()
+    return value
+
+
+def has_differences(result: TableResult) -> str:
+    if result.status != "OK":
+        return "Unknown"
+    if result.output == "PREFLIGHT":
+        return "Preflight"
+    summary = result.summary
+    counts = [
+        summary.get("OnlyInSource"),
+        summary.get("OnlyInTarget"),
+        summary.get("ValueMismatch"),
+        summary.get("DuplicateSourceKeys"),
+        summary.get("DuplicateTargetKeys"),
+    ]
+    if any(count is not None for count in counts):
+        return "Yes" if any((count or 0) > 0 for count in counts) else "No"
+    if result.detail_rows or result.duplicate_rows:
+        return "Yes"
+    return "No"
+
+
+def pick_driver(preferred: str | None) -> str:
+    try:
+        import pyodbc
+    except ImportError as exc:
+        raise SystemExit("pyodbc is required. Install dependencies with: pip install -r requirements.txt") from exc
+
+    installed = set(pyodbc.drivers())
+    candidates = (([preferred] if preferred else []) + list(ODBC_DRIVERS))
+    for driver in candidates:
+        if driver in installed:
+            return driver
+    available = ", ".join(sorted(installed)) or "none"
+    raise SystemExit(
+        "No supported SQL Server ODBC driver is installed. "
+        f"Available drivers: {available}."
+    )
+
+
+def connect(
+    server: str,
+    database: str,
+    driver: str,
+    username: str | None,
+    password: str | None,
+    timeout: int,
+    trust_cert: bool,
+) -> Any:
+    import pyodbc
+
+    parts = [
+        f"DRIVER={{{driver}}}",
+        f"SERVER={server}",
+        f"DATABASE={database}",
+    ]
+    if username:
+        parts.append(f"UID={username}")
+        parts.append(f"PWD={password or ''}")
+    else:
+        parts.append("Trusted_Connection=yes")
+    if driver.startswith("ODBC Driver 18") or driver.startswith("ODBC Driver 17"):
+        parts.append("Encrypt=yes")
+        parts.append(f"TrustServerCertificate={'yes' if trust_cert else 'no'}")
+
+    connection = pyodbc.connect(";".join(parts), timeout=timeout)
+    connection.timeout = timeout
+    return connection
+
+
+def fetch_result_sets(cursor: Any) -> list[ResultSet]:
+    sets: list[ResultSet] = []
+    while True:
+        if cursor.description is not None:
+            columns = [column[0] for column in cursor.description]
+            kind = classify_result_set(columns)
+            rows: list[tuple[Any, ...]] = []
+            while True:
+                batch = cursor.fetchmany(PROGRESS_EVERY)
+                if not batch:
+                    break
+                rows.extend(tuple(row) for row in batch)
+                if len(rows) >= PROGRESS_EVERY:
+                    log(f"  Reading {kind}: {len(rows):,} rows")
+            sets.append(ResultSet(kind, columns, rows))
+        if not cursor.nextset():
+            break
+    return sets
+
+
+def print_sql_messages(connection: Any) -> None:
+    messages = getattr(connection, "messages", None)
+    if not messages:
+        return
+    for message in messages:
+        text = message[1] if isinstance(message, tuple) and len(message) > 1 else str(message)
+        text = str(text).strip()
+        if text:
+            log(text)
+    connection.messages.clear()
+
+
+def compare_table(
+    cursor: Any,
+    connection: Any,
+    job: TableJob,
+    args: argparse.Namespace,
+) -> TableResult:
+    output = "PREFLIGHT" if args.preflight else (job.output or args.output)
+    include_matches = args.include_matches if job.include_matches is None else job.include_matches
+    ignore_case = args.ignore_case if job.ignore_case is None else job.ignore_case
+    ignore_blank = args.ignore_blank if job.ignore_blank is None else job.ignore_blank
+    schema_name = job.schema_name or args.schema
+    started = datetime.now()
+
+    sql = """
+EXEC dbo.CompareTables
+    @SourceDatabase = ?,
+    @TargetDatabase = ?,
+    @SchemaName = ?,
+    @TableName = ?,
+    @KeyColumns = ?,
+    @ExcludedColumns = ?,
+    @IncludeMatches = ?,
+    @Output = ?,
+    @SourceServer = ?,
+    @TargetServer = ?,
+    @IgnoreCase = ?,
+    @IgnoreBlank = ?,
+    @Filter = ?,
+    @MaxDetailRows = ?,
+    @IncludedColumns = ?,
+    @ExcludePatterns = ?;
+"""
+    cursor.execute(
+        sql,
+        args.source_database,
+        args.target_database,
+        schema_name,
+        job.table_name,
+        job.key_columns,
+        job.excluded_columns,
+        1 if include_matches else 0,
+        output,
+        args.source_server,
+        args.target_server,
+        1 if ignore_case else 0,
+        1 if ignore_blank else 0,
+        job.row_filter,
+        args.max_detail_rows,
+        job.included_columns,
+        job.exclude_patterns,
+    )
+    log("  Query returned. Reading result sets...")
+    print_sql_messages(connection)
+    sets = fetch_result_sets(cursor)
+    duration = (datetime.now() - started).total_seconds()
+
+    result = TableResult(
+        job=job,
+        status="OK",
+        schema_name=schema_name,
+        duration_sec=duration,
+        output=output,
+    )
+    for result_set in sets:
+        if result_set.kind == "detail":
+            result.detail_columns = result_set.columns
+            result.detail_rows = result_set.rows
+        elif result_set.kind == "duplicates":
+            result.duplicate_rows = result_set.rows
+        elif result_set.kind == "schema":
+            result.schema_rows = result_set.rows
+        elif result_set.kind == "summary" and result_set.rows:
+            result.summary = dict(zip(result_set.columns, result_set.rows[0]))
+    return result
+
+
+def summary_row(result: TableResult) -> list[Any]:
+    summary = result.summary
+    return [
+        result.job.group_name,
+        result.job.table_name,
+        result.schema_name,
+        result.job.key_columns,
+        result.job.excluded_columns,
+        result.job.included_columns,
+        result.job.exclude_patterns,
+        result.job.row_filter,
+        result.status,
+        has_differences(result),
+        round(result.duration_sec, 2),
+        summary.get("SourceRowCount"),
+        summary.get("TargetRowCount"),
+        summary.get("CountDifference"),
+        summary.get("MatchingRows"),
+        summary.get("OnlyInSource"),
+        summary.get("OnlyInTarget"),
+        summary.get("ValueMismatch"),
+        summary.get("DuplicateSourceKeys"),
+        summary.get("DuplicateTargetKeys"),
+        len(result.detail_rows),
+        len(result.duplicate_rows),
+        len(result.schema_rows),
+        result.overflow_file,
+        result.error,
+    ]
+
+
+def write_sheet(
+    workbook: Any,
+    title: str,
+    used: set[str],
+    headers: Sequence[str],
+    rows: Sequence[Sequence[Any]],
+    overflow_dir: Path,
+    table_name: str | None = None,
+) -> str | None:
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    sheet_title = excel_sheet_name(title, used)
+    sheet = workbook.create_sheet(sheet_title)
+    overflow_file = None
+    written_rows: Sequence[Sequence[Any]] = rows
+    max_data_rows = EXCEL_MAX_ROWS - 1
+
+    if len(rows) > max_data_rows:
+        overflow_path = overflow_dir / f"{table_name or sheet_title}.csv"
+        log(f"  {sheet_title}: {len(rows):,} rows exceed Excel's limit. Writing the full result to CSV...")
+        _write_csv(overflow_path, headers, rows)
+        overflow_file = str(overflow_path)
+        written_rows = rows[:max_data_rows]
+        log(f"  Full result written to {overflow_path}")
+        log(f"  {sheet_title}: writing the first {len(written_rows):,} rows into Excel")
+
+    header_fill = PatternFill("solid", fgColor="1F4E79")
+    header_font = Font(color="FFFFFF", bold=True)
+    sheet.append(list(headers))
+    for cell in sheet[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(vertical="center")
+
+    status_fills = {
+        "OK": PatternFill("solid", fgColor="C6EFCE"),
+        "FAILED": PatternFill("solid", fgColor="FFC7CE"),
+        "MATCH": PatternFill("solid", fgColor="C6EFCE"),
+        "ONLY_IN_SOURCE": PatternFill("solid", fgColor="BDD7EE"),
+        "ONLY_IN_TARGET": PatternFill("solid", fgColor="FCE4D6"),
+        "VALUE_MISMATCH": PatternFill("solid", fgColor="F8CBAD"),
+        "DUPLICATE_SOURCE": PatternFill("solid", fgColor="E2D5F1"),
+        "DUPLICATE_TARGET": PatternFill("solid", fgColor="E2D5F1"),
+        "Yes": PatternFill("solid", fgColor="F8CBAD"),
+        "No": PatternFill("solid", fgColor="C6EFCE"),
+        "Unknown": PatternFill("solid", fgColor="D9D9D9"),
+    }
+    status_index = next((i for i, header in enumerate(headers, start=1) if header == "Status"), None)
+    diff_index = next((i for i, header in enumerate(headers, start=1) if header == "HasDifferences"), None)
+
+    total_rows = len(written_rows)
+    if total_rows >= PROGRESS_EVERY:
+        log(f"  Writing sheet {sheet_title}: 0 / {total_rows:,}")
+    for index, row in enumerate(written_rows, start=1):
+        sheet.append([cell_value(value) for value in row])
+        current = sheet.max_row
+        if total_rows >= PROGRESS_EVERY and index % PROGRESS_EVERY == 0:
+            log(f"  Writing sheet {sheet_title}: {index:,} / {total_rows:,}")
+        if status_index:
+            status = sheet.cell(current, status_index).value
+            fill = status_fills.get(str(status) if status is not None else "")
+            if fill:
+                sheet.cell(current, status_index).fill = fill
+        if diff_index:
+            value = sheet.cell(current, diff_index).value
+            fill = status_fills.get(str(value) if value is not None else "")
+            if fill:
+                sheet.cell(current, diff_index).fill = fill
+
+    sheet.freeze_panes = "A2"
+    for index, header in enumerate(headers, start=1):
+        width = len(str(header)) + 2
+        for row in sheet.iter_rows(min_row=2, min_col=index, max_col=index, max_row=min(sheet.max_row, 200)):
+            value = row[0].value
+            if value is not None:
+                width = min(max(width, len(str(value)) + 2), 60)
+        sheet.column_dimensions[get_column_letter(index)].width = width
+    if sheet.max_row >= 1:
+        sheet.auto_filter.ref = sheet.dimensions
+    return overflow_file
+
+
+def _write_csv(path: Path, headers: Sequence[str], rows: Sequence[Sequence[Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    total_rows = len(rows)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(headers)
+        for index, row in enumerate(rows, start=1):
+            writer.writerow(["" if value is None else value for value in row])
+            if total_rows >= PROGRESS_EVERY and index % PROGRESS_EVERY == 0:
+                log(f"  Writing CSV {path.name}: {index:,} / {total_rows:,}")
+
+
+def write_workbook(path: Path, results: Sequence[TableResult]) -> None:
+    from openpyxl import Workbook
+
+    detail_rows = sum(len(result.detail_rows) for result in results)
+    log(f"Comparisons finished. Writing {path.name}: {len(results)} table(s), {detail_rows:,} detail rows.")
+    workbook = Workbook()
+    default = workbook.active
+    workbook.remove(default)
+    used: set[str] = set()
+    overflow_dir = path.with_name(f"{path.stem}-overflow")
+
+    duplicate_rows = [row for result in results for row in result.duplicate_rows]
+    if duplicate_rows:
+        log(f"  Sheet _Duplicates: {len(duplicate_rows):,} rows")
+        write_sheet(workbook, "_Duplicates", used, DUPLICATE_HEADERS, duplicate_rows, overflow_dir)
+
+    used_titles = {name.lower() for name in RESERVED_SHEETS}
+    schema_rows = [row for result in results for row in result.schema_rows]
+    if schema_rows:
+        log(f"  Sheet _Schema: {len(schema_rows):,} rows")
+        write_sheet(workbook, "_Schema", used, SCHEMA_HEADERS, schema_rows, overflow_dir)
+
+    ok_results = [result for result in results if result.status == "OK" and result.output != "PREFLIGHT"]
+    for sheet_index, result in enumerate(ok_results, start=1):
+        title = result.job.table_name
+        if title.lower() in used_titles:
+            title = f"{result.schema_name}.{result.job.table_name}"
+        log(f"  Sheet {sheet_index}/{len(ok_results)} {title}: {len(result.detail_rows):,} detail rows")
+        overflow = write_sheet(
+            workbook,
+            title,
+            used,
+            result.detail_columns,
+            result.detail_rows,
+            overflow_dir,
+            table_name=result.job.table_name,
         )
-    ) AS STL_AUDIT_DATE_SRGT,
+        if overflow:
+            result.overflow_file = overflow
+        used_titles.add(title.lower())
 
-    CAST(
-        COALESCE(
-            ws.BOOKING_DATE,
-            bal.DATE_OF_BOOKING
-        ) AS date
-    ) AS STL_AUDIT_DATE,
+    write_sheet(
+        workbook,
+        "_Summary",
+        used,
+        SUMMARY_HEADERS,
+        [summary_row(result) for result in results],
+        overflow_dir,
+    )
+    workbook.move_sheet("_Summary", offset=-(len(workbook.sheetnames) - 1))
+    if "_Schema" in workbook.sheetnames:
+        schema_index = workbook.sheetnames.index("_Schema")
+        if schema_index != 1:
+            workbook.move_sheet("_Schema", offset=1 - schema_index)
 
-    COALESCE(
-        ws.ID_SERIE_NO,
-        bal.ID_SERIE_NO
-    ) AS STL_AUDIT_NUM,
+    path.parent.mkdir(parents=True, exist_ok=True)
+    log(f"Saving {path} ...")
+    try:
+        workbook.save(path)
+    except OSError as exc:
+        fallback = path.with_stem(f"{path.stem}-{datetime.now().strftime('%Y%m%d-%H%M%S')}")
+        log(f"Could not save {path}: {exc}. Writing {fallback} instead.")
+        workbook.save(fallback)
+        path = fallback
+    log(f"Wrote {path}")
 
-    CAST(
-        COALESCE(
-            bal.VALUE_DATE,
-            bal.DUE_DATE
-        ) AS date
-    ) AS STL_EFFECTIVE_DATE,
 
-    CAST(
-        bal.ACTUAL_SETLMT_DATE
-        AS date
-    ) AS STL_RECONCILED_DATE,
+def write_result_workbooks(base: Path, results: Sequence[TableResult]) -> list[Path]:
+    use_groups = has_named_groups(results)
+    written: list[Path] = []
+    for group_name, group in group_results(results):
+        path = grouped_workbook_path(base, group_name, use_groups)
+        if use_groups:
+            label = group_name or DEFAULT_GROUP_NAME
+            log(f"Group {label}: {len(group)} table(s) -> {path.name}")
+        write_workbook(path, group)
+        written.append(path)
+    return written
 
-    /* Processing period key as YYYYMM01 */
-    TRY_CONVERT(
-        int,
-        CONVERT(char(4), bal.BOOKING_YEAR)
-        + RIGHT(
-            '0' + REPLACE(
-                UPPER(
-                    LTRIM(
-                        RTRIM(bal.FRK_BOOKING_PERIOD)
-                    )
-                ),
-                'M',
-                ''
-            ),
-            2
+
+def persist_enabled(args: argparse.Namespace) -> bool:
+    return bool(
+        getattr(args, "persist", False)
+        or getattr(args, "persist_detail", False)
+        or getattr(args, "persist_duplicates", False)
+        or getattr(args, "persist_schema", False)
+    )
+
+
+def _sql_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    return int(value)
+
+
+def _sql_error(value: str | None) -> str | None:
+    if not value:
+        return None
+    return value[:2000]
+
+
+def _row_at(row: Sequence[Any], index: int) -> Any:
+    if index >= len(row):
+        return None
+    value = row[index]
+    return None if value == "" else value
+
+
+class SqlRunStore:
+    """Writes one CLI invocation to compare.Run and child tables."""
+
+    def __init__(self, connection: Any) -> None:
+        self.connection = connection
+        self.cursor = connection.cursor()
+        self.run_id: int | None = None
+        self.errors: list[str] = []
+
+    def close(self) -> None:
+        try:
+            self.cursor.close()
+        finally:
+            self.connection.close()
+
+    def start_run(self, args: argparse.Namespace, jobs: Sequence[TableJob], workbook: Path | None) -> int:
+        self.cursor.execute("SELECT OBJECT_ID(N'compare.Run', N'U')")
+        found = self.cursor.fetchone()
+        if not found or found[0] is None:
+            raise PersistError(
+                "compare.Run was not found. Re-run sql/install.sql in the utility database, then pass --persist."
+            )
+        self.cursor.execute(
+            """
+INSERT INTO compare.Run (
+    SourceDatabase, TargetDatabase, SourceServer, TargetServer,
+    UtilityDatabase, SchemaName, Output, Preflight, IgnoreCase, IgnoreBlank, IncludeMatches,
+    MaxDetailRows, Workers, Resumed, TablesFile, WorkbookPath, TableCount
+)
+OUTPUT INSERTED.RunId
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+""",
+            args.source_database,
+            args.target_database,
+            args.source_server,
+            args.target_server,
+            args.database,
+            args.schema,
+            args.output,
+            1 if args.preflight else 0,
+            1 if args.ignore_case else 0,
+            1 if args.ignore_blank else 0,
+            1 if args.include_matches else 0,
+            args.max_detail_rows,
+            args.workers,
+            1 if args.resume is not None else 0,
+            str(args.tables) if args.tables is not None else None,
+            str(workbook) if workbook is not None else None,
+            len(jobs),
         )
-        + '01'
-    ) AS STL_PROCESSING_PERIOD_SRGT,
+        row = self.cursor.fetchone()
+        if row is None or row[0] is None:
+            raise PersistError("compare.Run insert did not return RunId.")
+        self.run_id = int(row[0])
+        if not getattr(self.connection, "autocommit", False):
+            self.connection.commit()
+        log(f"Persist run {self.run_id} -> {args.database}.compare.Run")
+        return self.run_id
 
-    /* Detail-level gross amounts */
-    CAST(dtl.EXCH_AMT AS money)
-        AS STL_BASE_GROSS_AMT,
+    def save_table(self, result: TableResult, args: argparse.Namespace) -> None:
+        if self.run_id is None:
+            raise PersistError("save_table called before start_run.")
+        try:
+            self._save_table(result, args)
+        except PersistError:
+            raise
+        except Exception as exc:
+            message = str(exc).splitlines()[0]
+            self.errors.append(f"{result.job.table_name}: {message}")
+            log(f"  Persist failed for {result.job.table_name}: {message}")
 
-    CAST(dtl.FUNC_AMT2 AS money)
-        AS STL_BASE2_GROSS_AMT,
-
-    /*
-       Provision-level amount repeated across its child rows.
-       Do not SUM this column from FACT_TRA_SETTLEMENT.
-    */
-    CAST(
-        settlement_balance.LEDGER_BAL_ORG_AMT
-        AS money
-    ) AS STL_SETT_GROSS_AMT,
-
-    CAST(dtl.DTL_AMT AS money)
-        AS STL_ORIG_GROSS_AMT,
-
-    /* Detail-level paid-to-date amounts */
-    CAST(
-        CASE
-            WHEN NULLIF(dtl.DTL_AMT, 0) IS NULL
-                THEN 0
-            ELSE
-                dtl.EXCH_AMT
-                * (
+    def _save_table(self, result: TableResult, args: argparse.Namespace) -> None:
+        summary = result.summary
+        self.cursor.execute(
+            """
+INSERT INTO compare.RunTable (
+    RunId, GroupName, SchemaName, TableName, KeyColumns, ExcludedColumns,
+    IncludedColumns, ExcludePatterns, Filter,
+    Output, JobStatus, HasDifferences, Skipped, DurationSec,
+    SourceRowCount, TargetRowCount, CountDifference, MatchingRows,
+    OnlyInSource, OnlyInTarget, ValueMismatch, DuplicateSourceKeys, DuplicateTargetKeys,
+    DetailRows, DuplicateRows, SchemaRows, Error
+)
+OUTPUT INSERTED.RunTableId
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+""",
+            self.run_id,
+            result.job.group_name,
+            result.schema_name,
+            result.job.table_name,
+            result.job.key_columns,
+            result.job.excluded_columns,
+            result.job.included_columns,
+            result.job.exclude_patterns,
+            result.job.row_filter,
+            result.output or args.output,
+            result.status,
+            has_differences(result),
+            1 if result.skipped else 0,
+            round(result.duration_sec, 2),
+            _sql_int(summary.get("SourceRowCount")),
+            _sql_int(summary.get("TargetRowCount")),
+            _sql_int(summary.get("CountDifference")),
+            _sql_int(summary.get("MatchingRows")),
+            _sql_int(summary.get("OnlyInSource")),
+            _sql_int(summary.get("OnlyInTarget")),
+            _sql_int(summary.get("ValueMismatch")),
+            _sql_int(summary.get("DuplicateSourceKeys")),
+            _sql_int(summary.get("DuplicateTargetKeys")),
+            len(result.detail_rows),
+            len(result.duplicate_rows),
+            len(result.schema_rows),
+            _sql_error(result.error),
+        )
+        row = self.cursor.fetchone()
+        if row is None or row[0] is None:
+            raise PersistError(f"compare.RunTable insert did not return RunTableId for {result.job.table_name}.")
+        run_table_id = int(row[0])
+        if args.persist_detail and result.detail_rows:
+            self._insert_rows(
+                """
+INSERT INTO compare.RunDetail (RunId, RunTableId, BusinessKey, Status, ColumnName, SourceValue, TargetValue)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+""",
+                [
                     (
-                        dtl.DTL_AMT
-                        - COALESCE(dtl.DTL_UNR_AMT, 0)
+                        self.run_id,
+                        run_table_id,
+                        _row_at(detail, 1),
+                        _row_at(detail, 2),
+                        _row_at(detail, 3),
+                        _row_at(detail, 4),
+                        _row_at(detail, 5),
                     )
-                    / NULLIF(dtl.DTL_AMT, 0)
-                )
-        END
-        AS money
-    ) AS STL_BASE_PTD_AMT,
-
-    CAST(
-        CASE
-            WHEN NULLIF(dtl.DTL_AMT, 0) IS NULL
-                THEN 0
-            ELSE
-                dtl.FUNC_AMT2
-                * (
+                    for detail in result.detail_rows
+                ],
+            )
+        if args.persist_duplicates and result.duplicate_rows:
+            self._insert_rows(
+                """
+INSERT INTO compare.RunDuplicate (RunId, RunTableId, BusinessKey, Status, RecordCount)
+VALUES (?, ?, ?, ?, ?);
+""",
+                [
                     (
-                        dtl.DTL_AMT
-                        - COALESCE(dtl.DTL_UNR_AMT, 0)
+                        self.run_id,
+                        run_table_id,
+                        _row_at(dup, 1),
+                        _row_at(dup, 2),
+                        _sql_int(_row_at(dup, 3)) or 0,
                     )
-                    / NULLIF(dtl.DTL_AMT, 0)
-                )
-        END
-        AS money
-    ) AS STL_BASE2_PTD_AMT,
+                    for dup in result.duplicate_rows
+                ],
+            )
+        if args.persist_schema and result.schema_rows:
+            self._insert_rows(
+                """
+INSERT INTO compare.RunSchema (RunId, RunTableId, ColumnName, Side, Role, SourceType, TargetType)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+""",
+                [
+                    (
+                        self.run_id,
+                        run_table_id,
+                        _row_at(schema, 1),
+                        _row_at(schema, 2),
+                        _row_at(schema, 3),
+                        _row_at(schema, 4),
+                        _row_at(schema, 5),
+                    )
+                    for schema in result.schema_rows
+                ],
+            )
+        if not getattr(self.connection, "autocommit", False):
+            self.connection.commit()
 
-    /*
-       Member-level amount. It can repeat when one member
-       balance contains multiple detail rows.
-    */
-    CAST(bal.SETTLED_AMT AS money)
-        AS STL_SETT_PTD_AMT,
+    def _insert_rows(self, sql: str, rows: Sequence[tuple[Any, ...]]) -> None:
+        for offset in range(0, len(rows), PERSIST_BATCH):
+            batch = rows[offset : offset + PERSIST_BATCH]
+            if hasattr(self.cursor, "fast_executemany"):
+                self.cursor.fast_executemany = True
+            self.cursor.executemany(sql, batch)
 
-    CAST(
-        dtl.DTL_AMT
-        - COALESCE(dtl.DTL_UNR_AMT, 0)
-        AS money
-    ) AS STL_ORIG_PTD_AMT,
+    def finish_run(self, exit_code: int, results: Sequence[TableResult]) -> None:
+        if self.run_id is None:
+            return
+        self.cursor.execute(
+            """
+UPDATE compare.Run
+SET FinishedAt = SYSDATETIME(),
+    ExitCode = ?,
+    FailedCount = ?,
+    DifferedCount = ?,
+    SkippedCount = ?
+WHERE RunId = ?;
+""",
+            exit_code,
+            sum(1 for result in results if result.status != "OK"),
+            sum(1 for result in results if has_differences(result) == "Yes"),
+            sum(1 for result in results if result.skipped),
+            self.run_id,
+        )
+        if not getattr(self.connection, "autocommit", False):
+            self.connection.commit()
 
-    /* ETL-derived; transformation not confirmed */
-    CAST(NULL AS varchar(50)) AS RECORD_TYPE,
 
-    /*
-       FRK_GL_ACCOUNT already contains the code from
-       reference-data list 416.
-    */
-    bal.FRK_GL_ACCOUNT AS STL_ACCOUNT_CODE,
+OUTPUT_CHOICES = ("ALL", "DETAIL", "DIFF", "DUPLICATES", "SUMMARY", "PREFLIGHT")
+PASSWORD_ENV = "DWH_COMPARE_PASSWORD"
+_CONFIG_GROUPS = {"source", "target", "defaults"}
+_SOURCE_FIELDS = {"database": "source_database", "server": "source_server"}
+_TARGET_FIELDS = {"database": "target_database", "server": "target_server"}
+_OPTION_KINDS = {
+    "tables": "path",
+    "server": "str",
+    "database": "str",
+    "source_database": "str",
+    "target_database": "str",
+    "schema": "str",
+    "source_server": "str",
+    "target_server": "str",
+    "output": "output",
+    "include_matches": "bool",
+    "ignore_case": "bool",
+    "ignore_blank": "bool",
+    "workbook": "path",
+    "resume": "path",
+    "workers": "int+",
+    "driver": "str",
+    "username": "str",
+    "password": "password",
+    "timeout": "int0",
+    "no_trust_cert": "bool",
+    "dry_run": "bool",
+    "preflight": "bool",
+    "fail_on_diff": "bool",
+    "max_detail_rows": "int+",
+    "log": "path",
+    "persist": "bool",
+    "persist_detail": "bool",
+    "persist_duplicates": "bool",
+    "persist_schema": "bool",
+    "include_columns": "str",
+    "exclude_columns": "str",
+    "exclude_patterns": "str",
+}
 
-    /* DIM_CLAIM_GROUP lookup */
-    claim_group.CLGRP_BK
 
-FROM SICS.AC_LEDGER_DETAIL AS dtl
+def _config_key(name: str) -> str:
+    return str(name).strip().lower().replace("-", "_")
 
-INNER JOIN SICS.AC_LEDGER_BALANCE AS bal
-    ON bal.OBJECT_ID = dtl.FK_BALANCE
 
-INNER JOIN SICS.AC_LEDGER_BALANCE AS settlement_balance
-    ON settlement_balance.OBJECT_ID =
-       bal.FK_SETTLEMENT_BAL
-   AND settlement_balance.SUBCLASS = 1
+def _load_raw_config(path: Path) -> Any:
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except OSError as exc:
+        raise ConfigError(f"Could not read {path}: {exc}") from exc
+    suffix = path.suffix.lower()
+    if suffix == ".json":
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ConfigError(f"Invalid JSON in {path}: {exc}") from exc
+    if suffix in {".yaml", ".yml"}:
+        try:
+            import yaml
+        except ImportError as exc:
+            raise ConfigError(
+                "PyYAML is required for a YAML config. Install dependencies with: pip install -r requirements.txt"
+            ) from exc
+        try:
+            return yaml.safe_load(text)
+        except yaml.YAMLError as exc:
+            raise ConfigError(f"Invalid YAML in {path}: {exc}") from exc
+    raise ConfigError(f"{path} must be a .json, .yaml, or .yml file.")
 
-LEFT JOIN SICS.AC_WORKSHEET AS ws
-    ON ws.OBJECT_ID =
-       COALESCE(
-           dtl.FK_WORKSHEET,
-           bal.FK_WORKSHEET
-       )
 
-LEFT JOIN SICS.ENTRY_CODE AS ec
-    ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
+def _put_config(flat: dict[str, tuple[Any, str]], dest: str, value: Any, display: str) -> None:
+    if dest in flat:
+        raise ConfigError(
+            f"Config key {display!r} repeats {dest} (already set by {flat[dest][1]!r}). "
+            "Set it in only one place."
+        )
+    flat[dest] = (value, display)
 
-LEFT JOIN SICS.INSURED_PERIOD AS ip
-    ON ip.OBJECT_ID = dtl.FK_INS_PER
 
-LEFT JOIN SICS.BUSINESS AS bus
-    ON bus.OBJECT_ID = ip.FK_BUSINESS
+def _assign_option(flat: dict[str, tuple[Any, str]], name: str, value: Any, display: str) -> None:
+    if value is None:
+        return
+    if name == "trust_cert":
+        _put_config(flat, "no_trust_cert", not _config_bool(value, display), display)
+        return
+    if name not in _OPTION_KINDS:
+        raise ConfigError(f"Unknown config key {display!r}.")
+    _put_config(flat, name, value, display)
 
-LEFT JOIN SICS.CLAIMS AS claim_direct
-    ON claim_direct.OBJECT_ID =
-       dtl.FK_CLAIM_TO_SOC
 
-LEFT JOIN SICS.SOC_TO_CLAIM_REL AS claim_relation
-    ON claim_relation.OBJECT_ID =
-       bal.FK_CLAIM
+def _merge_named_group(
+    flat: dict[str, tuple[Any, str]],
+    value: Any,
+    fields: dict[str, str],
+    group: str,
+) -> None:
+    if not isinstance(value, dict):
+        raise ConfigError(f"{group} must be a mapping of {', '.join(sorted(fields))}.")
+    for key, item in value.items():
+        field = _config_key(key)
+        display = f"{group}.{key}"
+        if field not in fields:
+            raise ConfigError(f"Unknown config key {display!r}.")
+        if item is None:
+            continue
+        _put_config(flat, fields[field], item, display)
 
-LEFT JOIN SICS.CLAIMS AS claim_from_balance
-    ON claim_from_balance.OBJECT_ID =
-       claim_relation.FK_CLAIM
 
-LEFT JOIN SICS.CLAIMS AS headline
-    ON headline.OBJECT_ID =
-       dtl.FK_HEADLINE_LOSS
-   AND headline.SUBCLASS = 6
+def _merge_options(flat: dict[str, tuple[Any, str]], value: Any, group: str) -> None:
+    if not isinstance(value, dict):
+        raise ConfigError(f"{group} must be a mapping of option names.")
+    for key, item in value.items():
+        name = _config_key(key)
+        display = f"{group}.{key}"
+        if name in _CONFIG_GROUPS:
+            raise ConfigError(f"Unknown config key {display!r}.")
+        _assign_option(flat, name, item, display)
 
-OUTER APPLY
-(
-    SELECT TOP (1)
-        broker_party.IDENTIFIER AS BROK_BK
-    FROM SICS.BUSINESS_PRTNR_REL AS bpr
-    INNER JOIN SICS.PARTY AS broker_party
-        ON broker_party.OBJECT_ID =
-           bpr.FK_BUS_PARTNER
-    WHERE bpr.FRK_RELSHIP_TYPE = 'BR'
-      AND bpr.FSK_RELSHIP_TYPE = 55
-      AND
-      (
-          bpr.FK_INS_PERIOD = ip.OBJECT_ID
-          OR bpr.FK_BUSINESS = bus.OBJECT_ID
-      )
-    ORDER BY broker_party.IDENTIFIER
-) AS broker
 
-OUTER APPLY
-(
-    SELECT TOP (1)
-        ref.REFERENCE_ID AS CLGRP_BK
-    FROM SICS.CL_HLOSS_REF AS ref
-    WHERE ref.FK_PARENT = headline.OBJECT_ID
-      AND ref.REFERENCE_ID IS NOT NULL
-    ORDER BY ref.REFERENCE_ID
-) AS claim_group
+def _config_bool(value: Any, display: str) -> bool:
+    try:
+        parsed = parse_bool(value)
+    except ValueError as exc:
+        raise ConfigError(f"Config key {display!r} must be true or false.") from exc
+    if parsed is None:
+        raise ConfigError(f"Config key {display!r} must be true or false.")
+    return parsed
 
-WHERE bal.FK_SETTLEMENT_BAL IS NOT NULL
-  AND bal.IS_PART_SET_BAL = 'Y';
-```
+
+def _config_int(value: Any, display: str, minimum: int) -> int:
+    if isinstance(value, bool) or isinstance(value, float):
+        raise ConfigError(f"Config key {display!r} must be an integer >= {minimum}.")
+    if isinstance(value, str):
+        text = value.strip()
+        if text.lstrip("-").isdigit():
+            value = int(text)
+        else:
+            raise ConfigError(f"Config key {display!r} must be an integer >= {minimum}.")
+    if not isinstance(value, int) or value < minimum:
+        raise ConfigError(f"Config key {display!r} must be an integer >= {minimum}.")
+    return value
+
+
+def _config_str(value: Any, display: str, *, strip: bool) -> str:
+    if not isinstance(value, str):
+        raise ConfigError(f"Config key {display!r} must be a string.")
+    text = value.strip() if strip else value
+    if text == "":
+        raise ConfigError(f"Config key {display!r} must be a non-empty string.")
+    return text
+
+
+def _coerce_option(dest: str, value: Any, display: str, config_path: Path) -> Any:
+    kind = _OPTION_KINDS[dest]
+    if kind == "bool":
+        return _config_bool(value, display)
+    if kind == "int+":
+        return _config_int(value, display, 1)
+    if kind == "int0":
+        return _config_int(value, display, 0)
+    if kind == "password":
+        return _config_str(value, display, strip=False)
+    if kind == "str":
+        return _config_str(value, display, strip=True)
+    if kind == "output":
+        text = _config_str(value, display, strip=True).upper()
+        if text not in OUTPUT_CHOICES:
+            raise ConfigError(
+                f"Config key {display!r} must be one of {', '.join(OUTPUT_CHOICES)}."
+            )
+        return text
+    if kind == "path":
+        text = _config_str(value, display, strip=True)
+        path = Path(text)
+        if not path.is_absolute():
+            path = config_path.parent / path
+        return path
+    raise ConfigError(f"Unknown config key {display!r}.")
+
+
+def load_config(path: Path) -> dict[str, Any]:
+    """Return argparse defaults from a YAML or JSON config file."""
+    if not path.is_file():
+        raise ConfigError(f"Config file not found: {path}")
+    raw = _load_raw_config(path)
+    if raw is None:
+        raise ConfigError(f"Config file is empty: {path}")
+    if not isinstance(raw, dict):
+        raise ConfigError(f"Config root must be a mapping: {path}")
+
+    flat: dict[str, tuple[Any, str]] = {}
+    for key, value in raw.items():
+        name = _config_key(key)
+        if name == "source":
+            _merge_named_group(flat, value, _SOURCE_FIELDS, "source")
+        elif name == "target":
+            _merge_named_group(flat, value, _TARGET_FIELDS, "target")
+        elif name == "defaults":
+            _merge_options(flat, value, "defaults")
+        else:
+            _assign_option(flat, name, value, str(key))
+
+    return {
+        dest: _coerce_option(dest, value, display, path)
+        for dest, (value, display) in flat.items()
+    }
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Read TableName, KeyColumns, and ExcludedColumns from a CSV or Excel "
+            "file, run dbo.CompareTables for each row, and write one workbook "
+            "per Group/Package with a _Summary sheet plus one sheet per table."
+        )
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help=(
+            "YAML or JSON file of servers, databases, and defaults. "
+            "Command-line flags override the file. Paths in the file are relative to the file."
+        ),
+    )
+    parser.add_argument(
+        "--tables",
+        type=Path,
+        help="CSV or Excel control file. Required on the command line or in --config.",
+    )
+    parser.add_argument(
+        "--server",
+        help="SQL Server that hosts the utility database. Required on the command line or in --config.",
+    )
+    parser.add_argument("--database", default="DwhCompare", help="Utility database. Default: DwhCompare.")
+    parser.add_argument(
+        "--source-database",
+        help="@SourceDatabase. Required on the command line or in --config.",
+    )
+    parser.add_argument(
+        "--target-database",
+        help="@TargetDatabase. Required on the command line or in --config.",
+    )
+    parser.add_argument("--schema", default="dbo", help="Default @SchemaName. Default: dbo.")
+    parser.add_argument("--source-server", help="Optional @SourceServer linked server.")
+    parser.add_argument("--target-server", help="Optional @TargetServer linked server.")
+    parser.add_argument(
+        "--output",
+        default="ALL",
+        choices=OUTPUT_CHOICES,
+        help="Default @Output. ALL writes detail, duplicates, summary, and schema in one scan. Default: ALL.",
+    )
+    parser.add_argument(
+        "--include-matches",
+        action="store_true",
+        help="Include MATCH rows in detail sheets. Default is to omit them. Ignored for DIFF.",
+    )
+    parser.add_argument(
+        "--ignore-case",
+        action="store_true",
+        help="Compare string keys and string values without case. Trailing spaces still differ.",
+    )
+    parser.add_argument(
+        "--ignore-blank",
+        action="store_true",
+        help=(
+            "Trim compared string values and treat NULL, empty, and whitespace-only text as equal. "
+            "Keys are unchanged."
+        ),
+    )
+    parser.add_argument(
+        "--workbook",
+        type=Path,
+        help=(
+            "Output .xlsx path, or a directory when the table list has Group/Package. "
+            "Default: compare-results-YYYYmmdd-HHMMSS.xlsx. "
+            "With groups, each group is written as a separate workbook named after the group. "
+            "A state folder is created next to it so --resume can skip finished tables."
+        ),
+    )
+    parser.add_argument(
+        "--resume",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "Continue a previous run. PATH is the same value you passed to --workbook. "
+            "Tables that already finished with status OK are skipped. FAILED tables run again."
+        ),
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        metavar="N",
+        help=(
+            "Compare up to N tables at once. Default: 1. "
+            "Each worker uses its own SQL connection. Large fact tables can fill tempdb."
+        ),
+    )
+    parser.add_argument("--driver", help="ODBC driver name. The first installed supported driver is used if omitted.")
+    parser.add_argument("--username", help="SQL login. Omit to use Windows / trusted authentication.")
+    parser.add_argument(
+        "--password",
+        help=f"SQL login password. When omitted, {PASSWORD_ENV} is used if it is set.",
+    )
+    parser.add_argument("--timeout", type=int, default=0, help="Query timeout in seconds. 0 means no timeout.")
+    parser.add_argument(
+        "--no-trust-cert",
+        action="store_true",
+        help="Require a trusted TLS certificate. Default is TrustServerCertificate=yes.",
+    )
+    parser.add_argument("--dry-run", action="store_true", help="Print the resolved table list and exit.")
+    parser.add_argument(
+        "--preflight",
+        action="store_true",
+        help="Validate keys, types, and filters without scanning rows. Writes _Summary and _Schema only.",
+    )
+    parser.add_argument(
+        "--fail-on-diff",
+        action="store_true",
+        help="Exit 3 when any compared table has differences. Exit 2 still means a table failed to run.",
+    )
+    parser.add_argument(
+        "--max-detail-rows",
+        type=int,
+        metavar="N",
+        help="Keep at most N detail rows per table. Summary counts stay complete.",
+    )
+    parser.add_argument(
+        "--log",
+        type=Path,
+        help="Run log path. Default: a .log file next to the workbook or in the output folder.",
+    )
+    parser.add_argument(
+        "--persist",
+        action="store_true",
+        help="Write this run to compare.Run and compare.RunTable in the utility database. Excel is still written.",
+    )
+    parser.add_argument(
+        "--persist-detail",
+        action="store_true",
+        help="Also write compare.RunDetail. Implies --persist. Can be large.",
+    )
+    parser.add_argument(
+        "--persist-duplicates",
+        action="store_true",
+        help="Also write compare.RunDuplicate. Implies --persist.",
+    )
+    parser.add_argument(
+        "--persist-schema",
+        action="store_true",
+        help="Also write compare.RunSchema. Implies --persist.",
+    )
+    parser.add_argument(
+        "--include-columns",
+        help="Default @IncludedColumns for every table. CSV IncludedColumns overrides this.",
+    )
+    parser.add_argument(
+        "--exclude-columns",
+        help=(
+            "Default @ExcludedColumns for every table, comma-separated names. "
+            "CSV ExcludedColumns overrides this."
+        ),
+    )
+    parser.add_argument(
+        "--exclude-patterns",
+        help=(
+            "Default @ExcludePatterns for every table, glob-style: "
+            "*_SRGT,CREATED_*,UPDATED_*. CSV ExcludePatterns overrides this."
+        ),
+    )
+    return parser
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = _build_parser()
+    raw = list(sys.argv[1:] if argv is None else argv)
+    args = parser.parse_args(raw)
+    if args.config is not None:
+        try:
+            parser.set_defaults(**load_config(args.config))
+        except ConfigError as exc:
+            parser.error(str(exc))
+        args = parser.parse_args(raw)
+    if args.max_detail_rows is not None and args.max_detail_rows < 1:
+        parser.error("--max-detail-rows must be greater than 0.")
+    if args.workers < 1:
+        parser.error("--workers must be greater than 0.")
+    if args.resume is not None and args.workbook is None:
+        args.workbook = args.resume
+    if args.persist_detail or args.persist_duplicates or args.persist_schema:
+        args.persist = True
+    if not args.password:
+        args.password = os.environ.get(PASSWORD_ENV) or None
+    missing = [
+        flag
+        for flag, value in (
+            ("--tables", args.tables),
+            ("--server", args.server),
+            ("--source-database", args.source_database),
+            ("--target-database", args.target_database),
+        )
+        if value is None or value == ""
+    ]
+    if missing:
+        parser.error("required: " + ", ".join(missing) + ". Set them on the command line or in --config.")
+    return args
+
+
+def default_workbook_path() -> Path:
+    return Path(f"compare-results-{datetime.now().strftime('%Y%m%d-%H%M%S')}.xlsx")
+
+
+def resolve_workbook_base(workbook: Path | None, use_groups: bool) -> Path:
+    if workbook is None:
+        return Path(".") if use_groups else default_workbook_path()
+    if use_groups and (workbook.is_dir() or workbook.suffix.lower() != ".xlsx"):
+        return workbook
+    if workbook.suffix.lower() != ".xlsx":
+        return workbook.with_suffix(".xlsx")
+    return workbook
+
+
+def resolve_state_dir(workbook: Path) -> Path:
+    if workbook.suffix.lower() == ".xlsx":
+        return workbook.with_name(f"{workbook.stem}.state")
+    return Path(workbook) / "state"
+
+
+def compare_settings(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "source_database": args.source_database,
+        "target_database": args.target_database,
+        "source_server": args.source_server or "",
+        "target_server": args.target_server or "",
+        "preflight": bool(args.preflight),
+        "output": args.output,
+        "ignore_case": bool(args.ignore_case),
+        "ignore_blank": bool(args.ignore_blank),
+        "include_matches": bool(args.include_matches),
+        "max_detail_rows": args.max_detail_rows,
+        "schema": args.schema,
+        "include_columns": args.include_columns or "",
+        "exclude_columns": args.exclude_columns or "",
+        "exclude_patterns": args.exclude_patterns or "",
+    }
+
+
+def apply_job_defaults(jobs: Sequence[TableJob], args: argparse.Namespace) -> None:
+    include = blank_to_none(getattr(args, "include_columns", None))
+    excluded = blank_to_none(getattr(args, "exclude_columns", None))
+    patterns = blank_to_none(getattr(args, "exclude_patterns", None))
+    for job in jobs:
+        if not job.included_columns:
+            job.included_columns = include
+        if not job.excluded_columns:
+            job.excluded_columns = excluded
+        if not job.exclude_patterns:
+            job.exclude_patterns = patterns
+
+
+def job_id(job: TableJob, default_schema: str) -> str:
+    include = {True: "1", False: "0", None: ""}[job.include_matches]
+    ignore = {True: "1", False: "0", None: ""}[job.ignore_case]
+    blank = {True: "1", False: "0", None: ""}[job.ignore_blank]
+    return "|".join(
+        [
+            job.group_name or "",
+            job.schema_name or default_schema,
+            job.table_name,
+            job.key_columns,
+            job.excluded_columns or "",
+            job.included_columns or "",
+            job.exclude_patterns or "",
+            job.row_filter or "",
+            (job.output or "").upper(),
+            include,
+            ignore,
+            blank,
+        ]
+    )
+
+
+def job_state_dir(state_dir: Path, job: TableJob, default_schema: str) -> Path:
+    digest = hashlib.sha256(job_id(job, default_schema).encode("utf-8")).hexdigest()[:10]
+    group = safe_filename(job.group_name or DEFAULT_GROUP_NAME)
+    table = safe_filename(job.table_name)
+    return state_dir / "jobs" / f"{group}__{table}__{digest}"
+
+
+def write_json_atomic(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2, default=str) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
+def read_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_run_json(state_dir: Path, args: argparse.Namespace, jobs: Sequence[TableJob]) -> None:
+    write_json_atomic(
+        state_dir / "run.json",
+        {
+            **compare_settings(args),
+            "started": datetime.now().isoformat(timespec="seconds"),
+            "job_ids": [job_id(job, args.schema) for job in jobs],
+        },
+    )
+
+
+def load_run_settings(state_dir: Path) -> dict[str, Any]:
+    path = state_dir / "run.json"
+    if not path.exists():
+        raise ResumeError(
+            f"No previous run in {state_dir.parent}. Pass the same path you used for --workbook."
+        )
+    try:
+        return read_json(path)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ResumeError(f"Could not read {path}: {exc}") from exc
+
+
+def settings_mismatch_message(saved: dict[str, Any], current: dict[str, Any]) -> str | None:
+    diffs = []
+    for key, value in current.items():
+        if key not in saved:
+            if value in ("", False, None):
+                continue
+            diffs.append(f"{key}: saved {saved.get(key)!r}, now {value!r}")
+            continue
+        if saved.get(key) != value:
+            diffs.append(f"{key}: saved {saved.get(key)!r}, now {value!r}")
+    if not diffs:
+        return None
+    return "Cannot resume; compare settings changed. " + "; ".join(diffs)
+
+
+def _csv_row(row: Sequence[str]) -> tuple[Any, ...]:
+    return tuple(None if cell == "" else cell for cell in row)
+
+
+def read_csv_table(path: Path) -> tuple[list[str], list[tuple[Any, ...]]]:
+    if not path.exists():
+        return [], []
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.reader(handle)
+        headers = next(reader, [])
+        return list(headers), [_csv_row(row) for row in reader]
+
+
+def persist_table_result(job_dir: Path, result: TableResult, default_schema: str) -> None:
+    job_dir.mkdir(parents=True, exist_ok=True)
+    _write_csv(job_dir / "detail.csv", result.detail_columns, result.detail_rows)
+    _write_csv(job_dir / "duplicates.csv", DUPLICATE_HEADERS, result.duplicate_rows)
+    _write_csv(job_dir / "schema.csv", SCHEMA_HEADERS, result.schema_rows)
+    write_json_atomic(
+        job_dir / "result.json",
+        {
+            "job_id": job_id(result.job, default_schema),
+            "status": result.status,
+            "schema_name": result.schema_name,
+            "duration_sec": result.duration_sec,
+            "error": result.error,
+            "output": result.output,
+            "summary": result.summary,
+            "overflow_file": result.overflow_file,
+        },
+    )
+
+
+def load_ok_result(job_dir: Path, job: TableJob, default_schema: str) -> TableResult | None:
+    path = job_dir / "result.json"
+    if not path.exists():
+        return None
+    try:
+        payload = read_json(path)
+    except (OSError, json.JSONDecodeError):
+        return None
+    if payload.get("status") != "OK":
+        return None
+    if payload.get("job_id") != job_id(job, default_schema):
+        return None
+    detail_headers, detail_rows = read_csv_table(job_dir / "detail.csv")
+    _, duplicate_rows = read_csv_table(job_dir / "duplicates.csv")
+    _, schema_rows = read_csv_table(job_dir / "schema.csv")
+    return TableResult(
+        job=job,
+        status="OK",
+        schema_name=str(payload.get("schema_name") or job.schema_name or default_schema),
+        duration_sec=float(payload.get("duration_sec") or 0),
+        error=payload.get("error"),
+        detail_columns=detail_headers or list(DETAIL_HEADERS),
+        detail_rows=detail_rows,
+        duplicate_rows=duplicate_rows,
+        summary=payload.get("summary") or {},
+        schema_rows=schema_rows,
+        overflow_file=payload.get("overflow_file"),
+        output=payload.get("output"),
+        skipped=True,
+    )
+
+
+def plan_jobs(
+    jobs: Sequence[TableJob],
+    args: argparse.Namespace,
+    state_dir: Path | None,
+    resume: bool,
+) -> list[PlannedJob]:
+    planned: list[PlannedJob] = []
+    for job in jobs:
+        cached = None
+        if resume and state_dir is not None:
+            cached = load_ok_result(job_state_dir(state_dir, job, args.schema), job, args.schema)
+        planned.append(PlannedJob(job=job, cached=cached))
+    return planned
+
+
+def prepare_run_state(
+    jobs: Sequence[TableJob],
+    args: argparse.Namespace,
+    state_dir: Path,
+    resume: bool,
+) -> list[PlannedJob]:
+    if resume:
+        saved = load_run_settings(state_dir)
+        mismatch = settings_mismatch_message(saved, compare_settings(args))
+        if mismatch:
+            raise ResumeError(mismatch)
+    else:
+        if state_dir.exists():
+            shutil.rmtree(state_dir)
+        write_run_json(state_dir, args, jobs)
+    return plan_jobs(jobs, args, state_dir, resume)
+
+
+def job_log_label(job: TableJob, args: argparse.Namespace) -> str:
+    schema = job.schema_name or args.schema
+    output = "PREFLIGHT" if args.preflight else (job.output or args.output)
+    group_tag = f" [{job.group_name}]" if job.group_name else ""
+    filter_tag = f" filter={job.row_filter}" if job.row_filter else ""
+    ignore_blank = args.ignore_blank if job.ignore_blank is None else job.ignore_blank
+    blank_tag = " ignore-blank" if ignore_blank else ""
+    return f"{schema}.{job.table_name}{group_tag} ({output}){filter_tag}{blank_tag}"
+
+
+def compare_one_job(
+    cursor: Any,
+    connection: Any,
+    job: TableJob,
+    args: argparse.Namespace,
+) -> TableResult:
+    schema = job.schema_name or args.schema
+    started = datetime.now()
+    try:
+        result = compare_table(cursor, connection, job, args)
+        extra = ""
+        if job.row_filter:
+            extra += f", filter={job.row_filter}"
+        if result.schema_rows:
+            extra += f", {len(result.schema_rows)} schema"
+        log(
+            f"  {result.status} in {result.duration_sec:.1f}s "
+            f"({len(result.detail_rows):,} detail, {len(result.duplicate_rows):,} duplicate{extra})"
+        )
+        return result
+    except Exception as exc:
+        result = TableResult(
+            job=job,
+            status="FAILED",
+            schema_name=schema,
+            duration_sec=(datetime.now() - started).total_seconds(),
+            error=str(exc).splitlines()[0],
+            output="PREFLIGHT" if args.preflight else (job.output or args.output),
+        )
+        log(f"  FAILED: {result.error}")
+        return result
+
+
+def _connect_from_args(args: argparse.Namespace, driver: str) -> Any:
+    return connect(
+        server=args.server,
+        database=args.database,
+        driver=driver,
+        username=args.username,
+        password=args.password,
+        timeout=args.timeout,
+        trust_cert=not args.no_trust_cert,
+    )
+
+
+def _sql_executor(
+    args: argparse.Namespace,
+    workers: int,
+) -> tuple[Callable[[TableJob, argparse.Namespace], TableResult], Any | None]:
+    driver = pick_driver(args.driver)
+    log(f"Connecting to {args.server} / {args.database} with {driver}")
+    if workers == 1:
+        connection = _connect_from_args(args, driver)
+        cursor = connection.cursor()
+
+        def execute(job: TableJob, job_args: argparse.Namespace) -> TableResult:
+            return compare_one_job(cursor, connection, job, job_args)
+
+        return execute, connection
+
+    log(f"Using {workers} workers. Each table opens its own connection; large facts can fill tempdb.")
+
+    def execute(job: TableJob, job_args: argparse.Namespace) -> TableResult:
+        connection = _connect_from_args(job_args, driver)
+        try:
+            return compare_one_job(connection.cursor(), connection, job, job_args)
+        finally:
+            connection.close()
+
+    return execute, None
+
+
+def run_one_planned_job(
+    job: TableJob,
+    args: argparse.Namespace,
+    execute: Callable[[TableJob, argparse.Namespace], TableResult],
+    state_dir: Path | None,
+) -> TableResult:
+    schema = job.schema_name or args.schema
+    started = datetime.now()
+    try:
+        result = execute(job, args)
+    except Exception as exc:
+        result = TableResult(
+            job=job,
+            status="FAILED",
+            schema_name=schema,
+            duration_sec=(datetime.now() - started).total_seconds(),
+            error=str(exc).splitlines()[0],
+            output="PREFLIGHT" if args.preflight else (job.output or args.output),
+        )
+        log(f"  FAILED: {result.error}")
+    if state_dir is not None:
+        persist_table_result(job_state_dir(state_dir, job, args.schema), result, args.schema)
+    return result
+
+
+def run_jobs(
+    jobs: Iterable[TableJob],
+    args: argparse.Namespace,
+    workbook_base: Path | None = None,
+    execute: Callable[[TableJob, argparse.Namespace], TableResult] | None = None,
+    state_dir: Path | None = None,
+    store: Any | None = None,
+) -> list[TableResult]:
+    job_list = list(jobs)
+    apply_job_defaults(job_list, args)
+    use_groups = has_named_groups(job_list)
+    groups = group_jobs(job_list)
+    workers = max(1, int(getattr(args, "workers", 1) or 1))
+    resume = getattr(args, "resume", None) is not None
+    if state_dir is None and workbook_base is not None:
+        state_dir = resolve_state_dir(workbook_base)
+
+    planned = (
+        prepare_run_state(job_list, args, state_dir, resume)
+        if state_dir is not None
+        else plan_jobs(job_list, args, None, False)
+    )
+    planned_by_job = {id(item.job): item for item in planned}
+    index_by_job = {id(job): index for index, job in enumerate(job_list, start=1)}
+
+    run_table = execute
+    connection = None
+    if run_table is None:
+        run_table, connection = _sql_executor(args, workers)
+    assert run_table is not None
+
+    results: list[TableResult] = []
+    try:
+        for group_index, (group_name, group) in enumerate(groups, start=1):
+            label = group_name or DEFAULT_GROUP_NAME
+            path = (
+                grouped_workbook_path(workbook_base, group_name, use_groups)
+                if workbook_base is not None
+                else None
+            )
+            if use_groups:
+                names = ", ".join(job.table_name for job in group)
+                log(f"Group {group_index}/{len(groups)} {label}: {len(group)} table(s) [{names}]")
+
+            slots: list[TableResult | None] = [None] * len(group)
+            pending: list[tuple[int, TableJob]] = []
+            for slot, job in enumerate(group):
+                cached = planned_by_job[id(job)].cached
+                if cached is not None:
+                    log(f"[{index_by_job[id(job)]}/{len(job_list)}] {job_log_label(job, args)} SKIP")
+                    slots[slot] = cached
+                    if store is not None:
+                        store.save_table(cached, args)
+                else:
+                    pending.append((slot, job))
+
+            def run_slot(job: TableJob) -> TableResult:
+                log(f"[{index_by_job[id(job)]}/{len(job_list)}] {job_log_label(job, args)}")
+                return run_one_planned_job(job, args, run_table, state_dir)
+
+            if pending and workers == 1:
+                for slot, job in pending:
+                    slots[slot] = run_slot(job)
+                    if store is not None:
+                        store.save_table(slots[slot], args)
+                    filled = [item for item in slots if item is not None]
+                    if path is not None and (len(filled) == 1 or all(slots)):
+                        if use_groups and all(slots):
+                            log(f"Group {label} finished. Writing {path} now, then starting the next group.")
+                        elif use_groups and len(filled) == 1:
+                            log(f"  Writing {path} after the first {label} table.")
+                        write_workbook(path, filled)
+            elif pending:
+                with ThreadPoolExecutor(max_workers=min(workers, len(pending))) as pool:
+                    futures = {pool.submit(run_slot, job): slot for slot, job in pending}
+                    for future in as_completed(futures):
+                        slots[futures[future]] = future.result()
+                        if store is not None:
+                            store.save_table(slots[futures[future]], args)
+                if path is not None:
+                    if use_groups:
+                        log(f"Group {label} finished. Writing {path} now, then starting the next group.")
+                    write_workbook(path, [item for item in slots if item is not None])
+            elif path is not None:
+                if use_groups:
+                    log(f"Group {label} finished. Writing {path} now, then starting the next group.")
+                write_workbook(path, [item for item in slots if item is not None])
+
+            results.extend(item for item in slots if item is not None)
+    finally:
+        if connection is not None:
+            connection.close()
+    return results
+
+
+def log_job_plan(jobs: Sequence[TableJob], planned: Sequence[PlannedJob] | None = None) -> None:
+    groups = group_jobs(jobs)
+    log(f"Loaded {len(jobs)} table(s) in {len(groups)} group(s)")
+    cached = {id(item.job): item.cached for item in planned} if planned is not None else {}
+    for group_name, group in groups:
+        label = group_name or DEFAULT_GROUP_NAME
+        names = []
+        for job in group:
+            prefix = "SKIP " if cached.get(id(job)) is not None else "RUN " if planned is not None else ""
+            names.append(f"{prefix}{job.table_name}")
+        log(f"  {label}: {', '.join(names)}")
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    if not args.tables.exists():
+        print(f"Table list not found: {args.tables}", file=sys.stderr)
+        return 1
+
+    try:
+        jobs = read_table_list(args.tables)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    apply_job_defaults(jobs, args)
+
+    use_groups = has_named_groups(jobs)
+    workbook = resolve_workbook_base(args.workbook, use_groups)
+    state_dir = resolve_state_dir(workbook)
+    resume = args.resume is not None
+
+    if args.dry_run:
+        planned = None
+        if resume:
+            try:
+                saved = load_run_settings(state_dir)
+                mismatch = settings_mismatch_message(saved, compare_settings(args))
+                if mismatch:
+                    raise ResumeError(mismatch)
+            except ResumeError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            planned = plan_jobs(jobs, args, state_dir, True)
+        log(f"Dry run from {args.tables}")
+        log_job_plan(jobs, planned)
+        return 0
+
+    log_path = resolve_log_path(args.log, workbook, use_groups)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    global _LOG_FILE
+    _LOG_FILE = log_path.open("a", encoding="utf-8")
+    store = None
+    try:
+        persist_flags = []
+        if persist_enabled(args):
+            persist_flags.append("summary")
+            if args.persist_detail:
+                persist_flags.append("detail")
+            if args.persist_duplicates:
+                persist_flags.append("duplicates")
+            if args.persist_schema:
+                persist_flags.append("schema")
+        log(
+            "start"
+            + (f" config={args.config}" if args.config else "")
+            + (" preflight" if args.preflight else "")
+            + (" resume" if resume else "")
+            + f" server={args.server} database={args.database}"
+            + f" source={args.source_database} target={args.target_database}"
+            + (f" source-server={args.source_server}" if args.source_server else "")
+            + (f" target-server={args.target_server}" if args.target_server else "")
+            + f" output={args.output}"
+            + (" ignore-blank" if args.ignore_blank else "")
+            + (f" workers={args.workers}" if args.workers > 1 else "")
+            + (f" max-detail-rows={args.max_detail_rows}" if args.max_detail_rows else "")
+            + (f" persist={','.join(persist_flags)}" if persist_flags else "")
+            + f" workbook={workbook}"
+        )
+        try:
+            if resume:
+                planned = prepare_run_state(jobs, args, state_dir, True)
+                log_job_plan(jobs, planned)
+            else:
+                log_job_plan(jobs)
+        except ResumeError as exc:
+            print(str(exc), file=sys.stderr)
+            log(str(exc))
+            return 1
+        try:
+            if persist_enabled(args):
+                persist_connection = _connect_from_args(args, pick_driver(args.driver))
+                persist_connection.autocommit = True
+                store = SqlRunStore(persist_connection)
+                store.start_run(args, jobs, workbook)
+            results = run_jobs(jobs, args, workbook, state_dir=state_dir, store=store)
+        except PersistError as exc:
+            print(str(exc), file=sys.stderr)
+            log(str(exc))
+            return 1
+        failed = sum(1 for result in results if result.status != "OK")
+        differed = sum(1 for result in results if has_differences(result) == "Yes")
+        skipped = sum(1 for result in results if result.skipped)
+        code = run_exit_code(results, args.fail_on_diff)
+        if skipped:
+            log(f"{skipped} of {len(results)} table(s) skipped (already OK).")
+        if failed:
+            log(f"{failed} of {len(results)} table(s) failed.")
+            print(f"{failed} of {len(results)} table(s) failed.", file=sys.stderr)
+        if differed:
+            log(f"{differed} of {len(results)} table(s) have differences.")
+            if args.fail_on_diff and code == 3:
+                print(f"{differed} of {len(results)} table(s) have differences.", file=sys.stderr)
+        if store is not None:
+            store.finish_run(code, results)
+            if store.run_id is not None:
+                log(f"Persisted run {store.run_id} in {args.database}.compare")
+            if store.errors:
+                log(f"SQL persist failed for {len(store.errors)} table(s).")
+                print(f"SQL persist failed for {len(store.errors)} table(s).", file=sys.stderr)
+                if code == 0:
+                    code = 2
+        log(f"finished exit={code} log={log_path}")
+        return code
+    finally:
+        if store is not None:
+            try:
+                store.close()
+            except Exception:
+                pass
+        _LOG_FILE.close()
+        _LOG_FILE = None
+
+
+if __name__ == "__main__":
+    sys.exit(main())
