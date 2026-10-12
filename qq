@@ -1,30 +1,109 @@
-SELECT 
-    bsr.IDENTIFIER           AS SBM_BK,
-    bsr.ID_PREFIX            AS SBM_CONTRACT_NUMBER,
-    bsr.TITLE                AS SBM_DESC,
-    bsr.LAYER_NUMBER         AS SBM_LAYER,
-    bsr.INCEPTION_DATE       AS SBM_INCEPTION_DATE,
-    bsr.FRK_LC_STAT_CURR     AS LC_STATUS,
-    bsr.FRK_BASICSTAT_CURR   AS BASIC_STATUS,
-    CASE WHEN bsr.FRK_LC_STAT_CURR = 'OA' THEN 1 ELSE 0 END AS SBM_IS_ACCEPTED,
-    CASE WHEN bsr.IS_CRNT_STATUS = 'Y' THEN 1 ELSE 0 END   AS SBM_IS_LATEST_VERSION,
-    lcp.SEQUENCE_NUMBER      AS SBM_VERSION_NO,
-    lcs.CHANGE_DATE          AS SBM_ENTRY_DATE,
-    ipt.INSRD_PERIOD_START   AS SBM_VALID_FROM,
-    ipt.INSRD_PERIOD_END     AS SBM_EXPIRY_DATE,
-    sh.WRITTEN_SHARE         AS SBM_WSHARED_PRCNT,
-    sh.SIGNED_SHARE          AS SBM_SSHARED_PRCNT,
-    brok.IDENTIFIER          AS BROKER_BK,
-    ced.IDENTIFIER           AS COMPANY_BK,
-    cur.ISO_ALPHA            AS SOC_CURRENCY
-FROM SICS.BUS_STRUCT_REP bsr
-LEFT JOIN SICS.LIFE_CYCLE_PHASE  lcp ON lcp.OBJECT_ID = bsr.FK_LC_PHASE
-LEFT JOIN SICS.LIFE_CYCLE_STATUS lcs ON lcs.OBJECT_ID = bsr.FK_LC_STATUS_CURR
-LEFT JOIN SICS.INS_PER_TIMESPAN  ipt ON ipt.FK_LIFECYCLEPHASE = bsr.FK_LC_PHASE AND ipt.IS_CURRENT = 'Y'
-LEFT JOIN SICS.SCOPE_OF_COVER    soc ON soc.OBJECT_ID = bsr.FK_SOC
-LEFT JOIN SICS.BC_SHARE          sh  ON sh.OBJECT_ID  = bsr.FK_PC_SHARE
-LEFT JOIN SICS.PARTY             brok ON brok.OBJECT_ID = bsr.FK_BROKER
-LEFT JOIN SICS.PARTY             ced  ON ced.OBJECT_ID  = bsr.FK_CEDENT
-LEFT JOIN SICS.CNU_CURRENCY      cur  ON cur.ISO_ALPHA  = soc.FK_CURRENCY
-WHERE bsr.IS_CRNT_STATUS = 'Y'
-ORDER BY bsr.IDENTIFIER;
+/* DIM_SUBMISSION load extract from SICS
+   Grain: current life-cycle status + current insured-period timespan.
+   *_SRGT values are NOT generated here. Columns named *_BK / *_CODE
+   are the lookup keys for the matching dimension.
+*/
+SELECT
+    /* DW generates SBM_SRGT */
+
+    bsr.IDENTIFIER                              AS SBM_BK,
+    lcp.SEQUENCE_NUMBER                         AS SBM_VERSION_NO,
+    bsr.ID_PREFIX                               AS SBM_CONTRACT_NUMBER,
+    bus.EXT_IDENTIFIER                          AS SBM_EXTERNAL_REF,
+    soc.ORIG_POLICY_ID                          AS SBM_ORIG_POL_REF,
+
+    bsr.FRK_TYPE_OF_BUS                         AS SBM_BUSINESS_INDICATOR,
+    CASE WHEN bsr.IS_CRNT_STATUS = 'Y' THEN 1 ELSE 0 END
+                                                AS SBM_IS_LATEST_VERSION,
+    CASE WHEN bsr.FRK_LC_STAT_CURR = 'OA' THEN 1 ELSE 0 END
+                                                AS SBM_IS_ACCEPTED,
+    bsr.LAYER_NUMBER                            AS SBM_LAYER,
+    bsr.AMNDMNT_NMBR                            AS SBM_END_NO,
+    bsr.FORMER_IDENTIFIER                       AS SBM_TAKEN_TO_REF,
+    bsr.TITLE                                   AS SBM_DESC,
+
+    CAST(bsr.INCEPTION_DATE AS date)            AS SBM_INCEPTION_DATE,
+    CAST(ipt.INSRD_PERIOD_START AS date)        AS SBM_VALID_FROM,
+    CAST(ipt.INSRD_PERIOD_END AS date)          AS SBM_EXPIRY_DATE,
+    CAST(lcs.CHANGE_DATE AS date)               AS SBM_ENTRY_DATE,
+
+    epi_cur.ISO_ALPHA                           AS SBM_EPI_CURRENCY,
+    epi.EST_AMT                                 AS SBM_EPI_AMOUNT_ORIGIN,
+    CASE
+        WHEN epi_cur.ISO_ALPHA = bus.FK_FUNCTIONAL_CCY THEN epi.EST_AMT
+    END                                         AS SBM_EPI_AMOUNT_BASE,
+
+    tsi_cur.ISO_ALPHA                           AS SBM_TSI_CURRENCY,
+    CASE
+        WHEN tsi_cur.ISO_ALPHA = bus.FK_FUNCTIONAL_CCY THEN lim.AMOUNT
+    END                                         AS SBM_TSI_AMOUNT_BASE,
+    lim.AMOUNT                                  AS SBM_TSI_AMOUNT_ORIGIN,
+
+    prem_cur.ISO_ALPHA                          AS PREMIUM_CURRENCY,
+    prem.CURRENT_AMOUNT                         AS PREMIUM_AMOUNT,
+
+    CAST(NULL AS varchar(3))                    AS PAG_CURRENCY,
+    CAST(NULL AS decimal(18,2))                 AS PAG_AMOUNT,
+
+    sh.WRITTEN_SHARE                            AS SBM_WSHARED_PRCNT,
+    sh.SIGNED_SHARE                             AS SBM_SSHARED_PRCNT,
+    COALESCE(uw.SHORTNAME, uw.USER_ID)          AS SBM_ENTERED_BY,
+
+    /* Lookup keys for *_SRGT */
+    brok.IDENTIFIER                             AS BROK_BK,            -- BROK_SRGT
+    ced.IDENTIFIER                              AS COMP_BK,            -- COMP_SRGT
+    insd.IDENTIFIER                             AS OIN_BK,             -- OIN_SRGT
+    cls.FRK_REFIC961                            AS PCLS_CODE,          -- PCLS_SRGT  Policy Type
+    ip.FRK_TERM_OPT                             AS PTRM_CODE,          -- PTRM_SRGT
+    risk_ctry.CODE                              AS CTRY_RISK_CODE,     -- CTRY_RISK_SRGT
+    dom_ctry.CODE                               AS CTRY_DOMICILE_CODE, -- CTRY_DOMICILE_SRGT
+    cls.FRK_REFIC3                              AS LOB_CODE,           -- LOB_SRGT  Class of Business
+    bsr.FK_IP_OCC                               AS OCC_BK,             -- OCC_SRGT
+    bsr.FRK_LC_STAT_CURR                        AS PSTS_CODE,          -- PSTS_SRGT
+    cls.FRK_REFIM978                            AS MOP_CODE,           -- MOP_SRGT
+    CAST(NULL AS varchar(15))                   AS PFCTR_CODE,         -- PFCTR_SRGT  no confirmed source
+    CAST(NULL AS varchar(15))                   AS COCTR_CODE,         -- COCTR_SRGT  no confirmed source
+    tsi_cur.ISO_ALPHA                           AS CURR_TSI_CODE,      -- CURR_TSI_SRGT
+    epi_cur.ISO_ALPHA                           AS CURR_EPI_CODE,      -- CURR_EPI_SRGT
+    CAST(COALESCE(ip.CREATE_TIMESTAMP, lcs.CHANGE_DATE) AS date)
+                                                AS CREATED_DATE,       -- CREATED_DATE_SRGT
+    CAST(ip.CHANGED_DATE AS date)               AS UPDATED_DATE        -- UPDATED_DATE_SRGT
+
+FROM dbo.BUS_STRUCT_REP AS bsr
+LEFT JOIN dbo.BUSINESS          AS bus  ON bus.OBJECT_ID = bsr.FK_BUSINESS
+LEFT JOIN dbo.LIFE_CYCLE_PHASE  AS lcp  ON lcp.OBJECT_ID = bsr.FK_LC_PHASE
+LEFT JOIN dbo.LIFE_CYCLE_STATUS AS lcs  ON lcs.OBJECT_ID = bsr.FK_LC_STATUS_CURR
+LEFT JOIN dbo.INSURED_PERIOD    AS ip   ON ip.OBJECT_ID  = bsr.FK_INS_PERIOD
+LEFT JOIN dbo.INS_PER_TIMESPAN  AS ipt  ON ipt.FK_LIFECYCLEPHASE = bsr.FK_LC_PHASE
+                                       AND ipt.IS_CURRENT = 'Y'
+LEFT JOIN dbo.SCOPE_OF_COVER    AS soc  ON soc.OBJECT_ID = bsr.FK_SOC
+LEFT JOIN dbo.BC_SHARE          AS sh   ON sh.OBJECT_ID  = bsr.FK_PC_SHARE
+LEFT JOIN dbo.BUS_CLASSIFIC     AS cls  ON cls.OBJECT_ID = bsr.FK_SOC_CLASSIFIC
+LEFT JOIN dbo.LPC_LIM_PREM_COND AS lpc  ON lpc.OBJECT_ID = COALESCE(bsr.FK_PC_LIM_PREM, bsr.FK_PC_PREM)
+LEFT JOIN dbo.LPC_PREMIUM       AS prem ON prem.OBJECT_ID = lpc.FK_TOT_PREM
+LEFT JOIN dbo.LPC_LIMIT         AS lim  ON lim.OBJECT_ID  = lpc.FK_MAIN_LIMIT
+LEFT JOIN dbo.CNU_CURRENCY      AS prem_cur ON prem_cur.ISO_ALPHA = lpc.FK_MAIN_CURRENCY
+LEFT JOIN dbo.CNU_CURRENCY      AS tsi_cur  ON tsi_cur.ISO_ALPHA  = COALESCE(lpc.FK_MAIN_CURRENCY, soc.FK_CURRENCY, bsr.FK_SOC_CURRENCY)
+LEFT JOIN dbo.PARTY             AS brok ON brok.OBJECT_ID = bsr.FK_BROKER
+LEFT JOIN dbo.PARTY             AS ced  ON ced.OBJECT_ID  = bsr.FK_CEDENT
+LEFT JOIN dbo.PARTY             AS insd ON insd.OBJECT_ID = bsr.FK_INSURED
+LEFT JOIN dbo.CNU_USER          AS uw   ON uw.OBJECT_ID   = COALESCE(bsr.FK_UNDERW_CURR, lcs.FK_UNDERWRITER)
+LEFT JOIN dbo.ACC_CLASSIFIC     AS acc  ON acc.FK_BUS = bsr.FK_BUSINESS
+                                       AND acc.FK_SOURCE_SOC = bsr.FK_SOC
+LEFT JOIN dbo.LEGAL_AREA        AS risk_ctry ON risk_ctry.OBJECT_ID = acc.FK_I_COUNTRY
+LEFT JOIN dbo.LEGAL_AREA        AS dom_ctry  ON dom_ctry.OBJECT_ID  = acc.FK_RES_I_COUNTRY
+OUTER APPLY (
+    SELECT TOP (1)
+           pe.FK_PER_CURR,
+           sn.EST_AMT
+    FROM dbo.BUS_PERIOD_EST AS pe
+    INNER JOIN dbo.PERIOD_SNL_EST AS sn
+            ON sn.FK_SNGL_EST = pe.OBJECT_ID
+    WHERE pe.FK_PER_EST_COND = bsr.FK_PC_ESTIMATE
+    ORDER BY pe.AS_AT_DATE DESC
+) AS epi
+LEFT JOIN dbo.CNU_CURRENCY AS epi_cur ON epi_cur.ISO_ALPHA = epi.FK_PER_CURR
+
+WHERE bsr.IDENTIFIER IS NOT NULL
+  AND bsr.IS_CRNT_STATUS = 'Y'
+ORDER BY bsr.IDENTIFIER, lcp.SEQUENCE_NUMBER;
