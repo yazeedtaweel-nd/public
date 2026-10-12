@@ -1,117 +1,98 @@
-/* DIM_SUBMISSION load extract from SICS
-   Grain: current life-cycle status + current insured-period timespan.
-   *_SRGT values are NOT generated here. Columns named *_BK / *_CODE
-   are the lookup keys for the matching dimension.
-*/
 SELECT
-    /* DW generates SBM_SRGT */
+    -- Identity
+    bsr.IDENTIFIER                                              AS SBMS_BK,
+    bsr.TITLE                                                   AS SBMS_TITLE,
 
-    bsr.IDENTIFIER                              AS SBM_BK,
-    lcp.SEQUENCE_NUMBER                         AS SBM_VERSION_NO,
-    bsr.ID_PREFIX                               AS SBM_CONTRACT_NUMBER,
-    bus.EXT_IDENTIFIER                          AS SBM_EXTERNAL_REF,
-    soc.ORIG_POLICY_ID                          AS SBM_ORIG_POL_REF,
+    -- User
+    u.USER_ID                                                   AS SBMS_ENTERED_BY,
+    u.SHORTNAME                                                 AS SBMS_UDT_LOGIN,
 
-    bsr.FRK_TYPE_OF_BUS                         AS SBM_BUSINESS_INDICATOR,
-    CASE WHEN bsr.IS_CRNT_STATUS = 'Y' THEN 1 ELSE 0 END
-                                                AS SBM_IS_LATEST_VERSION,
-    CASE WHEN bsr.FRK_LC_STAT_CURR = 'OA' THEN 1 ELSE 0 END
-                                                AS SBM_IS_ACCEPTED,
-    bsr.LAYER_NUMBER                            AS SBM_LAYER,
-    bsr.AMNDMNT_NMBR                            AS SBM_END_NO,
-    bsr.FORMER_IDENTIFIER                       AS SBM_TAKEN_TO_REF,
-    bsr.TITLE                                   AS SBM_DESC,
+    -- Take-up
+    bsr.IDENTIFIER_PREV                                         AS SBMS_TAKEN_FROM_REF,
+    bsr.IDENTIFIER_CURR                                         AS IDENTIFIER_CURR,
+    bsr.IDENTIFIER                                              AS SBMS_TAKEN_TO_REF,   -- bound business id
 
-    CAST(bsr.INCEPTION_DATE AS date)            AS SBM_INCEPTION_DATE,
-    CAST(ipt.INSRD_PERIOD_START AS date)        AS SBM_VALID_FROM,
-    CAST(ipt.INSRD_PERIOD_END AS date)          AS SBM_EXPIRY_DATE,
-    CAST(lcs.CHANGE_DATE AS date)               AS SBM_ENTRY_DATE,
+    -- Dates
+    bsr.INCEPTION_DATE                                          AS SBMS_INCEPTION_DATE,
+    lcs.CHANGE_DATE                                             AS SBMS_ENTRY_DATE,
+    CAST(bsr.INSRD_PERIOD_START AS DATE)                        AS SBMS_START_DATE,
+    CAST(bsr.INSRD_PERIOD_END   AS DATE)                        AS SBMS_EXPIRY_DATE,
 
-    epi_cur.ISO_ALPHA                           AS SBM_EPI_CURRENCY,
-    CAST(epi.EST_AMT AS money)                  AS SBM_EPI_AMOUNT_ORIGIN,
-    CAST(
-        CASE
-            WHEN epi_cur.ISO_ALPHA = bus.FK_FUNCTIONAL_CCY
-            THEN epi.EST_AMT
-        END
-        AS money
-    )                                           AS SBM_EPI_AMOUNT_BASE,
+    -- Status (prefer LC for SUBMS_STATUS)
+    bsr.FRK_LC_STAT_CURR                                        AS LC_STATUS_CODE,
+    rd_lc.NAME                                                  AS SUBMS_STATUS,          -- LC name
+    bsr.FRK_BASICSTAT_CURR                                      AS BASIC_STATUS_CODE,
+    rd_bs.NAME                                                  AS BASIC_STATUS_NAME,     -- e.g. Definite
 
-    tsi_cur.ISO_ALPHA                           AS SBM_TSI_CURRENCY,
-    CAST(
-        CASE
-            WHEN tsi_cur.ISO_ALPHA = bus.FK_FUNCTIONAL_CCY
-            THEN lim.AMOUNT
-        END
-        AS money
-    )                                           AS SBM_TSI_AMOUNT_BASE,
-    CAST(lim.AMOUNT AS money)                   AS SBM_TSI_AMOUNT_ORIGIN,
+    -- Parties (natural keys for dim lookup)
+    brk.IDENTIFIER                                              AS BROKER_BK,
+    bsr.BROKER_NAME,
+    ced.IDENTIFIER                                              AS CEDENT_BK,
+    bsr.CEDENT_NAME,
+    ins.IDENTIFIER                                              AS INSURED_BK,            -- OIN*
+    bsr.INSURED_NAME,
 
-    prem_cur.ISO_ALPHA                          AS PREMIUM_CURRENCY,
-    CAST(prem.CURRENT_AMOUNT AS money)          AS PREMIUM_AMOUNT,
+    -- Countries
+    bsr.INSURED_COUNTRY                                         AS CTRY_RISK_CODE,        -- e.g. SAU
+    bsr.CEDENT_COUNTRY                                          AS CTRY_DOMICILE_CODE,    -- e.g. SAU/ARE
+    bsr.BROKER_COUNTRY,
 
-    CAST(NULL AS varchar(3))                    AS PAG_CURRENCY,
-    CAST(NULL AS money)                         AS PAG_AMOUNT,
+    -- Type of business
+    bsr.FRK_TYPE_OF_BUS,
+    tob.NAME                                                    AS TYPE_OF_BUS_NAME,
+    bsr.LOB_REF_NM,                                             -- note: "Assumed Business" ≠ LOB
 
-    sh.WRITTEN_SHARE                            AS SBM_WSHARED_PRCNT,
-    sh.SIGNED_SHARE                             AS SBM_SSHARED_PRCNT,
-    COALESCE(uw.SHORTNAME, uw.USER_ID)          AS SBM_ENTERED_BY,
+    -- EPI / TSI
+    lpc.FK_MAIN_CURRENCY                                        AS CURRENCY_FK,
+    cur.ISO_ALPHA                                               AS SBMS_EPI_CURRENCY,
+    prem.CURRENT_AMOUNT                                         AS SBMS_EPI_AMOUNT_ORIGIN,
+    prem.ANNUAL_AMOUNT                                          AS EPI_ANNUAL_AMOUNT,
+    prem.INSURED_AMOUNT                                         AS EPI_INSURED_AMOUNT,
+    prem.BASE_AMOUNT                                            AS EPI_BASE_AMOUNT_SICS,  -- often NULL
+    lim.AMOUNT                                                  AS SBMS_TSI_AMOUNT_ORIGIN,
+    lim.IS_UNLIMITED                                            AS TSI_IS_UNLIMITED,
 
-    /* Lookup keys for *_SRGT */
-    brok.IDENTIFIER                             AS BROK_BK,            -- BROK_SRGT
-    ced.IDENTIFIER                              AS COMP_BK,            -- COMP_SRGT
-    insd.IDENTIFIER                             AS OIN_BK,             -- OIN_SRGT
-    cls.FRK_REFIC961                            AS PCLS_CODE,          -- PCLS_SRGT  Policy Type
-    ip.FRK_TERM_OPT                             AS PTRM_CODE,          -- PTRM_SRGT
-    risk_ctry.CODE                              AS CTRY_RISK_CODE,     -- CTRY_RISK_SRGT
-    dom_ctry.CODE                               AS CTRY_DOMICILE_CODE, -- CTRY_DOMICILE_SRGT
-    cls.FRK_REFIC3                              AS LOB_CODE,           -- LOB_SRGT  Class of Business
-    bsr.FK_IP_OCC                               AS OCC_BK,             -- OCC_SRGT
-    bsr.FRK_LC_STAT_CURR                        AS PSTS_CODE,          -- PSTS_SRGT
-    cls.FRK_REFIM978                            AS MOP_CODE,           -- MOP_SRGT
-    CAST(NULL AS varchar(15))                   AS PFCTR_CODE,         -- PFCTR_SRGT  no confirmed source
-    CAST(NULL AS varchar(15))                   AS COCTR_CODE,         -- COCTR_SRGT  no confirmed source
-    tsi_cur.ISO_ALPHA                           AS CURR_TSI_CODE,      -- CURR_TSI_SRGT
-    epi_cur.ISO_ALPHA                           AS CURR_EPI_CODE,      -- CURR_EPI_SRGT
-    CAST(COALESCE(ip.CREATE_TIMESTAMP, lcs.CHANGE_DATE) AS date)
-                                                AS CREATED_DATE,       -- CREATED_DATE_SRGT
-    CAST(ip.CHANGED_DATE AS date)               AS UPDATED_DATE        -- UPDATED_DATE_SRGT
-
-FROM dbo.BUS_STRUCT_REP AS bsr
-LEFT JOIN dbo.BUSINESS          AS bus  ON bus.OBJECT_ID = bsr.FK_BUSINESS
-LEFT JOIN dbo.LIFE_CYCLE_PHASE  AS lcp  ON lcp.OBJECT_ID = bsr.FK_LC_PHASE
-LEFT JOIN dbo.LIFE_CYCLE_STATUS AS lcs  ON lcs.OBJECT_ID = bsr.FK_LC_STATUS_CURR
-LEFT JOIN dbo.INSURED_PERIOD    AS ip   ON ip.OBJECT_ID  = bsr.FK_INS_PERIOD
-LEFT JOIN dbo.INS_PER_TIMESPAN  AS ipt  ON ipt.FK_LIFECYCLEPHASE = bsr.FK_LC_PHASE
-                                       AND ipt.IS_CURRENT = 'Y'
-LEFT JOIN dbo.SCOPE_OF_COVER    AS soc  ON soc.OBJECT_ID = bsr.FK_SOC
-LEFT JOIN dbo.BC_SHARE          AS sh   ON sh.OBJECT_ID  = bsr.FK_PC_SHARE
-LEFT JOIN dbo.BUS_CLASSIFIC     AS cls  ON cls.OBJECT_ID = bsr.FK_SOC_CLASSIFIC
-LEFT JOIN dbo.LPC_LIM_PREM_COND AS lpc  ON lpc.OBJECT_ID = COALESCE(bsr.FK_PC_LIM_PREM, bsr.FK_PC_PREM)
-LEFT JOIN dbo.LPC_PREMIUM       AS prem ON prem.OBJECT_ID = lpc.FK_TOT_PREM
-LEFT JOIN dbo.LPC_LIMIT         AS lim  ON lim.OBJECT_ID  = lpc.FK_MAIN_LIMIT
-LEFT JOIN dbo.CNU_CURRENCY      AS prem_cur ON prem_cur.ISO_ALPHA = lpc.FK_MAIN_CURRENCY
-LEFT JOIN dbo.CNU_CURRENCY      AS tsi_cur  ON tsi_cur.ISO_ALPHA  = COALESCE(lpc.FK_MAIN_CURRENCY, soc.FK_CURRENCY, bsr.FK_SOC_CURRENCY)
-LEFT JOIN dbo.PARTY             AS brok ON brok.OBJECT_ID = bsr.FK_BROKER
-LEFT JOIN dbo.PARTY             AS ced  ON ced.OBJECT_ID  = bsr.FK_CEDENT
-LEFT JOIN dbo.PARTY             AS insd ON insd.OBJECT_ID = bsr.FK_INSURED
-LEFT JOIN dbo.CNU_USER          AS uw   ON uw.OBJECT_ID   = COALESCE(bsr.FK_UNDERW_CURR, lcs.FK_UNDERWRITER)
-LEFT JOIN dbo.ACC_CLASSIFIC     AS acc  ON acc.FK_BUS = bsr.FK_BUSINESS
-                                       AND acc.FK_SOURCE_SOC = bsr.FK_SOC
-LEFT JOIN dbo.LEGAL_AREA        AS risk_ctry ON risk_ctry.OBJECT_ID = acc.FK_I_COUNTRY
-LEFT JOIN dbo.LEGAL_AREA        AS dom_ctry  ON dom_ctry.OBJECT_ID  = acc.FK_RES_I_COUNTRY
-OUTER APPLY (
-    SELECT TOP (1)
-           pe.FK_PER_CURR,
-           sn.EST_AMT
-    FROM dbo.BUS_PERIOD_EST AS pe
-    INNER JOIN dbo.PERIOD_SNL_EST AS sn
-            ON sn.FK_SNGL_EST = pe.OBJECT_ID
-    WHERE pe.FK_PER_EST_COND = bsr.FK_PC_ESTIMATE
-    ORDER BY pe.AS_AT_DATE DESC
-) AS epi
-LEFT JOIN dbo.CNU_CURRENCY AS epi_cur ON epi_cur.ISO_ALPHA = epi.FK_PER_CURR
-
-WHERE bsr.IDENTIFIER IS NOT NULL
-  AND bsr.IS_CRNT_STATUS = 'Y'
-ORDER BY bsr.IDENTIFIER, lcp.SEQUENCE_NUMBER;
+    -- Debug / grain
+    bsr.OBJECT_ID                                               AS BUS_STRUCT_REP_OID,
+    bsr.IS_CRNT_STATUS,
+    bsr.IS_CRNT_BASIC_STAT,
+    bsr.IS_CURRENT_LCP,
+    bsr.IS_IP_LATEST
+FROM SICS.BUS_STRUCT_REP AS bsr
+LEFT JOIN SICS.CNU_USER AS u
+    ON u.OBJECT_ID = bsr.FK_UNDERW_CURR
+LEFT JOIN SICS.LIFE_CYCLE_STATUS AS lcs
+    ON lcs.OBJECT_ID = bsr.FK_LC_STATUS_CURR
+LEFT JOIN SICS.REFERENCE_DATA AS rd_lc
+    ON rd_lc.CODE = bsr.FRK_LC_STAT_CURR
+   AND rd_lc.SUBCLASS = 90
+LEFT JOIN SICS.REFERENCE_DATA AS rd_bs
+    ON rd_bs.CODE = bsr.FRK_BASICSTAT_CURR
+   AND rd_bs.SUBCLASS = 89
+LEFT JOIN SICS.REFERENCE_DATA AS tob
+    ON tob.CODE = bsr.FRK_TYPE_OF_BUS
+   AND tob.SUBCLASS = 46
+LEFT JOIN SICS.PARTY AS brk
+    ON brk.OBJECT_ID = bsr.FK_BROKER
+LEFT JOIN SICS.PARTY AS ced
+    ON ced.OBJECT_ID = bsr.FK_CEDENT
+LEFT JOIN SICS.PARTY AS ins
+    ON ins.OBJECT_ID = bsr.FK_INSURED
+LEFT JOIN SICS.LPC_LIM_PREM_COND AS lpc
+    ON lpc.OBJECT_ID = COALESCE(bsr.FK_PC_LIM_PREM, bsr.FK_PC_PREM)
+LEFT JOIN SICS.CNU_CURRENCY AS cur
+    ON cur.ISO_ALPHA = lpc.FK_MAIN_CURRENCY
+LEFT JOIN SICS.LPC_PREMIUM AS prem
+    ON prem.OBJECT_ID = lpc.FK_TOT_PREM
+LEFT JOIN SICS.LPC_LIMIT AS lim
+    ON lim.OBJECT_ID = lpc.FK_MAIN_LIMIT
+WHERE bsr.FRK_TYPE_OF_BUS IN (
+    'NONPROPFAC',  -- confirmed live
+    'PF', 'NPF', 'PFO', 'NPFO',
+    'PAFM', 'PAFW',
+    'PPFAC', 'PFOFM'
+)
+  AND bsr.IS_CRNT_STATUS     = 'Y'   -- required (removes duplicate BK rows)
+  AND bsr.IS_CURRENT_LCP     = 'Y'
+  AND bsr.IS_IP_LATEST       = 'Y'
+ORDER BY bsr.IDENTIFIER;
