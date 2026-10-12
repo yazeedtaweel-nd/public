@@ -29,11 +29,11 @@ SELECT
     CONVERT(int, CONVERT(char(8), bsr.INSRD_PERIOD_END, 112))      AS SBMS_EXPIRY_DATE_SRGT,
     CAST(bsr.INSRD_PERIOD_END AS date)                             AS SBMS_EXPIRY_DATE,
     lpc.FK_MAIN_CURRENCY                                           AS SBMS_EPI_CURRENCY,
-    prem.CURRENT_AMOUNT                                            AS SBMS_EPI_AMOUNT_ORIGIN,
-    prem.BASE_AMOUNT                                               AS SBMS_EPI_AMOUNT_BASE,
+    CAST(prem.CURRENT_AMOUNT AS money)                             AS SBMS_EPI_AMOUNT_ORIGIN,
+    CAST(prem.BASE_AMOUNT AS money)                                AS SBMS_EPI_AMOUNT_BASE,
     COALESCE(lpc.FK_MAIN_CURRENCY, bsr.FK_SOC_CURRENCY)            AS SBMS_TSI_CURRENCY,
-    CAST(NULL AS decimal(22, 2))                                   AS SBMS_TSI_AMOUNT_BASE,
-    lim.AMOUNT                                                     AS SBMS_TSI_AMOUNT_ORIGIN,
+    CAST(NULL AS money)                                            AS SBMS_TSI_AMOUNT_BASE,
+    CAST(lim.AMOUNT AS money)                                      AS SBMS_TSI_AMOUNT_ORIGIN,
     COALESCE(
         NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
         NULLIF(LTRIM(RTRIM(ip.BUS_INS_PER_ID)), N'')
