@@ -29,16 +29,13 @@ SELECT
     i.AC_START_DATE                                   AS INS_START_DATE,
     i.AC_END_DATE                                     AS INS_END_DATE,
     dtl.EXCH_AMT                                      AS INS_INSTALMENT_BASE_AMT,
-    icur.NR_INSTAL                                    AS INSTALEMENT_COUNT,
+    cnt.INSTAL_COUNT                                  AS INSTALEMENT_COUNT,
     icur.FK_INST_CUR                                  AS INS_INSTALMENT_ORIG_CCY,
     ISNULL(bal.FK_CURR, icur.FK_INST_CUR)             AS INS_INSTALMENT_SETT_CCY,
     dep.PREMIUM_AMOUNT                                AS SRE_MDP,
-    CASE WHEN ISNULL(icur.NR_INSTAL, 0) = 0 THEN NULL
-         ELSE dep.PREMIUM_AMOUNT / icur.NR_INSTAL
-    END                                               AS SRE_MDP_INSTALMENT,
-    CASE WHEN ISNULL(icur.NR_INSTAL, 0) = 0 THEN NULL
-         ELSE (dep.PREMIUM_AMOUNT / icur.NR_INSTAL) * (ded.PCT / 100.0)
-    END                                               AS BROKERAGE,
+    dep.PREMIUM_AMOUNT / NULLIF(cnt.INSTAL_COUNT, 0)  AS SRE_MDP_INSTALMENT,
+    (dep.PREMIUM_AMOUNT / NULLIF(cnt.INSTAL_COUNT, 0))
+        * (ISNULL(ded.PCT, 10) / 100.0)               AS BROKERAGE,
     ISNULL(tax.TAX_AMT, 0)                            AS TAX_ON_PREMIUM
 
 FROM sics.BC_INSTAL AS i
@@ -46,10 +43,19 @@ FROM sics.BC_INSTAL AS i
 INNER JOIN sics.BC_INST_CUR AS icur
         ON icur.OBJECT_ID = i.FK_INST_CUR
 
-INNER JOIN sics.BC_INST_CONT AS icont
-        ON icont.OBJECT_ID = icur.FK_CONDITION
+LEFT JOIN sics.BC_INST_CONT AS icont
+       ON icont.OBJECT_ID = icur.FK_CONDITION
 
-CROSS APPLY (
+OUTER APPLY (
+    SELECT COALESCE(
+               NULLIF(icur.NR_INSTAL, 0),
+               (SELECT NULLIF(COUNT(*), 0)
+                FROM sics.BC_INSTAL AS x
+                WHERE x.FK_INST_CUR = icur.OBJECT_ID)
+           ) AS INSTAL_COUNT
+) AS cnt
+
+OUTER APPLY (
     SELECT TOP (1)
            d.FK_WORKSHEET,
            d.FK_BALANCE,
@@ -57,8 +63,8 @@ CROSS APPLY (
            d.EXCH_AMT
     FROM sics.AC_LEDGER_DETAIL AS d
     WHERE d.FK_SRCE_INSTALMENT = i.OBJECT_ID
-      AND d.FK_WORKSHEET IS NOT NULL
-    ORDER BY d.WKST_SEQ_NBR
+    ORDER BY CASE WHEN d.FK_WORKSHEET IS NULL THEN 1 ELSE 0 END,
+             d.WKST_SEQ_NBR
 ) AS dtl
 
 LEFT JOIN ws_bk AS ws
@@ -116,4 +122,6 @@ OUTER APPLY (
             ON de.FK_DED_COND = dc.OBJECT_ID
     WHERE dc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
       AND de.FRK_TYPE IN (N'IPT', N'IPT1', N'IPT2', N'IPT3')
-) AS tax;
+) AS tax
+
+ORDER BY POLICY_BK, INS_INSTALMENT_NUM;
