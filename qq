@@ -1,15 +1,167 @@
+WITH ws_bk AS (
+    SELECT
+        w.OBJECT_ID,
+        w.BOOKING_DATE,
+        CASE
+            WHEN w.EXTERNAL_ID LIKE 'TW|%'
+                THEN STUFF(w.EXTERNAL_ID, 1, 3, '')
+            ELSE CONVERT(varchar(8), w.BOOKING_DATE, 112)
+                 + '|' + CAST(
+                     ROW_NUMBER() OVER (
+                         PARTITION BY w.BOOKING_DATE
+                         ORDER BY w.ID_SERIE_NO, w.OBJECT_ID
+                     ) AS varchar(20)
+                 )
+        END AS WRKS_BK
+    FROM SICS.AC_WORKSHEET AS w
+)
 SELECT
-  (SELECT COUNT(*) FROM SICS.BC_INSTAL) AS total_instalments,
-  (SELECT COUNT(DISTINCT d.FK_SRCE_INSTALMENT)
-     FROM SICS.AC_LEDGER_DETAIL d
-    WHERE d.FK_SRCE_INSTALMENT IS NOT NULL
-      AND d.FK_WORKSHEET IS NOT NULL)                AS route1_detail_srce,
-  (SELECT COUNT(*)
-     FROM SICS.BC_INSTAL i
-    WHERE EXISTS (SELECT 1 FROM SICS.AC_LEDGER_DETAIL d
-                   WHERE d.FK_BALANCE = i.FK_REMITTANCE
-                     AND d.FK_WORKSHEET IS NOT NULL)) AS route2_remittance,
-  (SELECT COUNT(*)
-     FROM SICS.AC_LEDGER_BALANCE bl
-    WHERE bl.FK_BUSINESS IS NOT NULL
-      AND bl.INSTALMENT_NUMBER IS NOT NULL)          AS route3_balances_with_bus_and_instno;
+    ws.WRKS_BK                                        AS WRKS_BK,
+    COALESCE(b.IDENTIFIER, rep.IDENTIFIER)            AS POLICY_BK,
+
+    ws.BOOKING_DATE                                   AS INS_AUDIT_DATE,
+    lnk.WKST_SEQ_NBR                                  AS INS_AUDIT_NUM,
+    i.INST_NR                                         AS INS_INSTALMENT_NUM,
+    i.DUE_DATE                                        AS INS_INSTALMENT_DUE_DATE,
+    ISNULL(i.PAYMENT_DATE, '9999-01-01')              AS INS_ACTUAL_PAYMENT_DATE,
+    i.PREMIUM_AMT                                     AS INS_INSTALMENT_ORIG_AMT,
+    i.BOOKED_PRE_AMT                                  AS INS_INSTALMENT_SETT_AMT,
+    i.AC_START_DATE                                   AS INS_START_DATE,
+    i.AC_END_DATE                                     AS INS_END_DATE,
+    lnk.EXCH_AMT                                      AS INS_INSTALMENT_BASE_AMT,
+    cnt.INSTAL_COUNT                                  AS INSTALEMENT_COUNT,
+    icur.FK_INST_CUR                                  AS INS_INSTALMENT_ORIG_CCY,
+    ISNULL(bal.FK_CURR, icur.FK_INST_CUR)             AS INS_INSTALMENT_SETT_CCY,
+    dep.PREMIUM_AMOUNT                                AS SRE_MDP,
+    dep.PREMIUM_AMOUNT / NULLIF(cnt.INSTAL_COUNT, 0)  AS SRE_MDP_INSTALMENT,
+    (dep.PREMIUM_AMOUNT / NULLIF(cnt.INSTAL_COUNT, 0))
+        * (ISNULL(ded.PCT, 10) / 100.0)               AS BROKERAGE,
+    ISNULL(tax.TAX_AMT, 0)                            AS TAX_ON_PREMIUM,
+
+    lnk.LINK_METHOD                                   AS WRKS_LINK_METHOD
+
+FROM sics.BC_INSTAL AS i
+
+INNER JOIN sics.BC_INST_CUR AS icur
+        ON icur.OBJECT_ID = i.FK_INST_CUR
+
+LEFT JOIN sics.BC_INST_CONT AS icont
+       ON icont.OBJECT_ID = icur.FK_CONDITION
+
+LEFT JOIN sics.BUS_COND_CONTAINER AS bcc
+       ON bcc.OBJECT_ID = icont.FK_COND_CONTAINER
+LEFT JOIN sics.SCOPE_OF_COVER AS soc
+       ON soc.OBJECT_ID = bcc.FK_SOC
+LEFT JOIN sics.LIFE_CYCLE_PHASE AS lcp
+       ON lcp.OBJECT_ID = soc.FK_LIFECYCLEP
+LEFT JOIN sics.INSURED_PERIOD AS ip
+       ON ip.OBJECT_ID = COALESCE(icont.FK_INSURED_PERIOD, lcp.FK_INS_PRD)
+LEFT JOIN sics.BUSINESS AS b
+       ON b.OBJECT_ID = ip.FK_BUSINESS
+
+OUTER APPLY (
+    SELECT TOP (1) r.IDENTIFIER
+    FROM sics.BUS_STRUCT_REP AS r
+    WHERE r.FK_PC_INST = icont.OBJECT_ID
+    ORDER BY r.IDENTIFIER
+) AS rep
+
+OUTER APPLY (
+    SELECT COALESCE(
+               NULLIF(icur.NR_INSTAL, 0),
+               (SELECT NULLIF(COUNT(*), 0)
+                FROM sics.BC_INSTAL AS x
+                WHERE x.FK_INST_CUR = icur.OBJECT_ID)
+           ) AS INSTAL_COUNT
+) AS cnt
+
+OUTER APPLY (
+    SELECT TOP (1)
+           x.FK_WORKSHEET,
+           x.FK_BALANCE,
+           x.WKST_SEQ_NBR,
+           x.EXCH_AMT,
+           x.LINK_METHOD
+    FROM (
+        SELECT d.FK_WORKSHEET, d.FK_BALANCE, d.WKST_SEQ_NBR, d.EXCH_AMT,
+               1 AS PRIORITY, 'DETAIL_SRCE_INSTALMENT' AS LINK_METHOD
+        FROM sics.AC_LEDGER_DETAIL AS d
+        WHERE d.FK_SRCE_INSTALMENT = i.OBJECT_ID
+          AND d.FK_WORKSHEET IS NOT NULL
+
+        UNION ALL
+
+        SELECT d.FK_WORKSHEET, d.FK_BALANCE, d.WKST_SEQ_NBR, d.EXCH_AMT,
+               2, 'REMITTANCE_BALANCE'
+        FROM sics.AC_LEDGER_DETAIL AS d
+        WHERE i.FK_REMITTANCE IS NOT NULL
+          AND d.FK_BALANCE = i.FK_REMITTANCE
+          AND d.FK_WORKSHEET IS NOT NULL
+
+        UNION ALL
+
+        SELECT d.FK_WORKSHEET, d.FK_BALANCE, d.WKST_SEQ_NBR, d.EXCH_AMT,
+               3, 'BALANCE_BUSINESS_INSTALMENT'
+        FROM sics.AC_LEDGER_BALANCE AS bl
+        INNER JOIN sics.AC_LEDGER_DETAIL AS d
+                ON d.FK_BALANCE = bl.OBJECT_ID
+        WHERE bl.FK_BUSINESS        = b.OBJECT_ID
+          AND bl.INSTALMENT_NUMBER  = i.INST_NR
+          AND bl.FK_CURR            = icur.FK_INST_CUR
+          AND ISNULL(bl.IS_OUTWARD, 'N') = 'N'
+          AND d.FK_WORKSHEET IS NOT NULL
+
+        UNION ALL
+
+        SELECT bl.FK_WORKSHEET, bl.OBJECT_ID, NULL, NULL,
+               4, 'BALANCE_WORKSHEET'
+        FROM sics.AC_LEDGER_BALANCE AS bl
+        WHERE bl.FK_BUSINESS        = b.OBJECT_ID
+          AND bl.INSTALMENT_NUMBER  = i.INST_NR
+          AND bl.FK_CURR            = icur.FK_INST_CUR
+          AND ISNULL(bl.IS_OUTWARD, 'N') = 'N'
+          AND bl.FK_WORKSHEET IS NOT NULL
+    ) AS x
+    ORDER BY x.PRIORITY, x.WKST_SEQ_NBR
+) AS lnk
+
+LEFT JOIN ws_bk AS ws
+       ON ws.OBJECT_ID = lnk.FK_WORKSHEET
+
+LEFT JOIN sics.AC_LEDGER_BALANCE AS bal
+       ON bal.OBJECT_ID = lnk.FK_BALANCE
+
+OUTER APPLY (
+    SELECT TOP (1) dp.PREMIUM_AMOUNT
+    FROM sics.LPC_PREM_COND AS pc
+    INNER JOIN sics.LPC_DEP_PREMIUM AS dp
+            ON dp.FK_CONDITION = pc.OBJECT_ID
+    LEFT JOIN sics.LPC_CUR_LIMIT_PREM AS clp
+           ON clp.OBJECT_ID = dp.FK_CURRENCY
+    WHERE pc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
+      AND (clp.FK_CURRENCY = icur.FK_INST_CUR OR clp.FK_CURRENCY IS NULL)
+    ORDER BY CASE WHEN pc.IS_CURRENT_OF_IP = 'Y' THEN 0 ELSE 1 END,
+             pc.OBJECT_ID
+) AS dep
+
+OUTER APPLY (
+    SELECT TOP (1) de.PCT
+    FROM sics.DEDUCTION_COND AS dc
+    INNER JOIN sics.DEDUCTION_ELEMENT AS de
+            ON de.FK_DED_COND = dc.OBJECT_ID
+    WHERE dc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
+      AND de.FRK_TYPE = N'BRO'
+      AND de.PCT IS NOT NULL
+    ORDER BY de.OBJECT_ID
+) AS ded
+
+OUTER APPLY (
+    SELECT SUM(de.AMT_AMT) AS TAX_AMT
+    FROM sics.DEDUCTION_COND AS dc
+    INNER JOIN sics.DEDUCTION_ELEMENT AS de
+            ON de.FK_DED_COND = dc.OBJECT_ID
+    WHERE dc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
+      AND de.FRK_TYPE IN (N'IPT', N'IPT1', N'IPT2', N'IPT3')
+) AS tax
+
+ORDER BY POLICY_BK, INS_INSTALMENT_NUM;
