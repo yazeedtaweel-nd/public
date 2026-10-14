@@ -16,7 +16,7 @@ ws AS (
         w.ID_SERIE_NO,
         ROW_NUMBER() OVER (
             PARTITION BY w.BOOKING_DATE
-            ORDER BY w.ID_SERIE_NO, w.OBJECT_ID
+            ORDER BY w.REGIST_TIMESTAMP, w.ID_SERIE_NO, w.OBJECT_ID
         ) AS WRKS_NO
     FROM SICS.AC_WORKSHEET AS w
 )
