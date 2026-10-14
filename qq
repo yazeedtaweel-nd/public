@@ -2,31 +2,51 @@ WITH ws_balance AS (
     SELECT DISTINCT
         d.FK_WORKSHEET,
         b.OBJECT_ID,
+        b.IS_OUTWARD,
         b.LEDGER_BAL_ORG_AMT
     FROM SICS.AC_LEDGER_DETAIL AS d
     INNER JOIN SICS.AC_LEDGER_BALANCE AS b
             ON b.OBJECT_ID = d.FK_BALANCE
     WHERE d.FK_WORKSHEET IS NOT NULL
+),
+ws AS (
+    SELECT
+        w.OBJECT_ID,
+        w.BOOKING_DATE,
+        w.ID_SERIE_NO,
+        ROW_NUMBER() OVER (
+            PARTITION BY w.BOOKING_DATE
+            ORDER BY w.ID_SERIE_NO, w.OBJECT_ID
+        ) AS WRKS_NO
+    FROM SICS.AC_WORKSHEET AS w
 )
 SELECT
-    w.OBJECT_ID                         AS sics_object_id,
-    CONVERT(varchar(8), w.BOOKING_DATE, 112)
-        + '|' + CAST(w.ID_SERIE_NO AS varchar(20))
+    ws.OBJECT_ID                        AS sics_object_id,
+    CONVERT(varchar(8), ws.BOOKING_DATE, 112)
+        + '|' + CAST(ws.WRKS_NO AS varchar(20))
                                         AS WRKS_BK,
-    w.BOOKING_DATE                      AS WRKS_DATE,
-    w.ID_SERIE_NO                       AS WRKS_NO,
-    ROW_NUMBER() OVER (
-        PARTITION BY w.BOOKING_DATE
-        ORDER BY w.ID_SERIE_NO, w.OBJECT_ID
-    )                                   AS WRKS_INDICATOR,
+    ws.BOOKING_DATE                     AS WRKS_DATE,
+    ws.WRKS_NO                          AS WRKS_NO,
+    CASE
+        WHEN SUM(CASE WHEN b.IS_OUTWARD = 'Y' THEN 1 ELSE 0 END) > 0
+         AND SUM(CASE WHEN ISNULL(b.IS_OUTWARD, 'N') = 'N' THEN 1 ELSE 0 END) = 0
+            THEN 'O'
+        WHEN SUM(CASE WHEN ISNULL(b.IS_OUTWARD, 'N') = 'N' THEN 1 ELSE 0 END) > 0
+         AND SUM(CASE WHEN b.IS_OUTWARD = 'Y' THEN 1 ELSE 0 END) = 0
+            THEN 'I'
+        WHEN COUNT(b.OBJECT_ID) = 0
+            THEN NULL
+        ELSE 'MIXED'
+    END                                 AS WRKS_INDICATOR,
     SUM(b.LEDGER_BAL_ORG_AMT)           AS WRKS_CASH_TOTAL_AMT
-FROM SICS.AC_WORKSHEET AS w
+FROM ws
 LEFT JOIN ws_balance AS b
-       ON b.FK_WORKSHEET = w.OBJECT_ID
+       ON b.FK_WORKSHEET = ws.OBJECT_ID
 GROUP BY
-    w.OBJECT_ID,
-    w.BOOKING_DATE,
-    w.ID_SERIE_NO
+    ws.OBJECT_ID,
+    ws.BOOKING_DATE,
+    ws.ID_SERIE_NO,
+    ws.WRKS_NO
 ORDER BY
-    w.BOOKING_DATE,
-    w.ID_SERIE_NO;
+    ws.BOOKING_DATE,
+    ws.WRKS_NO;
