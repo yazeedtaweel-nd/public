@@ -3,6 +3,10 @@
    IW: @IsOutward = 'N'
    OW: @IsOutward = 'Y'
 
+   POLICY_BK matches DIM_POLICY:
+   INSURED_PERIOD.I_PERIOD_FORMER_ID, else BUS_INS_PER_ID
+   (via AC_LEDGER_DETAIL.FK_INS_PER)
+
    Date *_SRGT = YYYYMMDD int
    Processing period: YEAR + Mnn → YYYYMM01 (month start)
 
@@ -12,7 +16,12 @@
 DECLARE @IsOutward CHAR(1) = 'N';  -- 'Y' for FACT_OW_TRANSACTION
 
 SELECT
-    bus.IDENTIFIER                                              AS POLICY_BK,
+    CAST(
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
+            LTRIM(RTRIM(ip.BUS_INS_PER_ID))
+        ) AS nvarchar(50)
+    )                                                           AS POLICY_BK,
     COALESCE(clm_ow.CLAIM_IDENTIFIER, clm_bal.CLAIM_IDENTIFIER) AS CLA_CLAIM_BK,
     brk.BROK_BK                                                 AS BROK_BK,
     p_comp.IDENTIFIER                                           AS COMP_BK,
@@ -31,13 +40,26 @@ SELECT
     CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112))      AS TRANS_ACCOUNTING_FROM_DATE_SRGT,
     CONVERT(int, CONVERT(char(8), dtl.AC_END_DATE, 112))        AS TRANS_ACCOUNTING_TO_DATE_SRGT,
 
-    CAST(dtl.EXCH_AMT   AS money)                                             AS TRANS_BASE_GROSS_AMT,
-   CAST( dtl.FUNC_AMT2      AS money)                                            AS TRANS_BASE2_GROSS_AMT,
-    CAST(bal.SETTLED_AMT    AS money)                                            AS TRANS_SETT_GROSS_AMT,
-    CAST(dtl.DTL_AMT          AS money)                                          AS TRANS_ORIG_GROSS_AMT,
+    CAST(dtl.EXCH_AMT   AS money)                               AS TRANS_BASE_GROSS_AMT,
+    CAST(dtl.FUNC_AMT2  AS money)                               AS TRANS_BASE2_GROSS_AMT,
+    CAST(bal.SETTLED_AMT AS money)                              AS TRANS_SETT_GROSS_AMT,
+    CAST(dtl.DTL_AMT    AS money)                               AS TRANS_ORIG_GROSS_AMT,
 
-     bus.IDENTIFIER                                          AS IW_POLICY_BK,
-    CASE WHEN bal.IS_OUTWARD = 'Y' THEN bus.IDENTIFIER END      AS OW_POLICY_BK,
+    CAST(
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
+            LTRIM(RTRIM(ip.BUS_INS_PER_ID))
+        ) AS nvarchar(50)
+    )                                                           AS IW_POLICY_BK,
+    CASE
+        WHEN bal.IS_OUTWARD = 'Y' THEN
+            CAST(
+                COALESCE(
+                    NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
+                    LTRIM(RTRIM(ip.BUS_INS_PER_ID))
+                ) AS nvarchar(50)
+            )
+    END                                                         AS OW_POLICY_BK,
 
     bal.FK_CURR                                                 AS CURR_ORIG_BK,
     bal.FK_AC_FUNC_CCY                                          AS CURR_BASE_BK,
