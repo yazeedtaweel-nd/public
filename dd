@@ -30,7 +30,8 @@ SELECT
     )                                                           AS POLICY_BK,
     COALESCE(
         COALESCE(cref_ow.REFERENCE_ID, clm_ow.CLAIM_IDENTIFIER),
-        COALESCE(cref_bal.REFERENCE_ID, clm_bal.CLAIM_IDENTIFIER)
+        COALESCE(cref_bal.REFERENCE_ID, clm_bal.CLAIM_IDENTIFIER),
+        iw_clm.CLA_BK
     )                                                           AS CLA_CLAIM_BK,
     brk.BROK_BK                                                 AS BROK_BK,
     p_comp.IDENTIFIER                                           AS COMP_BK,
@@ -83,10 +84,6 @@ LEFT JOIN sics.INSURED_PERIOD AS ip
         ON ip.OBJECT_ID = dtl.FK_INS_PER
 LEFT JOIN sics.BUSINESS AS bus
         ON bus.OBJECT_ID = ip.FK_BUSINESS
-LEFT JOIN sics.INSURED_PERIOD AS ip_assumed
-        ON ip_assumed.OBJECT_ID = dtl.FK_INS_PER_ASSUMED
-LEFT JOIN sics.BUSINESS AS bus_assumed
-        ON bus_assumed.OBJECT_ID = ip_assumed.FK_BUSINESS
 LEFT JOIN sics.SOC_TO_CLAIM_REL AS soc
         ON soc.OBJECT_ID = bal.FK_CLAIM
 LEFT JOIN sics.CLAIMS AS clm_bal
@@ -109,6 +106,192 @@ LEFT JOIN (
     GROUP BY scr.FK_CLAIM
 ) AS cref_ow
         ON cref_ow.FK_CLAIM = clm_ow.OBJECT_ID
+/* DIM_CLAIM policy link, walked back from the inward insured period */
+OUTER APPLY (
+    SELECT TOP (1)
+           COALESCE(cref.REFERENCE_ID, c.CLAIM_IDENTIFIER) AS CLA_BK
+    FROM sics.SOC_TO_CLAIM_REL AS scr
+    INNER JOIN sics.CLAIMS AS c
+            ON c.OBJECT_ID = scr.FK_CLAIM
+    LEFT JOIN (
+        SELECT FK_SOC_REL, MIN(REFERENCE_ID) AS REFERENCE_ID
+        FROM sics.CLAIM_REFS
+        GROUP BY FK_SOC_REL
+    ) AS cref
+            ON cref.FK_SOC_REL = scr.OBJECT_ID
+    LEFT JOIN sics.SCOPE_OF_COVER AS cov
+            ON cov.OBJECT_ID = scr.FK_SOC
+    LEFT JOIN sics.LIFE_CYCLE_PHASE AS lcp1
+            ON lcp1.OBJECT_ID = cov.FK_LIFECYCLEP
+    LEFT JOIN sics.LIFE_CYCLE_PHASE AS lcp2
+            ON lcp2.FK_SCOPE_OF_CVR = cov.OBJECT_ID
+           AND lcp2.IS_CURRENT = 'Y'
+    INNER JOIN sics.INSURED_PERIOD AS ip_iw
+            ON ip_iw.OBJECT_ID = COALESCE(lcp1.FK_INS_PRD, lcp2.FK_INS_PRD)
+    INNER JOIN sics.BUSINESS AS b_iw
+            ON b_iw.OBJECT_ID = ip_iw.FK_BUSINESS
+    WHERE ip_iw.OBJECT_ID = CASE
+                                WHEN bal.IS_OUTWARD = 'Y' THEN dtl.FK_INS_PER_ASSUMED
+                                ELSE dtl.FK_INS_PER
+                            END
+      AND b_iw.SUBCLASS = 6
+    ORDER BY COALESCE(cref.REFERENCE_ID, c.CLAIM_IDENTIFIER)
+) AS iw_clm
+LEFT JOIN SICS.PARTY AS p_comp
+        ON p_comp.OBJECT_ID = bal.FK_BASE_COMPANY
+OUTER APPLY (
+    SELECT TOP (1)
+           p.IDENTIFIER AS BROK_BK
+    FROM sics.BUSINESS_PRTNR_REL AS bpr
+    INNER JOIN sics.PARTY AS p
+            ON p.OBJECT_ID = bpr.FK_BUS_PARTNER
+    WHERE bpr.FRK_RELSHIP_TYPE = 'BR'
+      AND bpr.FSK_RELSHIP_TYPE = 55
+      AND (
+            bpr.FK_INS_PERIOD = dtl.FK_INS_PER
+         OR bpr.FK_BUSINESS   = ip.FK_BUSINESS
+          )
+    ORDER BY p.IDENTIFIER
+) AS brk
+WHERE bal.IS_OUTWARD = @IsOutward;DECLARE @IsOutward CHAR(1) = 'N';  -- 'Y' for FACT_OW_TRANSACTION
+WITH ws_seq AS (
+    SELECT
+        w.OBJECT_ID,
+        w.BOOKING_DATE,
+        w.EXTERNAL_ID,
+        ROW_NUMBER() OVER (
+            PARTITION BY w.BOOKING_DATE
+            ORDER BY w.ID_SERIE_NO, w.OBJECT_ID
+        ) AS serie_no
+    FROM sics.AC_WORKSHEET AS w
+),
+ws_bk AS (
+    SELECT
+        OBJECT_ID,
+        CASE
+            WHEN EXTERNAL_ID LIKE 'TW|%'
+                THEN STUFF(EXTERNAL_ID, 1, 3, '')
+            ELSE CONVERT(varchar(8), BOOKING_DATE, 112)
+                 + '|' + CAST(serie_no AS varchar(20))
+        END AS WRKS_BK
+    FROM ws_seq
+)
+SELECT
+    CAST(
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
+            LTRIM(RTRIM(ip.BUS_INS_PER_ID))
+        ) AS nvarchar(50)
+    )                                                           AS POLICY_BK,
+    COALESCE(
+        COALESCE(cref_ow.REFERENCE_ID, clm_ow.CLAIM_IDENTIFIER),
+        COALESCE(cref_bal.REFERENCE_ID, clm_bal.CLAIM_IDENTIFIER),
+        iw_clm.CLA_BK
+    )                                                           AS CLA_CLAIM_BK,
+    brk.BROK_BK                                                 AS BROK_BK,
+    p_comp.IDENTIFIER                                           AS COMP_BK,
+    CONVERT(int, CONVERT(char(8), ws.BOOKING_DATE, 112))        AS TRANS_AUDIT_DATE_SRGT,
+    ws.ID_SERIE_NO                                              AS TRANS_AUDIT_NUM,
+    CONVERT(int,
+        CONVERT(char(4), bal.BOOKING_YEAR)
+        + RIGHT('0' + REPLACE(bal.FRK_BOOKING_PERIOD, 'M', ''), 2)
+        + '01'
+    )                                                           AS TRANS_PROCESSING_PERIOD_SRGT,
+    ec.CODE                                                     AS TRST_BK,
+    CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112))      AS TRANS_ACCOUNTING_FROM_DATE_SRGT,
+    CONVERT(int, CONVERT(char(8), dtl.AC_END_DATE, 112))        AS TRANS_ACCOUNTING_TO_DATE_SRGT,
+    CAST(dtl.EXCH_AMT    AS money)                              AS TRANS_BASE_GROSS_AMT,
+    CAST(dtl.FUNC_AMT2   AS money)                              AS TRANS_BASE2_GROSS_AMT,
+    CAST(bal.SETTLED_AMT AS money)                              AS TRANS_SETT_GROSS_AMT,
+    CAST(dtl.DTL_AMT     AS money)                              AS TRANS_ORIG_GROSS_AMT,
+    CAST(
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
+            LTRIM(RTRIM(ip.BUS_INS_PER_ID))
+        ) AS nvarchar(50)
+    )                                                           AS IW_POLICY_BK,
+    CASE
+        WHEN bal.IS_OUTWARD = 'Y' THEN
+            CAST(
+                COALESCE(
+                    NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
+                    LTRIM(RTRIM(ip.BUS_INS_PER_ID))
+                ) AS nvarchar(50)
+            )
+    END                                                         AS OW_POLICY_BK,
+    bal.FK_CURR                                                 AS CURR_ORIG_BK,
+    bal.FK_AC_FUNC_CCY                                          AS CURR_BASE_BK,
+    COALESCE(bal.FK_LLOYDS_SETL_CUR, bal.FK_CURR)               AS CURR_SETT_BK,
+    usr.USER_ID                                                 AS USR_BK,
+    ws_bk.WRKS_BK                                               AS WRKS_BK
+FROM sics.AC_LEDGER_DETAIL AS dtl
+INNER JOIN sics.AC_LEDGER_BALANCE AS bal
+        ON bal.OBJECT_ID = dtl.FK_BALANCE
+LEFT JOIN sics.AC_WORKSHEET AS ws
+        ON ws.OBJECT_ID = COALESCE(dtl.FK_WORKSHEET, bal.FK_WORKSHEET)
+LEFT JOIN ws_bk
+        ON ws_bk.OBJECT_ID = ws.OBJECT_ID
+LEFT JOIN sics.ENTRY_CODE AS ec
+        ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
+LEFT JOIN sics.CNU_USER AS usr
+        ON usr.OBJECT_ID = ws.FK_REGISTERED_BY
+LEFT JOIN sics.INSURED_PERIOD AS ip
+        ON ip.OBJECT_ID = dtl.FK_INS_PER
+LEFT JOIN sics.BUSINESS AS bus
+        ON bus.OBJECT_ID = ip.FK_BUSINESS
+LEFT JOIN sics.SOC_TO_CLAIM_REL AS soc
+        ON soc.OBJECT_ID = bal.FK_CLAIM
+LEFT JOIN sics.CLAIMS AS clm_bal
+        ON clm_bal.OBJECT_ID = soc.FK_CLAIM
+LEFT JOIN (
+    SELECT FK_SOC_REL, MIN(REFERENCE_ID) AS REFERENCE_ID
+    FROM sics.CLAIM_REFS
+    GROUP BY FK_SOC_REL
+) AS cref_bal
+        ON cref_bal.FK_SOC_REL = soc.OBJECT_ID
+LEFT JOIN sics.CLAIMS AS clm_ow
+        ON clm_ow.OBJECT_ID = dtl.FK_CLAIM_TO_SOC
+LEFT JOIN (
+    SELECT
+        scr.FK_CLAIM,
+        MIN(r.REFERENCE_ID) AS REFERENCE_ID
+    FROM sics.SOC_TO_CLAIM_REL AS scr
+    INNER JOIN sics.CLAIM_REFS AS r
+            ON r.FK_SOC_REL = scr.OBJECT_ID
+    GROUP BY scr.FK_CLAIM
+) AS cref_ow
+        ON cref_ow.FK_CLAIM = clm_ow.OBJECT_ID
+/* DIM_CLAIM policy link, walked back from the inward insured period */
+OUTER APPLY (
+    SELECT TOP (1)
+           COALESCE(cref.REFERENCE_ID, c.CLAIM_IDENTIFIER) AS CLA_BK
+    FROM sics.SOC_TO_CLAIM_REL AS scr
+    INNER JOIN sics.CLAIMS AS c
+            ON c.OBJECT_ID = scr.FK_CLAIM
+    LEFT JOIN (
+        SELECT FK_SOC_REL, MIN(REFERENCE_ID) AS REFERENCE_ID
+        FROM sics.CLAIM_REFS
+        GROUP BY FK_SOC_REL
+    ) AS cref
+            ON cref.FK_SOC_REL = scr.OBJECT_ID
+    LEFT JOIN sics.SCOPE_OF_COVER AS cov
+            ON cov.OBJECT_ID = scr.FK_SOC
+    LEFT JOIN sics.LIFE_CYCLE_PHASE AS lcp1
+            ON lcp1.OBJECT_ID = cov.FK_LIFECYCLEP
+    LEFT JOIN sics.LIFE_CYCLE_PHASE AS lcp2
+            ON lcp2.FK_SCOPE_OF_CVR = cov.OBJECT_ID
+           AND lcp2.IS_CURRENT = 'Y'
+    INNER JOIN sics.INSURED_PERIOD AS ip_iw
+            ON ip_iw.OBJECT_ID = COALESCE(lcp1.FK_INS_PRD, lcp2.FK_INS_PRD)
+    INNER JOIN sics.BUSINESS AS b_iw
+            ON b_iw.OBJECT_ID = ip_iw.FK_BUSINESS
+    WHERE ip_iw.OBJECT_ID = CASE
+                                WHEN bal.IS_OUTWARD = 'Y' THEN dtl.FK_INS_PER_ASSUMED
+                                ELSE dtl.FK_INS_PER
+                            END
+      AND b_iw.SUBCLASS = 6
+    ORDER BY COALESCE(cref.REFERENCE_ID, c.CLAIM_IDENTIFIER)
+) AS iw_clm
 LEFT JOIN SICS.PARTY AS p_comp
         ON p_comp.OBJECT_ID = bal.FK_BASE_COMPANY
 OUTER APPLY (
