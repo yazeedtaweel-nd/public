@@ -7,6 +7,11 @@
    INSURED_PERIOD.I_PERIOD_FORMER_ID, else BUS_INS_PER_ID
    (via AC_LEDGER_DETAIL.FK_INS_PER)
 
+   WRKS_BK matches the worksheet extract:
+   EXTERNAL_ID after 'TW|' when present, else
+   YYYYMMDD(BOOKING_DATE) + '|' + sequence within BOOKING_DATE
+   (ROW_NUMBER by ID_SERIE_NO, OBJECT_ID over all AC_WORKSHEET)
+
    Date *_SRGT = YYYYMMDD int
    Processing period: YEAR + Mnn → YYYYMM01 (month start)
 
@@ -15,6 +20,28 @@
 */
 DECLARE @IsOutward CHAR(1) = 'N';  -- 'Y' for FACT_OW_TRANSACTION
 
+WITH ws_seq AS (
+    SELECT
+        w.OBJECT_ID,
+        w.BOOKING_DATE,
+        w.EXTERNAL_ID,
+        ROW_NUMBER() OVER (
+            PARTITION BY w.BOOKING_DATE
+            ORDER BY w.ID_SERIE_NO, w.OBJECT_ID
+        ) AS serie_no
+    FROM sics.AC_WORKSHEET AS w
+),
+ws_bk AS (
+    SELECT
+        OBJECT_ID,
+        CASE
+            WHEN EXTERNAL_ID LIKE 'TW|%'
+                THEN STUFF(EXTERNAL_ID, 1, 3, '')
+            ELSE CONVERT(varchar(8), BOOKING_DATE, 112)
+                 + '|' + CAST(serie_no AS varchar(20))
+        END AS WRKS_BK
+    FROM ws_seq
+)
 SELECT
     CAST(
         COALESCE(
@@ -40,10 +67,10 @@ SELECT
     CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112))      AS TRANS_ACCOUNTING_FROM_DATE_SRGT,
     CONVERT(int, CONVERT(char(8), dtl.AC_END_DATE, 112))        AS TRANS_ACCOUNTING_TO_DATE_SRGT,
 
-    CAST(dtl.EXCH_AMT   AS money)                               AS TRANS_BASE_GROSS_AMT,
-    CAST(dtl.FUNC_AMT2  AS money)                               AS TRANS_BASE2_GROSS_AMT,
+    CAST(dtl.EXCH_AMT    AS money)                              AS TRANS_BASE_GROSS_AMT,
+    CAST(dtl.FUNC_AMT2   AS money)                              AS TRANS_BASE2_GROSS_AMT,
     CAST(bal.SETTLED_AMT AS money)                              AS TRANS_SETT_GROSS_AMT,
-    CAST(dtl.DTL_AMT    AS money)                               AS TRANS_ORIG_GROSS_AMT,
+    CAST(dtl.DTL_AMT     AS money)                              AS TRANS_ORIG_GROSS_AMT,
 
     CAST(
         COALESCE(
@@ -66,15 +93,15 @@ SELECT
     COALESCE(bal.FK_LLOYDS_SETL_CUR, bal.FK_CURR)               AS CURR_SETT_BK,
 
     usr.USER_ID                                                 AS USR_BK,
-    CONVERT(varchar(8), ws.BOOKING_DATE, 112)
-        + '|'
-        + CONVERT(varchar(20), ws.ID_SERIE_NO)                  AS WRKS_BK
+    ws_bk.WRKS_BK                                               AS WRKS_BK
 
 FROM sics.AC_LEDGER_DETAIL AS dtl
 INNER JOIN sics.AC_LEDGER_BALANCE AS bal
         ON bal.OBJECT_ID = dtl.FK_BALANCE
 LEFT JOIN sics.AC_WORKSHEET AS ws
         ON ws.OBJECT_ID = COALESCE(dtl.FK_WORKSHEET, bal.FK_WORKSHEET)
+LEFT JOIN ws_bk
+        ON ws_bk.OBJECT_ID = ws.OBJECT_ID
 LEFT JOIN sics.ENTRY_CODE AS ec
         ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
 LEFT JOIN sics.CNU_USER AS usr
