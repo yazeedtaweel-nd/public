@@ -1,10 +1,6 @@
 /* FACT_IW_TRANSACTION / FACT_OW_TRANSACTION
    Grain: 1 row per AC_LEDGER_DETAIL
    IW: @IsOutward = 'N'    OW: @IsOutward = 'Y'
-
-   COMP_BK matches the company extract:
-   COALESCE(NULLIF(LTRIM(RTRIM(FORMERID)), ''), PARTY.IDENTIFIER)
-   Party: AC_LEDGER_BALANCE.FK_BP, SUBCLASS = 4, category CE or SEC
 */
 DECLARE @IsOutward CHAR(1) = 'N';
 
@@ -15,15 +11,9 @@ SELECT
             LTRIM(RTRIM(ip.BUS_INS_PER_ID))
         ) AS nvarchar(50)
     )                                                    AS POLICY_BK,
-    COALESCE(
-        COALESCE(cref_ow.REFERENCE_ID, clm_ow.CLAIM_IDENTIFIER),
-        COALESCE(cref_bal.REFERENCE_ID, clm_bal.CLAIM_IDENTIFIER)
-    )                                                    AS CLA_CLAIM_BK,
+    COALESCE(clm_ow.CLAIM_IDENTIFIER, clm_bal.CLAIM_IDENTIFIER) AS CLA_CLAIM_BK,
     brk.BROK_BK                                          AS BROK_BK,
-    COALESCE(
-        NULLIF(LTRIM(RTRIM(comp_pid.IDENTIFIER)), ''),
-        p_comp.IDENTIFIER
-    )                                                    AS COMP_BK,
+    comp.COMP_BK                                         AS COMP_BK,
 
     CONVERT(int, CONVERT(char(8), ws.BOOKING_DATE, 112)) AS TRANS_AUDIT_DATE_SRGT,
     ws.ID_SERIE_NO                                       AS TRANS_AUDIT_NUM,
@@ -84,39 +74,24 @@ LEFT JOIN sics.SOC_TO_CLAIM_REL AS soc
         ON soc.OBJECT_ID = bal.FK_CLAIM
 LEFT JOIN sics.CLAIMS AS clm_bal
         ON clm_bal.OBJECT_ID = soc.FK_CLAIM
-OUTER APPLY (
-    SELECT TOP (1) r.REFERENCE_ID
-    FROM sics.CLAIM_REFS AS r
-    WHERE r.FK_SOC_REL = soc.OBJECT_ID
-    ORDER BY r.REFERENCE_ID
-) AS cref_bal
 LEFT JOIN sics.CLAIMS AS clm_ow
         ON clm_ow.OBJECT_ID = dtl.FK_CLAIM_TO_SOC
-OUTER APPLY (
-    SELECT TOP (1) r.REFERENCE_ID
-    FROM sics.SOC_TO_CLAIM_REL AS scr
-    INNER JOIN sics.CLAIM_REFS AS r
-            ON r.FK_SOC_REL = scr.OBJECT_ID
-    WHERE scr.FK_CLAIM = clm_ow.OBJECT_ID
-    ORDER BY r.REFERENCE_ID
-) AS cref_ow
 
-LEFT JOIN sics.PARTY AS p_comp
-        ON p_comp.OBJECT_ID = bal.FK_BP
-       AND p_comp.SUBCLASS = 4
-       AND EXISTS (
-               SELECT 1
-               FROM sics.BUS_PARTNER_CAT AS cat
-               WHERE cat.FK_PARTNER = p_comp.OBJECT_ID
-                 AND cat.FRK_CATEGORY IN ('CE', 'SEC')
-           )
 OUTER APPLY (
-    SELECT TOP (1) pi.IDENTIFIER
-    FROM sics.PARTY_IDENTIFIER AS pi
-    WHERE pi.FK_PARTY = p_comp.OBJECT_ID
-      AND pi.FRK_PARTY_ID_TYPE = 'FORMERID'
+    SELECT TOP (1)
+           COALESCE(NULLIF(LTRIM(RTRIM(pi.IDENTIFIER)), ''), p.IDENTIFIER) AS COMP_BK
+    FROM sics.PARTY AS p
+    INNER JOIN sics.BUS_PARTNER_CAT AS cat
+            ON cat.FK_PARTNER = p.OBJECT_ID
+           AND cat.FSK_CATEGORY = 23
+           AND cat.FRK_CATEGORY IN ('CE', 'SEC')
+    LEFT JOIN sics.PARTY_IDENTIFIER AS pi
+            ON pi.FK_PARTY = p.OBJECT_ID
+           AND pi.FRK_PARTY_ID_TYPE = 'FORMERID'
+    WHERE p.OBJECT_ID = bal.FK_BP
+      AND p.SUBCLASS = 4
     ORDER BY pi.OBJECT_ID
-) AS comp_pid
+) AS comp
 
 OUTER APPLY (
     SELECT TOP (1)
