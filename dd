@@ -1,6 +1,12 @@
 /* FACT_IW_TRANSACTION / FACT_OW_TRANSACTION
    Grain: 1 row per AC_LEDGER_DETAIL
    IW: @IsOutward = 'N'    OW: @IsOutward = 'Y'
+
+   BROK_BK = PARTY_IDENTIFIER.IDENTIFIER (FORMERID), else PARTY.IDENTIFIER
+   Broker party: SUBCLASS = 4 and BUS_PARTNER_CAT category B / BOUT (table 23)
+   COMP_BK: same derivation as DIM_COMPANY.COMP_BK
+            COALESCE(NULLIF(TRIM(FORMERID), ''), PARTY.IDENTIFIER)
+            for AC_LEDGER_BALANCE.FK_BASE_COMPANY, SUBCLASS = 4, category CE / SEC
 */
 DECLARE @IsOutward CHAR(1) = 'N';
 
@@ -11,7 +17,10 @@ SELECT
             LTRIM(RTRIM(ip.BUS_INS_PER_ID))
         ) AS nvarchar(50)
     )                                                    AS POLICY_BK,
-    COALESCE(clm_ow.CLAIM_IDENTIFIER, clm_bal.CLAIM_IDENTIFIER) AS CLA_CLAIM_BK,
+    COALESCE(
+        COALESCE(cref_ow.REFERENCE_ID, clm_ow.CLAIM_IDENTIFIER),
+        COALESCE(cref_bal.REFERENCE_ID, clm_bal.CLAIM_IDENTIFIER)
+    )                                                    AS CLA_CLAIM_BK,
     brk.BROK_BK                                          AS BROK_BK,
     comp.COMP_BK                                         AS COMP_BK,
 
@@ -74,28 +83,47 @@ LEFT JOIN sics.SOC_TO_CLAIM_REL AS soc
         ON soc.OBJECT_ID = bal.FK_CLAIM
 LEFT JOIN sics.CLAIMS AS clm_bal
         ON clm_bal.OBJECT_ID = soc.FK_CLAIM
+OUTER APPLY (
+    SELECT TOP (1) r.REFERENCE_ID
+    FROM sics.CLAIM_REFS AS r
+    WHERE r.FK_SOC_REL = soc.OBJECT_ID
+    ORDER BY r.REFERENCE_ID
+) AS cref_bal
 LEFT JOIN sics.CLAIMS AS clm_ow
         ON clm_ow.OBJECT_ID = dtl.FK_CLAIM_TO_SOC
+OUTER APPLY (
+    SELECT TOP (1) r.REFERENCE_ID
+    FROM sics.SOC_TO_CLAIM_REL AS scr
+    INNER JOIN sics.CLAIM_REFS AS r
+            ON r.FK_SOC_REL = scr.OBJECT_ID
+    WHERE scr.FK_CLAIM = clm_ow.OBJECT_ID
+    ORDER BY r.REFERENCE_ID
+) AS cref_ow
 
 OUTER APPLY (
     SELECT TOP (1)
-           COALESCE(NULLIF(LTRIM(RTRIM(pi.IDENTIFIER)), ''), p.IDENTIFIER) AS COMP_BK
+           COALESCE(NULLIF(LTRIM(RTRIM(pid.IDENTIFIER)), ''), p.IDENTIFIER) AS COMP_BK
     FROM sics.PARTY AS p
-    INNER JOIN sics.BUS_PARTNER_CAT AS cat
-            ON cat.FK_PARTNER = p.OBJECT_ID
-           AND cat.FSK_CATEGORY = 23
-           AND cat.FRK_CATEGORY IN ('CE', 'SEC')
-    LEFT JOIN sics.PARTY_IDENTIFIER AS pi
-            ON pi.FK_PARTY = p.OBJECT_ID
-           AND pi.FRK_PARTY_ID_TYPE = 'FORMERID'
-    WHERE p.OBJECT_ID = bal.FK_BP
+    OUTER APPLY (
+        SELECT TOP (1) pi.IDENTIFIER
+        FROM sics.PARTY_IDENTIFIER AS pi
+        WHERE pi.FK_PARTY = p.OBJECT_ID
+          AND pi.FRK_PARTY_ID_TYPE = 'FORMERID'
+        ORDER BY pi.OBJECT_ID
+    ) AS pid
+    WHERE p.OBJECT_ID = bal.FK_BASE_COMPANY
       AND p.SUBCLASS = 4
-    ORDER BY pi.OBJECT_ID
+      AND EXISTS (
+          SELECT 1
+          FROM sics.BUS_PARTNER_CAT AS cat
+          WHERE cat.FK_PARTNER = p.OBJECT_ID
+            AND cat.FRK_CATEGORY IN ('CE', 'SEC')
+      )
 ) AS comp
 
 OUTER APPLY (
     SELECT TOP (1)
-           COALESCE(NULLIF(LTRIM(RTRIM(pid.IDENTIFIER)), ''), bp.IDENTIFIER) AS BROK_BK
+           COALESCE(pid.IDENTIFIER, bp.IDENTIFIER) AS BROK_BK
     FROM sics.BUSINESS_PRTNR_REL AS bpr
     INNER JOIN sics.PARTY AS bp
             ON bp.OBJECT_ID = bpr.FK_BUS_PARTNER
