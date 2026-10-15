@@ -1,13 +1,3 @@
-/* FACT_IW_TRANSACTION / FACT_OW_TRANSACTION
-   Grain: 1 row per AC_LEDGER_DETAIL
-   IW: @IsOutward = 'N'    OW: @IsOutward = 'Y'
-
-   WRKS_BK / TRANS_AUDIT_NUM: same derivation as DIM_WORK_SHEET (WRKS_BK / WRKS_NO)
-   BROK_BK: first FORMERID, else PARTY.IDENTIFIER
-            SUBCLASS = 4, BUS_PARTNER_CAT B / BOUT (table 23), BUSINESS_PRTNR_REL BR / 55
-   COMP_BK: same derivation as DIM_COMPANY.COMP_BK
-            SUBCLASS = 4, BUS_PARTNER_CAT CE / SEC, via AC_LEDGER_BALANCE.FK_BASE_COMPANY
-*/
 DECLARE @IsOutward CHAR(1) = 'N';
 
 WITH ws_seq AS (
@@ -15,6 +5,7 @@ WITH ws_seq AS (
         w.OBJECT_ID,
         CAST(w.BOOKING_DATE AS date) AS BOOKING_DATE,
         w.EXTERNAL_ID,
+        w.ID_SERIE_NO,
         w.FK_REGISTERED_BY,
         ROW_NUMBER() OVER (
             PARTITION BY CAST(w.BOOKING_DATE AS date)
@@ -26,6 +17,8 @@ ws AS (
     SELECT
         OBJECT_ID,
         BOOKING_DATE,
+        EXTERNAL_ID,
+        ID_SERIE_NO,
         FK_REGISTERED_BY,
         CASE
             WHEN EXTERNAL_ID LIKE 'TW|%'
@@ -117,7 +110,14 @@ SELECT
     comp.COMP_BK                                           AS COMP_BK,
 
     CONVERT(int, CONVERT(char(8), ws.BOOKING_DATE, 112))   AS TRANS_AUDIT_DATE_SRGT,
-    ws.WRKS_NO                                             AS TRANS_AUDIT_NUM,
+
+    -- TRANS_AUDIT_NUM candidates: keep one, rename it TRANS_AUDIT_NUM, drop the rest
+    ws.WRKS_NO                                             AS TRANS_AUDIT_NUM_WRKS_NO,
+    ws.ID_SERIE_NO                                         AS TRANS_AUDIT_NUM_WS_ID_SERIE_NO,
+    bal.ADJUSTMENT_NUMBER                                  AS TRANS_AUDIT_NUM_ADJUSTMENT_NUMBER,
+    dtl.WKST_SEQ_NBR                                       AS TRANS_AUDIT_NUM_WKST_SEQ_NBR,
+    ws.EXTERNAL_ID                                         AS WS_EXTERNAL_ID,
+
     CONVERT(int,
         CONVERT(char(4), bal.BOOKING_YEAR)
         + RIGHT('0' + REPLACE(bal.FRK_BOOKING_PERIOD, 'M', ''), 2)
