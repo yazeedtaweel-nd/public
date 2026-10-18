@@ -1,37 +1,22 @@
 /* FACT_OW_TRANSACTION
    Grain: 1 row per AC_LEDGER_DETAIL
-   Filter: AC_LEDGER_BALANCE.IS_OUTWARD = 'Y'
+   Filter: BUSINESS.SUBCLASS = 11
+            via AC_LEDGER_DETAIL.FK_INS_PER -> INSURED_PERIOD.FK_BUSINESS
 
-   Differences vs FACT_IW_TRANSACTION:
-     - POLICY_BK / OW_POLICY_BK sourced from FK_INS_PER (outward/ceded policy).
-     - IW_POLICY_BK sourced from FK_INS_PER_ASSUMED (assumed inward policy behind
-       the outward booking) — requires an extra join to INSURED_PERIOD.
-     - TRANS_AUDIT_DATE_SRGT sourced from AC_WORKSHEET.BOOKING_DATE (not AC_START_DATE).
-     - TRANS_PROCESSING_PERIOD_SRGT built from AC_LEDGER_BALANCE.BOOKING_YEAR +
-       FRK_BOOKING_PERIOD (e.g. 2026 + 'M02' -> 20260201), not a direct date conversion.
-     - CLA_CLAIM_BK prefers AC_LEDGER_DETAIL.FK_CLAIM_TO_SOC (outward claim path)
-       before falling back to AC_LEDGER_BALANCE.FK_CLAIM.
+   POLICY_BK / OW_POLICY_BK = FK_INS_PER (outward/ceded policy).
+   IW_POLICY_BK = FK_INS_PER_ASSUMED (assumed inward policy).
+   TRANS_AUDIT_DATE_SRGT = AC_WORKSHEET.BOOKING_DATE.
+   TRANS_PROCESSING_PERIOD_SRGT = BOOKING_YEAR + FRK_BOOKING_PERIOD (2026 + M02 -> 20260201).
+   CLA_CLAIM_BK prefers FK_CLAIM_TO_SOC, then AC_LEDGER_BALANCE.FK_CLAIM.
 
    BROK_BK = PARTY_IDENTIFIER.IDENTIFIER (FORMERID), else PARTY.IDENTIFIER
    Broker party: SUBCLASS = 4 and BUS_PARTNER_CAT category B / BOUT (table 23)
    COMP_BK: COALESCE(NULLIF(TRIM(FORMERID), ''), PARTY.IDENTIFIER)
             for AC_LEDGER_BALANCE.FK_BASE_COMPANY, SUBCLASS = 4, category CE / SEC
 
-   TRANS_SETT_GROSS_AMT = AC_LEDGER_BALANCE.SETTLED_AMT (Low confidence, approved-pending).
-   KNOWN RISK: balance-grain - repeats across every detail of a multi-detail balance.
-   See ETL Mapping for- FACT_OW_TRANSACTION.md, Open Question #4.
-
-   Recommended indexes for this query's correlated lookups:
-     CLAIM_REFS           (FK_SOC_REL) INCLUDE (REFERENCE_ID)
-     SOC_TO_CLAIM_REL      (FK_CLAIM) INCLUDE (OBJECT_ID)
-     PARTY_IDENTIFIER      (FK_PARTY, FRK_PARTY_ID_TYPE) INCLUDE (IDENTIFIER)
-     BUS_PARTNER_CAT       (FK_PARTNER, FRK_CATEGORY)
-     BUSINESS_PRTNR_REL    (FK_INS_PERIOD, FRK_RELSHIP_TYPE, FSK_RELSHIP_TYPE) INCLUDE (FK_BUS_PARTNER)
-     AC_LEDGER_DETAIL      (FK_BALANCE, FK_INS_PER_ASSUMED)
-     AC_LEDGER_BALANCE     (OBJECT_ID, IS_OUTWARD)
+   TRANS_SETT_GROSS_AMT = AC_LEDGER_BALANCE.SETTLED_AMT (Low confidence).
+   KNOWN RISK: balance-grain; repeats across every detail of a multi-detail balance.
 */
-DECLARE @IsOutward CHAR(1) = 'Y';
-
 SELECT
     calc.OW_POLICY_BK_VALUE                              AS POLICY_BK,
     COALESCE(
@@ -69,19 +54,20 @@ SELECT
 FROM sics.AC_LEDGER_DETAIL AS dtl
 INNER JOIN sics.AC_LEDGER_BALANCE AS bal
         ON bal.OBJECT_ID = dtl.FK_BALANCE
-       AND bal.IS_OUTWARD = @IsOutward
+INNER JOIN sics.INSURED_PERIOD AS ip
+        ON ip.OBJECT_ID = dtl.FK_INS_PER
+INNER JOIN sics.BUSINESS AS bus
+        ON bus.OBJECT_ID = ip.FK_BUSINESS
+       AND bus.SUBCLASS = 11
 LEFT JOIN sics.AC_WORKSHEET AS ws
         ON ws.OBJECT_ID = dtl.FK_WORKSHEET
 LEFT JOIN sics.ENTRY_CODE AS ec
         ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
 LEFT JOIN sics.CNU_USER AS usr
         ON usr.OBJECT_ID = ws.FK_REGISTERED_BY
-LEFT JOIN sics.INSURED_PERIOD AS ip
-        ON ip.OBJECT_ID = dtl.FK_INS_PER
 LEFT JOIN sics.INSURED_PERIOD AS ip_assumed
         ON ip_assumed.OBJECT_ID = dtl.FK_INS_PER_ASSUMED
 
--- Computed once per row: audit date, processing period, accounting dates, both policy BKs
 CROSS APPLY (
     VALUES (
         CONVERT(int, CONVERT(char(8), ws.BOOKING_DATE, 112)),
@@ -176,6 +162,3 @@ OUTER APPLY (
       AND bpr.FK_INS_PERIOD = dtl.FK_INS_PER
     ORDER BY bp.OBJECT_ID, pid.OBJECT_ID
 ) AS brk;
-
--- Optional, for quick re-testing against a single business key:
--- WHERE cref_ow.REFERENCE_ID = 'C11X10LBX0790'
