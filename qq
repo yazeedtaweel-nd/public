@@ -1,89 +1,58 @@
-/* FACT_IW_TRANSACTION / FACT_OW_TRANSACTION
-   Grain: 1 row per AC_LEDGER_DETAIL
-   IW: @IsOutward = 'N'    OW: @IsOutward = 'Y'
-
-   BROK_BK = PARTY_IDENTIFIER.IDENTIFIER (FORMERID), else PARTY.IDENTIFIER
-   Broker party: SUBCLASS = 4 and BUS_PARTNER_CAT category B / BOUT (table 23)
-   COMP_BK: same derivation as DIM_COMPANY.COMP_BK
-            COALESCE(NULLIF(TRIM(FORMERID), ''), PARTY.IDENTIFIER)
-            for AC_LEDGER_BALANCE.FK_BASE_COMPANY, SUBCLASS = 4, category CE / SEC
-
-   TRANS_SETT_GROSS_AMT = AC_LEDGER_BALANCE.SETTLED_AMT (Low confidence, approved-pending).
-   KNOWN RISK: balance-grain - repeats across every detail of a multi-detail balance.
-   See ETL Source Mapping- FACT_IW_TRANSACTION.md, Open Question #3, for full elimination
-   history (DTL_UNR_AMT, LEDGER_BAL_ORG_AMT, DTL_AMT, AC_STL_PAIRING all ruled out).
-
-   Recommended indexes for this query's correlated lookups:
-     CLAIM_REFS           (FK_SOC_REL) INCLUDE (REFERENCE_ID)
-     SOC_TO_CLAIM_REL      (FK_CLAIM) INCLUDE (OBJECT_ID)
-     PARTY_IDENTIFIER      (FK_PARTY, FRK_PARTY_ID_TYPE) INCLUDE (IDENTIFIER)
-     BUS_PARTNER_CAT       (FK_PARTNER, FRK_CATEGORY)
-     BUSINESS_PRTNR_REL    (FK_INS_PERIOD, FRK_RELSHIP_TYPE, FSK_RELSHIP_TYPE) INCLUDE (FK_BUS_PARTNER)
-     AC_LEDGER_DETAIL      (FK_BALANCE)
-     AC_LEDGER_BALANCE     (OBJECT_ID, IS_OUTWARD)
-*/
-DECLARE @IsOutward CHAR(1) = 'N';
+DECLARE @RefId varchar(50) = 'C11X10LBX0790';
 
 SELECT
-    calc.POLICY_BK_VALUE                                 AS POLICY_BK,
-    COALESCE(
-        COALESCE(cref_ow.REFERENCE_ID, clm_ow.CLAIM_IDENTIFIER),
-        COALESCE(cref_bal.REFERENCE_ID, clm_bal.CLAIM_IDENTIFIER)
-    )                                                    AS CLA_CLAIM_BK,
-    brk.BROK_BK                                          AS BROK_BK,
-    comp.COMP_BK                                         AS COMP_BK,
+    dtl.OBJECT_ID                       AS DETAIL_ID,
+    dtl.FK_BALANCE                      AS BALANCE_ID,
+    dtl.DTL_AMT,
+    dtl.DTL_UNR_AMT,
 
-    calc.ACCT_FROM_DATE_SRGT                             AS TRANS_AUDIT_DATE_SRGT,
-    ws.ID_SERIE_NO                                       AS TRANS_AUDIT_NUM,
-    calc.ACCT_FROM_DATE_SRGT                             AS TRANS_PROCESSING_PERIOD_SRGT,
-    ec.CODE                                              AS TRST_BK,
-    calc.ACCT_FROM_DATE_SRGT                             AS TRANS_ACCOUNTING_FROM_DATE_SRGT,
-    calc.ACCT_TO_DATE_SRGT                                AS TRANS_ACCOUNTING_TO_DATE_SRGT,
-    CAST(dtl.EXCH_AMT     AS money)                      AS TRANS_BASE_GROSS_AMT,
-    CAST(dtl.FUNC_AMT2    AS money)                      AS TRANS_BASE2_GROSS_AMT,
-    CAST(bal.SETTLED_AMT  AS money)                      AS TRANS_SETT_GROSS_AMT,
-    CAST(dtl.DTL_AMT      AS money)                      AS TRANS_ORIG_GROSS_AMT,
+    bal.OBJECT_ID                       AS BAL_OBJECT_ID,
+    bal.SETTLED_AMT                     AS BAL_SETTLED_AMT,
+    bal.LEDGER_BAL_ORG_AMT              AS BAL_ORG_AMT,
+    bal.LEDGER_BAL_UNS_AMT              AS BAL_UNS_AMT,
+    bal.IS_PART_SET_BAL,
+    bal.FK_SETTLEMENT_BAL,
+    bal.ACTUAL_SETLMT_DATE,
+    bal.FK_CURR                         AS BAL_CURR,
 
-    calc.POLICY_BK_VALUE                                 AS IW_POLICY_BK,
-    CASE WHEN bal.IS_OUTWARD = 'Y' THEN calc.POLICY_BK_VALUE END AS OW_POLICY_BK,
+    settlement_grp.OBJECT_ID            AS SETTLEMENT_GRP_ID,
+    settlement_grp.LEDGER_BAL_ORG_AMT   AS SETTLEMENT_GRP_TOTAL,
+    settlement_grp.SETTLED_AMT          AS SETTLEMENT_GRP_SETTLED_AMT,
+    settlement_grp.SUBCLASS             AS SETTLEMENT_GRP_SUBCLASS,
 
-    bal.FK_CURR                                          AS CURR_ORIG_BK,
-    bal.FK_AC_FUNC_CCY                                   AS CURR_BASE_BK,
-    COALESCE(bal.FK_LLOYDS_SETL_CUR, bal.FK_CURR)        AS CURR_SETT_BK,
-    usr.USER_ID                                          AS USR_BK,
-    CASE
-        WHEN ws.EXTERNAL_ID LIKE 'TW|%'
-            THEN STUFF(ws.EXTERNAL_ID, 1, 3, '')
-        ELSE CONVERT(varchar(8), ws.BOOKING_DATE, 112)
-             + '|' + CONVERT(varchar(20), ws.ID_SERIE_NO)
-    END                                                  AS WRKS_BK
+    -- pairing matched on the DETAIL
+    pair_detail.OBJECT_ID               AS PAIR_VIA_DETAIL_ID,
+    pair_detail.FK_DETAIL1,
+    pair_detail.FK_DETAIL2,
+    pair_detail.FK_BALANCE1             AS PD_FK_BALANCE1,
+    pair_detail.FK_BALANCE2             AS PD_FK_BALANCE2,
+    pair_detail.SETTLED_AMT1            AS PD_SETTLED_AMT1,
+    pair_detail.SETTLED_AMT2            AS PD_SETTLED_AMT2,
+    pair_detail.SETTLEMENT_AMT          AS PD_SETTLEMENT_AMT,
+    pair_detail.SUBCLASS                AS PD_SUBCLASS,
+
+    -- pairing matched on the BALANCE (likely where the real value is, if #1 above)
+    pair_bal.OBJECT_ID                  AS PAIR_VIA_BALANCE_ID,
+    pair_bal.FK_BALANCE1,
+    pair_bal.FK_BALANCE2,
+    pair_bal.FK_DETAIL1                 AS PB_FK_DETAIL1,
+    pair_bal.FK_DETAIL2                 AS PB_FK_DETAIL2,
+    pair_bal.SETTLED_AMT1               AS PB_SETTLED_AMT1,
+    pair_bal.SETTLED_AMT2               AS PB_SETTLED_AMT2,
+    pair_bal.SETTLEMENT_AMT             AS PB_SETTLEMENT_AMT,
+    pair_bal.SUBCLASS                   AS PB_SUBCLASS
 
 FROM sics.AC_LEDGER_DETAIL AS dtl
 INNER JOIN sics.AC_LEDGER_BALANCE AS bal
         ON bal.OBJECT_ID = dtl.FK_BALANCE
-       AND bal.IS_OUTWARD = @IsOutward
-LEFT JOIN sics.AC_WORKSHEET AS ws
-        ON ws.OBJECT_ID = dtl.FK_WORKSHEET
-LEFT JOIN sics.ENTRY_CODE AS ec
-        ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
-LEFT JOIN sics.CNU_USER AS usr
-        ON usr.OBJECT_ID = ws.FK_REGISTERED_BY
-LEFT JOIN sics.INSURED_PERIOD AS ip
-        ON ip.OBJECT_ID = dtl.FK_INS_PER
-
--- Computed once per row instead of 2x (dates) / 3x (policy BK)
-CROSS APPLY (
-    VALUES (
-        CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112)),
-        CONVERT(int, CONVERT(char(8), dtl.AC_END_DATE, 112)),
-        CAST(
-            COALESCE(
-                NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
-                LTRIM(RTRIM(ip.BUS_INS_PER_ID))
-            ) AS nvarchar(50)
-        )
-    )
-) AS calc (ACCT_FROM_DATE_SRGT, ACCT_TO_DATE_SRGT, POLICY_BK_VALUE)
+LEFT JOIN sics.AC_LEDGER_BALANCE AS settlement_grp
+        ON settlement_grp.OBJECT_ID = bal.FK_SETTLEMENT_BAL
+LEFT JOIN sics.AC_STL_PAIRING AS pair_detail
+        ON pair_detail.FK_DETAIL1 = dtl.OBJECT_ID
+        OR pair_detail.FK_DETAIL2 = dtl.OBJECT_ID
+LEFT JOIN sics.AC_STL_PAIRING AS pair_bal
+        ON pair_bal.FK_BALANCE1 = bal.OBJECT_ID
+        OR pair_bal.FK_BALANCE2 = bal.OBJECT_ID
 
 LEFT JOIN sics.SOC_TO_CLAIM_REL AS soc
         ON soc.OBJECT_ID = bal.FK_CLAIM
@@ -106,46 +75,4 @@ OUTER APPLY (
     ORDER BY r.REFERENCE_ID
 ) AS cref_ow
 
-OUTER APPLY (
-    SELECT TOP (1)
-           COALESCE(NULLIF(LTRIM(RTRIM(pid.IDENTIFIER)), ''), p.IDENTIFIER) AS COMP_BK
-    FROM sics.PARTY AS p
-    OUTER APPLY (
-        SELECT TOP (1) pi.IDENTIFIER
-        FROM sics.PARTY_IDENTIFIER AS pi
-        WHERE pi.FK_PARTY = p.OBJECT_ID
-          AND pi.FRK_PARTY_ID_TYPE = 'FORMERID'
-        ORDER BY pi.OBJECT_ID
-    ) AS pid
-    WHERE p.OBJECT_ID = bal.FK_BASE_COMPANY
-      AND p.SUBCLASS = 4
-      AND EXISTS (
-          SELECT 1
-          FROM sics.BUS_PARTNER_CAT AS cat
-          WHERE cat.FK_PARTNER = p.OBJECT_ID
-            AND cat.FRK_CATEGORY IN ('CE', 'SEC')
-      )
-) AS comp
-
-OUTER APPLY (
-    SELECT TOP (1)
-           COALESCE(pid.IDENTIFIER, bp.IDENTIFIER) AS BROK_BK
-    FROM sics.BUSINESS_PRTNR_REL AS bpr
-    INNER JOIN sics.PARTY AS bp
-            ON bp.OBJECT_ID = bpr.FK_BUS_PARTNER
-           AND bp.SUBCLASS = 4
-    INNER JOIN sics.BUS_PARTNER_CAT AS bpc
-            ON bpc.FK_PARTNER = bp.OBJECT_ID
-           AND bpc.FSK_CATEGORY = 23
-           AND bpc.FRK_CATEGORY IN ('B', 'BOUT')
-    LEFT JOIN sics.PARTY_IDENTIFIER AS pid
-            ON pid.FK_PARTY = bp.OBJECT_ID
-           AND pid.FRK_PARTY_ID_TYPE = 'FORMERID'
-    WHERE bpr.FRK_RELSHIP_TYPE = 'BR'
-      AND bpr.FSK_RELSHIP_TYPE = 55
-      AND bpr.FK_INS_PERIOD = dtl.FK_INS_PER
-    ORDER BY bp.OBJECT_ID, pid.OBJECT_ID
-) AS brk;
-
--- Optional, for quick re-testing against a single business key:
--- WHERE cref_ow.REFERENCE_ID = 'C11X10LBX0790'
+WHERE COALESCE(cref_ow.REFERENCE_ID, cref_bal.REFERENCE_ID) = @RefId;
