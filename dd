@@ -1,78 +1,13 @@
-DECLARE @RefId varchar(50) = 'C11X10LBX0790';
-
 SELECT
-    dtl.OBJECT_ID                       AS DETAIL_ID,
-    dtl.FK_BALANCE                      AS BALANCE_ID,
+    dtl.OBJECT_ID            AS DETAIL_ID,
+    dtl.FK_BALANCE           AS BALANCE_ID,
     dtl.DTL_AMT,
     dtl.DTL_UNR_AMT,
-
-    bal.OBJECT_ID                       AS BAL_OBJECT_ID,
-    bal.SETTLED_AMT                     AS BAL_SETTLED_AMT,
-    bal.LEDGER_BAL_ORG_AMT              AS BAL_ORG_AMT,
-    bal.LEDGER_BAL_UNS_AMT              AS BAL_UNS_AMT,
-    bal.IS_PART_SET_BAL,
-    bal.FK_SETTLEMENT_BAL,
-    bal.ACTUAL_SETLMT_DATE,
-    bal.FK_CURR                         AS BAL_CURR,
-
-    settlement_grp.OBJECT_ID            AS SETTLEMENT_GRP_ID,
-    settlement_grp.LEDGER_BAL_ORG_AMT   AS SETTLEMENT_GRP_TOTAL,
-    settlement_grp.SETTLED_AMT          AS SETTLEMENT_GRP_SETTLED_AMT,
-    settlement_grp.SUBCLASS             AS SETTLEMENT_GRP_SUBCLASS,
-
-    -- pairing matched on the DETAIL
-    pair_detail.OBJECT_ID               AS PAIR_VIA_DETAIL_ID,
-    pair_detail.FK_DETAIL1,
-    pair_detail.FK_DETAIL2,
-    pair_detail.FK_BALANCE1             AS PD_FK_BALANCE1,
-    pair_detail.FK_BALANCE2             AS PD_FK_BALANCE2,
-    pair_detail.SETTLED_AMT1            AS PD_SETTLED_AMT1,
-    pair_detail.SETTLED_AMT2            AS PD_SETTLED_AMT2,
-    pair_detail.SETTLEMENT_AMT          AS PD_SETTLEMENT_AMT,
-    pair_detail.SUBCLASS                AS PD_SUBCLASS,
-
-    -- pairing matched on the BALANCE (likely where the real value is, if #1 above)
-    pair_bal.OBJECT_ID                  AS PAIR_VIA_BALANCE_ID,
-    pair_bal.FK_BALANCE1,
-    pair_bal.FK_BALANCE2,
-    pair_bal.FK_DETAIL1                 AS PB_FK_DETAIL1,
-    pair_bal.FK_DETAIL2                 AS PB_FK_DETAIL2,
-    pair_bal.SETTLED_AMT1               AS PB_SETTLED_AMT1,
-    pair_bal.SETTLED_AMT2               AS PB_SETTLED_AMT2,
-    pair_bal.SETTLEMENT_AMT             AS PB_SETTLEMENT_AMT,
-    pair_bal.SUBCLASS                   AS PB_SUBCLASS
-
+    bal.LEDGER_BAL_ORG_AMT,
+    bal.SETTLED_AMT,
+    COUNT(*) OVER (PARTITION BY dtl.FK_BALANCE) AS DETAILS_PER_BALANCE
 FROM sics.AC_LEDGER_DETAIL AS dtl
 INNER JOIN sics.AC_LEDGER_BALANCE AS bal
         ON bal.OBJECT_ID = dtl.FK_BALANCE
-LEFT JOIN sics.AC_LEDGER_BALANCE AS settlement_grp
-        ON settlement_grp.OBJECT_ID = bal.FK_SETTLEMENT_BAL
-LEFT JOIN sics.AC_STL_PAIRING AS pair_detail
-        ON pair_detail.FK_DETAIL1 = dtl.OBJECT_ID
-        OR pair_detail.FK_DETAIL2 = dtl.OBJECT_ID
-LEFT JOIN sics.AC_STL_PAIRING AS pair_bal
-        ON pair_bal.FK_BALANCE1 = bal.OBJECT_ID
-        OR pair_bal.FK_BALANCE2 = bal.OBJECT_ID
-
-LEFT JOIN sics.SOC_TO_CLAIM_REL AS soc
-        ON soc.OBJECT_ID = bal.FK_CLAIM
-LEFT JOIN sics.CLAIMS AS clm_bal
-        ON clm_bal.OBJECT_ID = soc.FK_CLAIM
-OUTER APPLY (
-    SELECT TOP (1) r.REFERENCE_ID
-    FROM sics.CLAIM_REFS AS r
-    WHERE r.FK_SOC_REL = soc.OBJECT_ID
-    ORDER BY r.REFERENCE_ID
-) AS cref_bal
-LEFT JOIN sics.CLAIMS AS clm_ow
-        ON clm_ow.OBJECT_ID = dtl.FK_CLAIM_TO_SOC
-OUTER APPLY (
-    SELECT TOP (1) r.REFERENCE_ID
-    FROM sics.SOC_TO_CLAIM_REL AS scr
-    INNER JOIN sics.CLAIM_REFS AS r
-            ON r.FK_SOC_REL = scr.OBJECT_ID
-    WHERE scr.FK_CLAIM = clm_ow.OBJECT_ID
-    ORDER BY r.REFERENCE_ID
-) AS cref_ow
-
-WHERE COALESCE(cref_ow.REFERENCE_ID, cref_bal.REFERENCE_ID) = @RefId;
+WHERE dtl.DTL_AMT <> ISNULL(dtl.DTL_UNR_AMT, -999999999)   -- picks rows that ARE partially released
+ORDER BY DETAILS_PER_BALANCE DESC, dtl.FK_BALANCE;
