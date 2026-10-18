@@ -99,35 +99,19 @@ LEFT JOIN sics.AC_LEDGER_BALANCE AS settlement_grp
         ON settlement_grp.OBJECT_ID = bal.FK_SETTLEMENT_BAL
        AND settlement_grp.SUBCLASS = 1
 
--- Candidates A & B: AC_STL_PAIRING rows that reference this detail on either side.
--- Aggregation is pre-computed (no outer reference inside the aggregate) to avoid
--- "Multiple columns are specified in an aggregated expression containing an outer reference".
-LEFT JOIN (
+-- Candidates A & B: AC_STL_PAIRING rows that reference this detail on either side
+OUTER APPLY (
     SELECT
-        FK_DETAIL,
-        SUM(SETTLED_AMT)      AS DETAIL_PAIRING_SETTLED_AMT,
-        SUM(SETTLEMENT_AMT)   AS PAIRING_SETTLEMENT_AMT,
-        COUNT(*)              AS PAIRING_COUNT
-    FROM (
-        SELECT
-            FK_DETAIL1 AS FK_DETAIL,
-            SETTLED_AMT1 AS SETTLED_AMT,
-            SETTLEMENT_AMT
-        FROM sics.AC_STL_PAIRING
-        WHERE FK_DETAIL1 IS NOT NULL
-
-        UNION ALL
-
-        SELECT
-            FK_DETAIL2 AS FK_DETAIL,
-            SETTLED_AMT2 AS SETTLED_AMT,
-            SETTLEMENT_AMT
-        FROM sics.AC_STL_PAIRING
-        WHERE FK_DETAIL2 IS NOT NULL
-    ) AS unpvt
-    GROUP BY FK_DETAIL
+        SUM(CASE
+                WHEN p.FK_DETAIL1 = dtl.OBJECT_ID THEN p.SETTLED_AMT1
+                WHEN p.FK_DETAIL2 = dtl.OBJECT_ID THEN p.SETTLED_AMT2
+            END)                                    AS DETAIL_PAIRING_SETTLED_AMT,
+        SUM(p.SETTLEMENT_AMT)                        AS PAIRING_SETTLEMENT_AMT,
+        COUNT(*)                                     AS PAIRING_COUNT
+    FROM sics.AC_STL_PAIRING AS p
+    WHERE p.FK_DETAIL1 = dtl.OBJECT_ID
+       OR p.FK_DETAIL2 = dtl.OBJECT_ID
 ) AS stl_pair
-    ON stl_pair.FK_DETAIL = dtl.OBJECT_ID
 
 LEFT JOIN sics.SOC_TO_CLAIM_REL AS soc
         ON soc.OBJECT_ID = bal.FK_CLAIM
