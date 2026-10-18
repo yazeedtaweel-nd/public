@@ -1,164 +1,261 @@
-/* FACT_OW_TRANSACTION
-   Grain: 1 row per AC_LEDGER_DETAIL
-   Filter: BUSINESS.SUBCLASS = 11
-            via AC_LEDGER_DETAIL.FK_INS_PER -> INSURED_PERIOD.FK_BUSINESS
-
-   POLICY_BK / OW_POLICY_BK = FK_INS_PER (outward/ceded policy).
-   IW_POLICY_BK = FK_INS_PER_ASSUMED (assumed inward policy).
-   TRANS_AUDIT_DATE_SRGT = AC_WORKSHEET.BOOKING_DATE.
-   TRANS_PROCESSING_PERIOD_SRGT = BOOKING_YEAR + FRK_BOOKING_PERIOD (2026 + M02 -> 20260201).
-   CLA_CLAIM_BK prefers FK_CLAIM_TO_SOC, then AC_LEDGER_BALANCE.FK_CLAIM.
-
-   BROK_BK = PARTY_IDENTIFIER.IDENTIFIER (FORMERID), else PARTY.IDENTIFIER
-   Broker party: SUBCLASS = 4 and BUS_PARTNER_CAT category B / BOUT (table 23)
-   COMP_BK: COALESCE(NULLIF(TRIM(FORMERID), ''), PARTY.IDENTIFIER)
-            for AC_LEDGER_BALANCE.FK_BASE_COMPANY, SUBCLASS = 4, category CE / SEC
-
-   TRANS_SETT_GROSS_AMT = AC_LEDGER_BALANCE.SETTLED_AMT (Low confidence).
-   KNOWN RISK: balance-grain; repeats across every detail of a multi-detail balance.
+/* FACT_SETTLEMENT — SICS parent extract
+   Grain:
+     Exactly one row per Settlement Balance/Provision:
+     settlement_balance.OBJECT_ID
+   All 29 target columns are represented.
+   Child-level dimensions are intentionally NULL because a settlement
+   may contain multiple worksheets, policies, claims and transactions.
+   SETTLEMENT_BK is the source key required to link:
+     FACT_SETTLEMENT → FACT_TRA_SETTLEMENT
 */
-SELECT
-    calc.OW_POLICY_BK_VALUE                              AS POLICY_BK,
-    COALESCE(
-        COALESCE(cref_ow.REFERENCE_ID, clm_ow.CLAIM_IDENTIFIER),
-        COALESCE(cref_bal.REFERENCE_ID, clm_bal.CLAIM_IDENTIFIER)
-    )                                                    AS CLA_CLAIM_BK,
-    brk.BROK_BK                                          AS BROK_BK,
-    comp.COMP_BK                                         AS COMP_BK,
-
-    calc.AUDIT_DATE_SRGT                                 AS TRANS_AUDIT_DATE_SRGT,
-    ws.ID_SERIE_NO                                       AS TRANS_AUDIT_NUM,
-    calc.PROCESSING_PERIOD_SRGT                          AS TRANS_PROCESSING_PERIOD_SRGT,
-    ec.CODE                                              AS TRST_BK,
-    calc.ACCOUNTING_FROM_DATE_SRGT                       AS TRANS_ACCOUNTING_FROM_DATE_SRGT,
-    calc.ACCOUNTING_TO_DATE_SRGT                         AS TRANS_ACCOUNTING_TO_DATE_SRGT,
-    CAST(dtl.EXCH_AMT     AS money)                      AS TRANS_BASE_GROSS_AMT,
-    CAST(dtl.FUNC_AMT2    AS money)                      AS TRANS_BASE2_GROSS_AMT,
-    CAST(bal.SETTLED_AMT  AS money)                      AS TRANS_SETT_GROSS_AMT,
-    CAST(dtl.DTL_AMT      AS money)                      AS TRANS_ORIG_GROSS_AMT,
-
-    calc.IW_POLICY_BK_VALUE                              AS IW_POLICY_BK,
-    calc.OW_POLICY_BK_VALUE                              AS OW_POLICY_BK,
-
-    bal.FK_CURR                                          AS CURR_ORIG_BK,
-    bal.FK_AC_FUNC_CCY                                   AS CURR_BASE_BK,
-    COALESCE(bal.FK_LLOYDS_SETL_CUR, bal.FK_CURR)        AS CURR_SETT_BK,
-    usr.USER_ID                                          AS USR_BK,
-    CASE
-        WHEN ws.EXTERNAL_ID LIKE 'TW|%'
-            THEN STUFF(ws.EXTERNAL_ID, 1, 3, '')
-        ELSE CONVERT(varchar(8), ws.BOOKING_DATE, 112)
-             + '|' + CONVERT(varchar(20), ws.ID_SERIE_NO)
-    END                                                  AS WRKS_BK
-
-FROM sics.AC_LEDGER_DETAIL AS dtl
-INNER JOIN sics.AC_LEDGER_BALANCE AS bal
-        ON bal.OBJECT_ID = dtl.FK_BALANCE
-INNER JOIN sics.INSURED_PERIOD AS ip
-        ON ip.OBJECT_ID = dtl.FK_INS_PER
-INNER JOIN sics.BUSINESS AS bus
-        ON bus.OBJECT_ID = ip.FK_BUSINESS
-       AND bus.SUBCLASS = 11
-LEFT JOIN sics.AC_WORKSHEET AS ws
-        ON ws.OBJECT_ID = dtl.FK_WORKSHEET
-LEFT JOIN sics.ENTRY_CODE AS ec
-        ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
-LEFT JOIN sics.CNU_USER AS usr
-        ON usr.OBJECT_ID = ws.FK_REGISTERED_BY
-LEFT JOIN sics.INSURED_PERIOD AS ip_assumed
-        ON ip_assumed.OBJECT_ID = dtl.FK_INS_PER_ASSUMED
-
-CROSS APPLY (
-    VALUES (
-        CONVERT(int, CONVERT(char(8), ws.BOOKING_DATE, 112)),
-        TRY_CONVERT(
-            int,
-            CONVERT(char(4), bal.BOOKING_YEAR)
-            + RIGHT('0' + REPLACE(bal.FRK_BOOKING_PERIOD, 'M', ''), 2)
-            + '01'
-        ),
-        CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112)),
-        CONVERT(int, CONVERT(char(8), dtl.AC_END_DATE, 112)),
-        CAST(
-            COALESCE(
-                NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
-                LTRIM(RTRIM(ip.BUS_INS_PER_ID))
-            ) AS nvarchar(50)
-        ),
-        CAST(
-            COALESCE(
-                NULLIF(LTRIM(RTRIM(ip_assumed.I_PERIOD_FORMER_ID)), N''),
-                LTRIM(RTRIM(ip_assumed.BUS_INS_PER_ID))
-            ) AS nvarchar(50)
-        )
-    )
-) AS calc (
-    AUDIT_DATE_SRGT,
-    PROCESSING_PERIOD_SRGT,
-    ACCOUNTING_FROM_DATE_SRGT,
-    ACCOUNTING_TO_DATE_SRGT,
-    OW_POLICY_BK_VALUE,
-    IW_POLICY_BK_VALUE
+WITH EligibleMember AS
+(
+    SELECT
+        bal.OBJECT_ID,
+        bal.FK_SETTLEMENT_BAL,
+        bal.FK_AC_FUNC_CCY,
+        bal.FK_CURR,
+        bal.SETTLED_AMT,
+        bal.FRK_GL_ACCOUNT
+    FROM SICS.AC_LEDGER_BALANCE AS bal
+    WHERE bal.FK_SETTLEMENT_BAL IS NOT NULL
+      AND bal.IS_PART_SET_BAL = 'Y'
+),
+MemberAggregate AS
+(
+    SELECT
+        member.FK_SETTLEMENT_BAL AS SETTLEMENT_BK,
+        /* Return a value only when all members share one currency */
+        CASE
+            WHEN COUNT(DISTINCT member.FK_AC_FUNC_CCY) = 1
+            THEN MIN(member.FK_AC_FUNC_CCY)
+        END AS CURR_BASE_BK,
+        CASE
+            WHEN COUNT(DISTINCT member.FK_CURR) = 1
+            THEN MIN(member.FK_CURR)
+        END AS CURR_ORIG_BK,
+        /* Each member is counted once */
+        SUM(
+            CAST(
+                COALESCE(member.SETTLED_AMT, 0)
+                AS decimal(38, 8)
+            )
+        ) AS STL_SETT_PTD_AMT,
+        /* Return account code only when there is one common code */
+        CASE
+            WHEN COUNT(DISTINCT member.FRK_GL_ACCOUNT) = 1
+            THEN MIN(member.FRK_GL_ACCOUNT)
+        END AS STL_ACCOUNT_CODE
+    FROM EligibleMember AS member
+    GROUP BY member.FK_SETTLEMENT_BAL
+),
+DetailAggregate AS
+(
+    SELECT
+        member.FK_SETTLEMENT_BAL AS SETTLEMENT_BK,
+        /* Gross amounts */
+        SUM(
+            CAST(
+                COALESCE(dtl.EXCH_AMT, 0)
+                AS decimal(38, 8)
+            )
+        ) AS STL_BASE_GROSS_AMT,
+        SUM(
+            CAST(
+                COALESCE(dtl.FUNC_AMT2, 0)
+                AS decimal(38, 8)
+            )
+        ) AS STL_BASE2_GROSS_AMT,
+        SUM(
+            CAST(
+                COALESCE(dtl.DTL_AMT, 0)
+                AS decimal(38, 8)
+            )
+        ) AS STL_ORIG_GROSS_AMT,
+        /* Base paid-to-date */
+        SUM(
+            CAST(
+                CASE
+                    WHEN NULLIF(dtl.DTL_AMT, 0) IS NULL
+                        THEN 0
+                    ELSE
+                        dtl.EXCH_AMT
+                        * (
+                            (
+                                dtl.DTL_AMT
+                                - COALESCE(dtl.DTL_UNR_AMT, 0)
+                            )
+                            / NULLIF(dtl.DTL_AMT, 0)
+                        )
+                END
+                AS decimal(38, 8)
+            )
+        ) AS STL_BASE_PTD_AMT,
+        /* Base currency 2 paid-to-date */
+        SUM(
+            CAST(
+                CASE
+                    WHEN NULLIF(dtl.DTL_AMT, 0) IS NULL
+                        THEN 0
+                    ELSE
+                        dtl.FUNC_AMT2
+                        * (
+                            (
+                                dtl.DTL_AMT
+                                - COALESCE(dtl.DTL_UNR_AMT, 0)
+                            )
+                            / NULLIF(dtl.DTL_AMT, 0)
+                        )
+                END
+                AS decimal(38, 8)
+            )
+        ) AS STL_BASE2_PTD_AMT,
+        /* Original currency paid-to-date */
+        SUM(
+            CAST(
+                COALESCE(dtl.DTL_AMT, 0)
+                - COALESCE(dtl.DTL_UNR_AMT, 0)
+                AS decimal(38, 8)
+            )
+        ) AS STL_ORIG_PTD_AMT
+    FROM EligibleMember AS member
+    INNER JOIN SICS.AC_LEDGER_DETAIL AS dtl
+        ON dtl.FK_BALANCE = member.OBJECT_ID
+    GROUP BY member.FK_SETTLEMENT_BAL
 )
-
-LEFT JOIN sics.SOC_TO_CLAIM_REL AS soc
-        ON soc.OBJECT_ID = bal.FK_CLAIM
-LEFT JOIN sics.CLAIMS AS clm_bal
-        ON clm_bal.OBJECT_ID = soc.FK_CLAIM
-OUTER APPLY (
-    SELECT TOP (1) r.REFERENCE_ID
-    FROM sics.CLAIM_REFS AS r
-    WHERE r.FK_SOC_REL = soc.OBJECT_ID
-    ORDER BY r.REFERENCE_ID
-) AS cref_bal
-LEFT JOIN sics.CLAIMS AS clm_ow
-        ON clm_ow.OBJECT_ID = dtl.FK_CLAIM_TO_SOC
-OUTER APPLY (
-    SELECT TOP (1) r.REFERENCE_ID
-    FROM sics.SOC_TO_CLAIM_REL AS scr
-    INNER JOIN sics.CLAIM_REFS AS r
-            ON r.FK_SOC_REL = scr.OBJECT_ID
-    WHERE scr.FK_CLAIM = clm_ow.OBJECT_ID
-    ORDER BY r.REFERENCE_ID
-) AS cref_ow
-
-OUTER APPLY (
-    SELECT TOP (1)
-           COALESCE(NULLIF(LTRIM(RTRIM(pid.IDENTIFIER)), ''), p.IDENTIFIER) AS COMP_BK
-    FROM sics.PARTY AS p
-    OUTER APPLY (
-        SELECT TOP (1) pi.IDENTIFIER
-        FROM sics.PARTY_IDENTIFIER AS pi
-        WHERE pi.FK_PARTY = p.OBJECT_ID
-          AND pi.FRK_PARTY_ID_TYPE = 'FORMERID'
-        ORDER BY pi.OBJECT_ID
-    ) AS pid
-    WHERE p.OBJECT_ID = bal.FK_BASE_COMPANY
-      AND p.SUBCLASS = 4
-      AND EXISTS (
-          SELECT 1
-          FROM sics.BUS_PARTNER_CAT AS cat
-          WHERE cat.FK_PARTNER = p.OBJECT_ID
-            AND cat.FRK_CATEGORY IN ('CE', 'SEC')
-      )
-) AS comp
-
-OUTER APPLY (
-    SELECT TOP (1)
-           COALESCE(pid.IDENTIFIER, bp.IDENTIFIER) AS BROK_BK
-    FROM sics.BUSINESS_PRTNR_REL AS bpr
-    INNER JOIN sics.PARTY AS bp
-            ON bp.OBJECT_ID = bpr.FK_BUS_PARTNER
-           AND bp.SUBCLASS = 4
-    INNER JOIN sics.BUS_PARTNER_CAT AS bpc
-            ON bpc.FK_PARTNER = bp.OBJECT_ID
-           AND bpc.FSK_CATEGORY = 23
-           AND bpc.FRK_CATEGORY IN ('B', 'BOUT')
-    LEFT JOIN sics.PARTY_IDENTIFIER AS pid
-            ON pid.FK_PARTY = bp.OBJECT_ID
-           AND pid.FRK_PARTY_ID_TYPE = 'FORMERID'
-    WHERE bpr.FRK_RELSHIP_TYPE = 'BR'
-      AND bpr.FSK_RELSHIP_TYPE = 55
-      AND bpr.FK_INS_PERIOD = dtl.FK_INS_PER
-    ORDER BY bp.OBJECT_ID, pid.OBJECT_ID
-) AS brk;
+SELECT
+    /* Source business key linking parent and children */
+    settlement_balance.OBJECT_ID AS SETTLEMENT_BK,
+    /* 1. STL_AUDIT_DATE_SRGT */
+    TRY_CONVERT(
+        int,
+        CONVERT(
+            char(8),
+            settlement_balance.DATE_OF_BOOKING,
+            112
+        )
+    ) AS STL_AUDIT_DATE_SRGT,
+    /* 2. STL_AUDIT_DATE */
+    CAST(
+        settlement_balance.DATE_OF_BOOKING
+        AS date
+    ) AS STL_AUDIT_DATE,
+    /* 3. STL_AUDIT_NUM */
+    settlement_balance.ID_SERIE_NO
+        AS STL_AUDIT_NUM,
+    /* 4. STL_EFFECTIVE_DATE */
+    CAST(
+        COALESCE(
+            settlement_balance.VALUE_DATE,
+            settlement_balance.DUE_DATE
+        )
+        AS date
+    ) AS STL_EFFECTIVE_DATE,
+    /* 5. STL_RECONCILED_DATE */
+    CAST(
+        settlement_balance.ACTUAL_SETLMT_DATE
+        AS date
+    ) AS STL_RECONCILED_DATE,
+    /* 6. STL_PROCESSING_PERIOD_SRGT */
+    TRY_CONVERT(
+        int,
+        CONVERT(
+            char(4),
+            settlement_balance.BOOKING_YEAR
+        )
+        + RIGHT(
+            '0' + REPLACE(
+                UPPER(
+                    LTRIM(
+                        RTRIM(
+                            settlement_balance.FRK_BOOKING_PERIOD
+                        )
+                    )
+                ),
+                'M',
+                ''
+            ),
+            2
+        )
+        + '01'
+    ) AS STL_PROCESSING_PERIOD_SRGT,
+    /*
+       7–14: Child-level dimensions.
+       A parent settlement can contain several worksheets,
+       transaction codes, policies, claims and brokers.
+       Therefore, these cannot safely be populated at parent grain.
+    */
+    CAST(NULL AS int) AS WRKS_SRGT,
+    CAST(NULL AS int) AS TRST_SRGT,
+    CAST(NULL AS int) AS TRCD_SRGT,
+    CAST(NULL AS int) AS STL_ENTRY_TYPE_SRGT,
+    CAST(NULL AS int) AS STL_STATUS_SRGT,
+    CAST(NULL AS int) AS POLICY_SRGT,
+    CAST(NULL AS int) AS CLA_CLAIM_SRGT,
+    CAST(NULL AS int) AS BROK_SRGT,
+    /* 15. CURR_BASE_SRGT lookup business key */
+    members.CURR_BASE_BK,
+    /* 16. CURR_SETT_SRGT lookup business key */
+    settlement_balance.FK_CURR
+        AS CURR_SETT_BK,
+    /* 17. CURR_ORIG_SRGT lookup business key */
+    members.CURR_ORIG_BK,
+    /* 18. STL_BASE_GROSS_AMT */
+    CAST(
+        details.STL_BASE_GROSS_AMT
+        AS money
+    ) AS STL_BASE_GROSS_AMT,
+    /* 19. STL_BASE2_GROSS_AMT */
+    CAST(
+        details.STL_BASE2_GROSS_AMT
+        AS money
+    ) AS STL_BASE2_GROSS_AMT,
+    /* 20. STL_SETT_GROSS_AMT */
+    CAST(
+        settlement_balance.LEDGER_BAL_ORG_AMT
+        AS money
+    ) AS STL_SETT_GROSS_AMT,
+    /* 21. STL_ORIG_GROSS_AMT */
+    CAST(
+        details.STL_ORIG_GROSS_AMT
+        AS money
+    ) AS STL_ORIG_GROSS_AMT,
+    /* 22. STL_BASE_PTD_AMT */
+    CAST(
+        details.STL_BASE_PTD_AMT
+        AS money
+    ) AS STL_BASE_PTD_AMT,
+    /* 23. STL_BASE2_PTD_AMT */
+    CAST(
+        details.STL_BASE2_PTD_AMT
+        AS money
+    ) AS STL_BASE2_PTD_AMT,
+    /* 24. STL_SETT_PTD_AMT */
+    CAST(
+        members.STL_SETT_PTD_AMT
+        AS money
+    ) AS STL_SETT_PTD_AMT,
+    /* 25. STL_ORIG_PTD_AMT */
+    CAST(
+        details.STL_ORIG_PTD_AMT
+        AS money
+    ) AS STL_ORIG_PTD_AMT,
+    /* 26–27: ETL-generated */
+    CAST(NULL AS int) AS CREATED_DATE_SRGT,
+    CAST(NULL AS int) AS UPDATED_DATE_SRGT,
+    /* 28. STL_ACCOUNT_CODE */
+    members.STL_ACCOUNT_CODE,
+    /*
+       29. CLGRP_SRGT
+       A settlement can contain multiple claim groups.
+       Claim group remains at FACT_TRA_SETTLEMENT grain.
+    */
+    CAST(NULL AS int) AS CLGRP_SRGT
+FROM SICS.AC_LEDGER_BALANCE AS settlement_balance
+INNER JOIN MemberAggregate AS members
+    ON members.SETTLEMENT_BK =
+       settlement_balance.OBJECT_ID
+LEFT JOIN DetailAggregate AS details
+    ON details.SETTLEMENT_BK =
+       settlement_balance.OBJECT_ID
+WHERE settlement_balance.SUBCLASS = 1;
