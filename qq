@@ -8,25 +8,24 @@
             COALESCE(NULLIF(TRIM(FORMERID), ''), PARTY.IDENTIFIER)
             for AC_LEDGER_BALANCE.FK_BASE_COMPANY, SUBCLASS = 4, category CE / SEC
 
-   TRANS_SETT_GROSS_AMT candidates (pick one after reviewing results):
-     A. stl_pair.DETAIL_PAIRING_SETTLED_AMT  -- AC_STL_PAIRING.SETTLED_AMT1/2 keyed to this detail, summed.
-                                               Detail-grain, handles partial settlement. CURRENT CHOICE.
-     B. stl_pair.PAIRING_SETTLEMENT_AMT      -- AC_STL_PAIRING.SETTLEMENT_AMT, summed. Name matches "settlement
-                                               amount" exactly but side/currency semantics unconfirmed.
-     C. settlement_grp.LEDGER_BAL_ORG_AMT    -- Parent Settlement Balance Group total (via FK_SETTLEMENT_BAL,
-                                               SUBCLASS=1). Repeats across every member/detail in the group.
-     D. bal.SETTLED_AMT                      -- Old value. Balance-grain; repeats across every detail of the
-                                               same balance. Kept here only for comparison.
+   TRANS_SETT_GROSS_AMT = AC_LEDGER_BALANCE.SETTLED_AMT (Low confidence, approved-pending).
+   KNOWN RISK: balance-grain - repeats across every detail of a multi-detail balance.
+   See ETL Source Mapping- FACT_IW_TRANSACTION.md, Open Question #3, for full elimination
+   history (DTL_UNR_AMT, LEDGER_BAL_ORG_AMT, DTL_AMT, AC_STL_PAIRING all ruled out).
+
+   Recommended indexes for this query's correlated lookups:
+     CLAIM_REFS           (FK_SOC_REL) INCLUDE (REFERENCE_ID)
+     SOC_TO_CLAIM_REL      (FK_CLAIM) INCLUDE (OBJECT_ID)
+     PARTY_IDENTIFIER      (FK_PARTY, FRK_PARTY_ID_TYPE) INCLUDE (IDENTIFIER)
+     BUS_PARTNER_CAT       (FK_PARTNER, FRK_CATEGORY)
+     BUSINESS_PRTNR_REL    (FK_INS_PERIOD, FRK_RELSHIP_TYPE, FSK_RELSHIP_TYPE) INCLUDE (FK_BUS_PARTNER)
+     AC_LEDGER_DETAIL      (FK_BALANCE)
+     AC_LEDGER_BALANCE     (OBJECT_ID, IS_OUTWARD)
 */
 DECLARE @IsOutward CHAR(1) = 'N';
 
 SELECT
-    CAST(
-        COALESCE(
-            NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
-            LTRIM(RTRIM(ip.BUS_INS_PER_ID))
-        ) AS nvarchar(50)
-    )                                                    AS POLICY_BK,
+    calc.POLICY_BK_VALUE                                 AS POLICY_BK,
     COALESCE(
         COALESCE(cref_ow.REFERENCE_ID, clm_ow.CLAIM_IDENTIFIER),
         COALESCE(cref_bal.REFERENCE_ID, clm_bal.CLAIM_IDENTIFIER)
@@ -34,41 +33,19 @@ SELECT
     brk.BROK_BK                                          AS BROK_BK,
     comp.COMP_BK                                         AS COMP_BK,
 
-    CONVERT(int, CONVERT(char(8), ws.BOOKING_DATE, 112)) AS TRANS_AUDIT_DATE_SRGT,
+    calc.ACCT_FROM_DATE_SRGT                             AS TRANS_AUDIT_DATE_SRGT,
     ws.ID_SERIE_NO                                       AS TRANS_AUDIT_NUM,
-    CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112))      AS TRANS_PROCESSING_PERIOD_SRGT,
+    calc.ACCT_FROM_DATE_SRGT                             AS TRANS_PROCESSING_PERIOD_SRGT,
     ec.CODE                                              AS TRST_BK,
-    CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112)) AS TRANS_ACCOUNTING_FROM_DATE_SRGT,
-    CONVERT(int, CONVERT(char(8), dtl.AC_END_DATE, 112))   AS TRANS_ACCOUNTING_TO_DATE_SRGT,
+    calc.ACCT_FROM_DATE_SRGT                             AS TRANS_ACCOUNTING_FROM_DATE_SRGT,
+    calc.ACCT_TO_DATE_SRGT                                AS TRANS_ACCOUNTING_TO_DATE_SRGT,
     CAST(dtl.EXCH_AMT     AS money)                      AS TRANS_BASE_GROSS_AMT,
     CAST(dtl.FUNC_AMT2    AS money)                      AS TRANS_BASE2_GROSS_AMT,
-
-    -- NEW primary (candidate A): sum of AC_STL_PAIRING settled amounts for this detail
-    CAST(stl_pair.DETAIL_PAIRING_SETTLED_AMT AS money)   AS TRANS_SETT_GROSS_AMT,
-
-    -- Other candidates kept side-by-side for comparison/decision:
-    CAST(stl_pair.PAIRING_SETTLEMENT_AMT     AS money)   AS TRANS_SETT_GROSS_AMT_CAND_B_PAIRING_SETTLEMENT_AMT,
-    CAST(settlement_grp.LEDGER_BAL_ORG_AMT   AS money)   AS TRANS_SETT_GROSS_AMT_CAND_C_GROUP_TOTAL,
-    CAST(bal.SETTLED_AMT                     AS money)   AS TRANS_SETT_GROSS_AMT_CAND_D_BALANCE_SETTLED_AMT_OLD,
-    stl_pair.PAIRING_COUNT                               AS TRANS_SETT_GROSS_AMT_PAIRING_COUNT,
-
+    CAST(bal.SETTLED_AMT  AS money)                      AS TRANS_SETT_GROSS_AMT,
     CAST(dtl.DTL_AMT      AS money)                      AS TRANS_ORIG_GROSS_AMT,
---     bal.*,
 
-    CAST(
-        COALESCE(
-            NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
-            LTRIM(RTRIM(ip.BUS_INS_PER_ID))
-        ) AS nvarchar(50)
-    )                                                    AS IW_POLICY_BK,
-    CASE WHEN bal.IS_OUTWARD = 'Y' THEN
-        CAST(
-            COALESCE(
-                NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
-                LTRIM(RTRIM(ip.BUS_INS_PER_ID))
-            ) AS nvarchar(50)
-        )
-    END                                                  AS OW_POLICY_BK,
+    calc.POLICY_BK_VALUE                                 AS IW_POLICY_BK,
+    CASE WHEN bal.IS_OUTWARD = 'Y' THEN calc.POLICY_BK_VALUE END AS OW_POLICY_BK,
 
     bal.FK_CURR                                          AS CURR_ORIG_BK,
     bal.FK_AC_FUNC_CCY                                   AS CURR_BASE_BK,
@@ -94,24 +71,19 @@ LEFT JOIN sics.CNU_USER AS usr
 LEFT JOIN sics.INSURED_PERIOD AS ip
         ON ip.OBJECT_ID = dtl.FK_INS_PER
 
--- Candidate C: parent Settlement Balance Group (group total, repeats across members)
-LEFT JOIN sics.AC_LEDGER_BALANCE AS settlement_grp
-        ON settlement_grp.OBJECT_ID = bal.FK_SETTLEMENT_BAL
-       AND settlement_grp.SUBCLASS = 1
-
--- Candidates A & B: AC_STL_PAIRING rows that reference this detail on either side
-OUTER APPLY (
-    SELECT
-        SUM(CASE
-                WHEN p.FK_DETAIL1 = dtl.OBJECT_ID THEN p.SETTLED_AMT1
-                WHEN p.FK_DETAIL2 = dtl.OBJECT_ID THEN p.SETTLED_AMT2
-            END)                                    AS DETAIL_PAIRING_SETTLED_AMT,
-        SUM(p.SETTLEMENT_AMT)                        AS PAIRING_SETTLEMENT_AMT,
-        COUNT(*)                                     AS PAIRING_COUNT
-    FROM sics.AC_STL_PAIRING AS p
-    WHERE p.FK_DETAIL1 = dtl.OBJECT_ID
-       OR p.FK_DETAIL2 = dtl.OBJECT_ID
-) AS stl_pair
+-- Computed once per row instead of 2x (dates) / 3x (policy BK)
+CROSS APPLY (
+    VALUES (
+        CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112)),
+        CONVERT(int, CONVERT(char(8), dtl.AC_END_DATE, 112)),
+        CAST(
+            COALESCE(
+                NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
+                LTRIM(RTRIM(ip.BUS_INS_PER_ID))
+            ) AS nvarchar(50)
+        )
+    )
+) AS calc (ACCT_FROM_DATE_SRGT, ACCT_TO_DATE_SRGT, POLICY_BK_VALUE)
 
 LEFT JOIN sics.SOC_TO_CLAIM_REL AS soc
         ON soc.OBJECT_ID = bal.FK_CLAIM
@@ -173,5 +145,7 @@ OUTER APPLY (
       AND bpr.FSK_RELSHIP_TYPE = 55
       AND bpr.FK_INS_PERIOD = dtl.FK_INS_PER
     ORDER BY bp.OBJECT_ID, pid.OBJECT_ID
-) AS brk
-where cref_ow.REFERENCE_ID ='C11X10LBX0790'
+) AS brk;
+
+-- Optional, for quick re-testing against a single business key:
+-- WHERE cref_ow.REFERENCE_ID = 'C11X10LBX0790'
