@@ -1,13 +1,40 @@
 SELECT
-    dtl.OBJECT_ID            AS DETAIL_ID,
-    dtl.FK_BALANCE           AS BALANCE_ID,
-    dtl.DTL_AMT,
-    dtl.DTL_UNR_AMT,
+    COUNT(*)                                                    AS TOTAL_ROWS,
+    SUM(CASE WHEN dtl.DTL_UNR_AMT IS NULL THEN 1 ELSE 0 END)     AS UNR_AMT_NULL_COUNT,
+    SUM(CASE WHEN dtl.DTL_UNR_AMT = dtl.DTL_AMT THEN 1 ELSE 0 END) AS UNR_AMT_EQUALS_DTL_AMT_COUNT,
+    SUM(CASE WHEN dtl.DTL_UNR_AMT IS NOT NULL
+                  AND dtl.DTL_UNR_AMT <> dtl.DTL_AMT THEN 1 ELSE 0 END) AS UNR_AMT_DIFFERS_COUNT
+FROM sics.AC_LEDGER_DETAIL AS dtl;
+
+
+-- Step 2: Real discriminating test for LEDGER_BAL_ORG_AMT
+-- Case A: balances with more than one detail -> does LEDGER_BAL_ORG_AMT
+--         repeat identically across all details, or match the SUM of details?
+SELECT TOP (50)
+    dtl.FK_BALANCE,
     bal.LEDGER_BAL_ORG_AMT,
-    bal.SETTLED_AMT,
-    COUNT(*) OVER (PARTITION BY dtl.FK_BALANCE) AS DETAILS_PER_BALANCE
+    COUNT(*)                         AS DETAILS_IN_BALANCE,
+    SUM(dtl.DTL_AMT)                 AS SUM_DTL_AMT,
+    MIN(dtl.DTL_AMT)                 AS MIN_DTL_AMT,
+    MAX(dtl.DTL_AMT)                 AS MAX_DTL_AMT
 FROM sics.AC_LEDGER_DETAIL AS dtl
 INNER JOIN sics.AC_LEDGER_BALANCE AS bal
         ON bal.OBJECT_ID = dtl.FK_BALANCE
-WHERE dtl.DTL_AMT <> ISNULL(dtl.DTL_UNR_AMT, -999999999)   -- picks rows that ARE partially released
-ORDER BY DETAILS_PER_BALANCE DESC, dtl.FK_BALANCE;
+GROUP BY dtl.FK_BALANCE, bal.LEDGER_BAL_ORG_AMT
+HAVING COUNT(*) > 1
+ORDER BY DETAILS_IN_BALANCE DESC;
+
+
+
+SELECT TOP (50)
+    dtl.OBJECT_ID      AS DETAIL_ID,
+    dtl.FK_BALANCE,
+    dtl.DTL_AMT,
+    bal.LEDGER_BAL_ORG_AMT,
+    bal.FK_CURR                                           AS ORIG_CURR,
+    COALESCE(bal.FK_LLOYDS_SETL_CUR, bal.FK_CURR)         AS SETT_CURR
+FROM sics.AC_LEDGER_DETAIL AS dtl
+INNER JOIN sics.AC_LEDGER_BALANCE AS bal
+        ON bal.OBJECT_ID = dtl.FK_BALANCE
+WHERE bal.FK_LLOYDS_SETL_CUR IS NOT NULL
+  AND bal.FK_LLOYDS_SETL_CUR <> bal.FK_CURR;
