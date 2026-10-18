@@ -1,40 +1,19 @@
-SELECT
-    COUNT(*)                                                    AS TOTAL_ROWS,
-    SUM(CASE WHEN dtl.DTL_UNR_AMT IS NULL THEN 1 ELSE 0 END)     AS UNR_AMT_NULL_COUNT,
-    SUM(CASE WHEN dtl.DTL_UNR_AMT = dtl.DTL_AMT THEN 1 ELSE 0 END) AS UNR_AMT_EQUALS_DTL_AMT_COUNT,
-    SUM(CASE WHEN dtl.DTL_UNR_AMT IS NOT NULL
-                  AND dtl.DTL_UNR_AMT <> dtl.DTL_AMT THEN 1 ELSE 0 END) AS UNR_AMT_DIFFERS_COUNT
-FROM sics.AC_LEDGER_DETAIL AS dtl;
-
-
--- Step 2: Real discriminating test for LEDGER_BAL_ORG_AMT
--- Case A: balances with more than one detail -> does LEDGER_BAL_ORG_AMT
---         repeat identically across all details, or match the SUM of details?
+-- Does AC_STL_PAIRING ever disagree with DTL_AMT for rows that actually have a pairing record?
 SELECT TOP (50)
-    dtl.FK_BALANCE,
-    bal.LEDGER_BAL_ORG_AMT,
-    COUNT(*)                         AS DETAILS_IN_BALANCE,
-    SUM(dtl.DTL_AMT)                 AS SUM_DTL_AMT,
-    MIN(dtl.DTL_AMT)                 AS MIN_DTL_AMT,
-    MAX(dtl.DTL_AMT)                 AS MAX_DTL_AMT
-FROM sics.AC_LEDGER_DETAIL AS dtl
-INNER JOIN sics.AC_LEDGER_BALANCE AS bal
-        ON bal.OBJECT_ID = dtl.FK_BALANCE
-GROUP BY dtl.FK_BALANCE, bal.LEDGER_BAL_ORG_AMT
-HAVING COUNT(*) > 1
-ORDER BY DETAILS_IN_BALANCE DESC;
-
-
-
-SELECT TOP (50)
-    dtl.OBJECT_ID      AS DETAIL_ID,
-    dtl.FK_BALANCE,
+    dtl.OBJECT_ID            AS DETAIL_ID,
     dtl.DTL_AMT,
-    bal.LEDGER_BAL_ORG_AMT,
-    bal.FK_CURR                                           AS ORIG_CURR,
-    COALESCE(bal.FK_LLOYDS_SETL_CUR, bal.FK_CURR)         AS SETT_CURR
+    pair.SETTLED_AMT1,
+    pair.SETTLED_AMT2,
+    pair.SETTLEMENT_AMT,
+    pair.FUNC_AMT,
+    pair.FUNC_AMT2,
+    CASE WHEN pair.FK_DETAIL1 = dtl.OBJECT_ID THEN pair.SETTLED_AMT1
+         WHEN pair.FK_DETAIL2 = dtl.OBJECT_ID THEN pair.SETTLED_AMT2
+    END                       AS MATCHED_SIDE_SETTLED_AMT
 FROM sics.AC_LEDGER_DETAIL AS dtl
-INNER JOIN sics.AC_LEDGER_BALANCE AS bal
-        ON bal.OBJECT_ID = dtl.FK_BALANCE
-WHERE bal.FK_LLOYDS_SETL_CUR IS NOT NULL
-  AND bal.FK_LLOYDS_SETL_CUR <> bal.FK_CURR;
+INNER JOIN sics.AC_STL_PAIRING AS pair
+        ON pair.FK_DETAIL1 = dtl.OBJECT_ID
+        OR pair.FK_DETAIL2 = dtl.OBJECT_ID
+WHERE dtl.DTL_AMT <> CASE WHEN pair.FK_DETAIL1 = dtl.OBJECT_ID THEN pair.SETTLED_AMT1
+                           WHEN pair.FK_DETAIL2 = dtl.OBJECT_ID THEN pair.SETTLED_AMT2
+                      END;
