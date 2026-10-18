@@ -7,13 +7,6 @@
    COMP_BK: same derivation as DIM_COMPANY.COMP_BK
             COALESCE(NULLIF(TRIM(FORMERID), ''), PARTY.IDENTIFIER)
             for AC_LEDGER_BALANCE.FK_BASE_COMPANY, SUBCLASS = 4, category CE / SEC
-
-   Processing-period options:
-     OPTION_1  detail original booking year/period     ORIG_BOOK_YEAR + FRK_ORIG_BOOK_PER
-     OPTION_2  detail original accounting year/period  ORGNL_ACC_YEAR + FRK_ORGNL_ACC_PRD
-     OPTION_3  month of detail accounting start        AC_START_DATE
-     OPTION_4  month of booking date                   BOOKING_DATE, else DATE_OF_BOOKING
-     OPTION_5  worksheet summary-account year/period   SOA_AC_YEAR + FRK_SOA_AC_PERIOD
 */
 DECLARE @IsOutward CHAR(1) = 'N';
 
@@ -33,30 +26,15 @@ SELECT
 
     CONVERT(int, CONVERT(char(8), ws.BOOKING_DATE, 112)) AS TRANS_AUDIT_DATE_SRGT,
     ws.ID_SERIE_NO                                       AS TRANS_AUDIT_NUM,
-    CONVERT(int,
-        CONVERT(char(4), bal.BOOKING_YEAR)
-        + RIGHT('0' + REPLACE(bal.FRK_BOOKING_PERIOD, 'M', ''), 2)
-        + '01'
-    )                                                    AS TRANS_PROCESSING_PERIOD_SRGT,
-
-    CONVERT(int,
-        CONVERT(char(4), dtl.ORIG_BOOK_YEAR)
-        + RIGHT('0' + REPLACE(dtl.FRK_ORIG_BOOK_PER, 'M', ''), 2)
-        + '01'
-    )                                                    AS OPTION_1,
-    CONCAT(dtl.ORGNL_ACC_YEAR, '-', dtl.FRK_ORGNL_ACC_PRD) AS OPTION_2,
-    CONVERT(int, CONVERT(char(6), dtl.AC_START_DATE, 112) + '01') AS OPTION_3,
-    CONVERT(int, CONVERT(char(6), COALESCE(ws.BOOKING_DATE, bal.DATE_OF_BOOKING), 112) + '01') AS OPTION_4,
-    CONCAT(ws.SOA_AC_YEAR, '-', ws.FRK_SOA_AC_PERIOD)    AS OPTION_5,
-
+    CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112))      AS TRANS_PROCESSING_PERIOD_SRGT,
     ec.CODE                                              AS TRST_BK,
     CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112)) AS TRANS_ACCOUNTING_FROM_DATE_SRGT,
     CONVERT(int, CONVERT(char(8), dtl.AC_END_DATE, 112))   AS TRANS_ACCOUNTING_TO_DATE_SRGT,
-
     CAST(dtl.EXCH_AMT     AS money)                      AS TRANS_BASE_GROSS_AMT,
     CAST(dtl.FUNC_AMT2    AS money)                      AS TRANS_BASE2_GROSS_AMT,
     CAST(bal.SETTLED_AMT  AS money)                      AS TRANS_SETT_GROSS_AMT,
     CAST(dtl.DTL_AMT      AS money)                      AS TRANS_ORIG_GROSS_AMT,
+--     bal.*,
 
     CAST(
         COALESCE(
@@ -158,4 +136,4 @@ OUTER APPLY (
       AND bpr.FK_INS_PERIOD = dtl.FK_INS_PER
     ORDER BY bp.OBJECT_ID, pid.OBJECT_ID
 ) AS brk
-WHERE cref_ow.REFERENCE_ID = 'C11X10LBX0790';
+where cref_ow.REFERENCE_ID ='C11X10LBX0790'
