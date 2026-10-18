@@ -1,167 +1,193 @@
-WITH ws_bk AS (
-    SELECT
-        w.OBJECT_ID,
-        w.BOOKING_DATE,
-        CASE
-            WHEN w.EXTERNAL_ID LIKE 'TW|%'
-                THEN STUFF(w.EXTERNAL_ID, 1, 3, '')
-            ELSE CONVERT(varchar(8), w.BOOKING_DATE, 112)
-                 + '|' + CAST(
-                     ROW_NUMBER() OVER (
-                         PARTITION BY w.BOOKING_DATE
-                         ORDER BY w.ID_SERIE_NO, w.OBJECT_ID
-                     ) AS varchar(20)
-                 )
-        END AS WRKS_BK
-    FROM SICS.AC_WORKSHEET AS w
-)
+/* FACT_IW_TRANSACTION / FACT_OW_TRANSACTION
+   Grain: 1 row per AC_LEDGER_DETAIL
+   IW: @IsOutward = 'N'    OW: @IsOutward = 'Y'
+
+   BROK_BK = PARTY_IDENTIFIER.IDENTIFIER (FORMERID), else PARTY.IDENTIFIER
+   Broker party: SUBCLASS = 4 and BUS_PARTNER_CAT category B / BOUT (table 23)
+   COMP_BK: same derivation as DIM_COMPANY.COMP_BK
+            COALESCE(NULLIF(TRIM(FORMERID), ''), PARTY.IDENTIFIER)
+            for AC_LEDGER_BALANCE.FK_BASE_COMPANY, SUBCLASS = 4, category CE / SEC
+
+   TRANS_SETT_GROSS_AMT candidates (pick one after reviewing results):
+     A. stl_pair.DETAIL_PAIRING_SETTLED_AMT  -- AC_STL_PAIRING.SETTLED_AMT1/2 keyed to this detail, summed.
+                                               Detail-grain, handles partial settlement. CURRENT CHOICE.
+     B. stl_pair.PAIRING_SETTLEMENT_AMT      -- AC_STL_PAIRING.SETTLEMENT_AMT, summed. Name matches "settlement
+                                               amount" exactly but side/currency semantics unconfirmed.
+     C. settlement_grp.LEDGER_BAL_ORG_AMT    -- Parent Settlement Balance Group total (via FK_SETTLEMENT_BAL,
+                                               SUBCLASS=1). Repeats across every member/detail in the group.
+     D. bal.SETTLED_AMT                      -- Old value. Balance-grain; repeats across every detail of the
+                                               same balance. Kept here only for comparison.
+*/
+DECLARE @IsOutward CHAR(1) = 'N';
+
 SELECT
-    ws.WRKS_BK                                        AS WRKS_BK,
-    COALESCE(b.IDENTIFIER, rep.IDENTIFIER)            AS POLICY_BK,
+    CAST(
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
+            LTRIM(RTRIM(ip.BUS_INS_PER_ID))
+        ) AS nvarchar(50)
+    )                                                    AS POLICY_BK,
+    COALESCE(
+        COALESCE(cref_ow.REFERENCE_ID, clm_ow.CLAIM_IDENTIFIER),
+        COALESCE(cref_bal.REFERENCE_ID, clm_bal.CLAIM_IDENTIFIER)
+    )                                                    AS CLA_CLAIM_BK,
+    brk.BROK_BK                                          AS BROK_BK,
+    comp.COMP_BK                                         AS COMP_BK,
 
-    ws.BOOKING_DATE                                   AS INS_AUDIT_DATE,
-    lnk.WKST_SEQ_NBR                                  AS INS_AUDIT_NUM,
-    i.INST_NR                                         AS INS_INSTALMENT_NUM,
-    i.DUE_DATE                                        AS INS_INSTALMENT_DUE_DATE,
-    ISNULL(i.PAYMENT_DATE, '9999-01-01')              AS INS_ACTUAL_PAYMENT_DATE,
-    i.PREMIUM_AMT                                     AS INS_INSTALMENT_ORIG_AMT,
-    i.BOOKED_PRE_AMT                                  AS INS_INSTALMENT_SETT_AMT,
-    i.AC_START_DATE                                   AS INS_START_DATE,
-    i.AC_END_DATE                                     AS INS_END_DATE,
-    lnk.EXCH_AMT                                      AS INS_INSTALMENT_BASE_AMT,
-    cnt.INSTAL_COUNT                                  AS INSTALEMENT_COUNT,
-    icur.FK_INST_CUR                                  AS INS_INSTALMENT_ORIG_CCY,
-    ISNULL(bal.FK_CURR, icur.FK_INST_CUR)             AS INS_INSTALMENT_SETT_CCY,
-    dep.PREMIUM_AMOUNT                                AS SRE_MDP,
-    dep.PREMIUM_AMOUNT / NULLIF(cnt.INSTAL_COUNT, 0)  AS SRE_MDP_INSTALMENT,
-    (dep.PREMIUM_AMOUNT / NULLIF(cnt.INSTAL_COUNT, 0))
-        * (ISNULL(ded.PCT, 10) / 100.0)               AS BROKERAGE,
-    ISNULL(tax.TAX_AMT, 0)                            AS TAX_ON_PREMIUM,
+    CONVERT(int, CONVERT(char(8), ws.BOOKING_DATE, 112)) AS TRANS_AUDIT_DATE_SRGT,
+    ws.ID_SERIE_NO                                       AS TRANS_AUDIT_NUM,
+    CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112))      AS TRANS_PROCESSING_PERIOD_SRGT,
+    ec.CODE                                              AS TRST_BK,
+    CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112)) AS TRANS_ACCOUNTING_FROM_DATE_SRGT,
+    CONVERT(int, CONVERT(char(8), dtl.AC_END_DATE, 112))   AS TRANS_ACCOUNTING_TO_DATE_SRGT,
+    CAST(dtl.EXCH_AMT     AS money)                      AS TRANS_BASE_GROSS_AMT,
+    CAST(dtl.FUNC_AMT2    AS money)                      AS TRANS_BASE2_GROSS_AMT,
 
-    lnk.LINK_METHOD                                   AS WRKS_LINK_METHOD
+    -- NEW primary (candidate A): sum of AC_STL_PAIRING settled amounts for this detail
+    CAST(stl_pair.DETAIL_PAIRING_SETTLED_AMT AS money)   AS TRANS_SETT_GROSS_AMT,
 
-FROM sics.BC_INSTAL AS i
+    -- Other candidates kept side-by-side for comparison/decision:
+    CAST(stl_pair.PAIRING_SETTLEMENT_AMT     AS money)   AS TRANS_SETT_GROSS_AMT_CAND_B_PAIRING_SETTLEMENT_AMT,
+    CAST(settlement_grp.LEDGER_BAL_ORG_AMT   AS money)   AS TRANS_SETT_GROSS_AMT_CAND_C_GROUP_TOTAL,
+    CAST(bal.SETTLED_AMT                     AS money)   AS TRANS_SETT_GROSS_AMT_CAND_D_BALANCE_SETTLED_AMT_OLD,
+    stl_pair.PAIRING_COUNT                               AS TRANS_SETT_GROSS_AMT_PAIRING_COUNT,
 
-INNER JOIN sics.BC_INST_CUR AS icur
-        ON icur.OBJECT_ID = i.FK_INST_CUR
+    CAST(dtl.DTL_AMT      AS money)                      AS TRANS_ORIG_GROSS_AMT,
+--     bal.*,
 
-LEFT JOIN sics.BC_INST_CONT AS icont
-       ON icont.OBJECT_ID = icur.FK_CONDITION
+    CAST(
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
+            LTRIM(RTRIM(ip.BUS_INS_PER_ID))
+        ) AS nvarchar(50)
+    )                                                    AS IW_POLICY_BK,
+    CASE WHEN bal.IS_OUTWARD = 'Y' THEN
+        CAST(
+            COALESCE(
+                NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
+                LTRIM(RTRIM(ip.BUS_INS_PER_ID))
+            ) AS nvarchar(50)
+        )
+    END                                                  AS OW_POLICY_BK,
 
-LEFT JOIN sics.BUS_COND_CONTAINER AS bcc
-       ON bcc.OBJECT_ID = icont.FK_COND_CONTAINER
-LEFT JOIN sics.SCOPE_OF_COVER AS soc
-       ON soc.OBJECT_ID = bcc.FK_SOC
-LEFT JOIN sics.LIFE_CYCLE_PHASE AS lcp
-       ON lcp.OBJECT_ID = soc.FK_LIFECYCLEP
+    bal.FK_CURR                                          AS CURR_ORIG_BK,
+    bal.FK_AC_FUNC_CCY                                   AS CURR_BASE_BK,
+    COALESCE(bal.FK_LLOYDS_SETL_CUR, bal.FK_CURR)        AS CURR_SETT_BK,
+    usr.USER_ID                                          AS USR_BK,
+    CASE
+        WHEN ws.EXTERNAL_ID LIKE 'TW|%'
+            THEN STUFF(ws.EXTERNAL_ID, 1, 3, '')
+        ELSE CONVERT(varchar(8), ws.BOOKING_DATE, 112)
+             + '|' + CONVERT(varchar(20), ws.ID_SERIE_NO)
+    END                                                  AS WRKS_BK
+
+FROM sics.AC_LEDGER_DETAIL AS dtl
+INNER JOIN sics.AC_LEDGER_BALANCE AS bal
+        ON bal.OBJECT_ID = dtl.FK_BALANCE
+       AND bal.IS_OUTWARD = @IsOutward
+LEFT JOIN sics.AC_WORKSHEET AS ws
+        ON ws.OBJECT_ID = dtl.FK_WORKSHEET
+LEFT JOIN sics.ENTRY_CODE AS ec
+        ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
+LEFT JOIN sics.CNU_USER AS usr
+        ON usr.OBJECT_ID = ws.FK_REGISTERED_BY
 LEFT JOIN sics.INSURED_PERIOD AS ip
-       ON ip.OBJECT_ID = COALESCE(icont.FK_INSURED_PERIOD, lcp.FK_INS_PRD)
-LEFT JOIN sics.BUSINESS AS b
-       ON b.OBJECT_ID = ip.FK_BUSINESS
+        ON ip.OBJECT_ID = dtl.FK_INS_PER
 
-OUTER APPLY (
-    SELECT TOP (1) r.IDENTIFIER
-    FROM sics.BUS_STRUCT_REP AS r
-    WHERE r.FK_PC_INST = icont.OBJECT_ID
-    ORDER BY r.IDENTIFIER
-) AS rep
+-- Candidate C: parent Settlement Balance Group (group total, repeats across members)
+LEFT JOIN sics.AC_LEDGER_BALANCE AS settlement_grp
+        ON settlement_grp.OBJECT_ID = bal.FK_SETTLEMENT_BAL
+       AND settlement_grp.SUBCLASS = 1
 
+-- Candidates A & B: AC_STL_PAIRING rows that reference this detail on either side.
+-- Aggregation is pre-computed (no outer reference inside the aggregate) to avoid
+-- "Multiple columns are specified in an aggregated expression containing an outer reference".
+LEFT JOIN (
+    SELECT
+        FK_DETAIL,
+        SUM(SETTLED_AMT)      AS DETAIL_PAIRING_SETTLED_AMT,
+        SUM(SETTLEMENT_AMT)   AS PAIRING_SETTLEMENT_AMT,
+        COUNT(*)              AS PAIRING_COUNT
+    FROM (
+        SELECT
+            FK_DETAIL1 AS FK_DETAIL,
+            SETTLED_AMT1 AS SETTLED_AMT,
+            SETTLEMENT_AMT
+        FROM sics.AC_STL_PAIRING
+        WHERE FK_DETAIL1 IS NOT NULL
+
+        UNION ALL
+
+        SELECT
+            FK_DETAIL2 AS FK_DETAIL,
+            SETTLED_AMT2 AS SETTLED_AMT,
+            SETTLEMENT_AMT
+        FROM sics.AC_STL_PAIRING
+        WHERE FK_DETAIL2 IS NOT NULL
+    ) AS unpvt
+    GROUP BY FK_DETAIL
+) AS stl_pair
+    ON stl_pair.FK_DETAIL = dtl.OBJECT_ID
+
+LEFT JOIN sics.SOC_TO_CLAIM_REL AS soc
+        ON soc.OBJECT_ID = bal.FK_CLAIM
+LEFT JOIN sics.CLAIMS AS clm_bal
+        ON clm_bal.OBJECT_ID = soc.FK_CLAIM
 OUTER APPLY (
-    SELECT COALESCE(
-               NULLIF(icur.NR_INSTAL, 0),
-               (SELECT NULLIF(COUNT(*), 0)
-                FROM sics.BC_INSTAL AS x
-                WHERE x.FK_INST_CUR = icur.OBJECT_ID)
-           ) AS INSTAL_COUNT
-) AS cnt
+    SELECT TOP (1) r.REFERENCE_ID
+    FROM sics.CLAIM_REFS AS r
+    WHERE r.FK_SOC_REL = soc.OBJECT_ID
+    ORDER BY r.REFERENCE_ID
+) AS cref_bal
+LEFT JOIN sics.CLAIMS AS clm_ow
+        ON clm_ow.OBJECT_ID = dtl.FK_CLAIM_TO_SOC
+OUTER APPLY (
+    SELECT TOP (1) r.REFERENCE_ID
+    FROM sics.SOC_TO_CLAIM_REL AS scr
+    INNER JOIN sics.CLAIM_REFS AS r
+            ON r.FK_SOC_REL = scr.OBJECT_ID
+    WHERE scr.FK_CLAIM = clm_ow.OBJECT_ID
+    ORDER BY r.REFERENCE_ID
+) AS cref_ow
 
 OUTER APPLY (
     SELECT TOP (1)
-           x.FK_WORKSHEET,
-           x.FK_BALANCE,
-           x.WKST_SEQ_NBR,
-           x.EXCH_AMT,
-           x.LINK_METHOD
-    FROM (
-        SELECT d.FK_WORKSHEET, d.FK_BALANCE, d.WKST_SEQ_NBR, d.EXCH_AMT,
-               1 AS PRIORITY, 'DETAIL_SRCE_INSTALMENT' AS LINK_METHOD
-        FROM sics.AC_LEDGER_DETAIL AS d
-        WHERE d.FK_SRCE_INSTALMENT = i.OBJECT_ID
-          AND d.FK_WORKSHEET IS NOT NULL
-
-        UNION ALL
-
-        SELECT d.FK_WORKSHEET, d.FK_BALANCE, d.WKST_SEQ_NBR, d.EXCH_AMT,
-               2, 'REMITTANCE_BALANCE'
-        FROM sics.AC_LEDGER_DETAIL AS d
-        WHERE i.FK_REMITTANCE IS NOT NULL
-          AND d.FK_BALANCE = i.FK_REMITTANCE
-          AND d.FK_WORKSHEET IS NOT NULL
-
-        UNION ALL
-
-        SELECT d.FK_WORKSHEET, d.FK_BALANCE, d.WKST_SEQ_NBR, d.EXCH_AMT,
-               3, 'BALANCE_BUSINESS_INSTALMENT'
-        FROM sics.AC_LEDGER_BALANCE AS bl
-        INNER JOIN sics.AC_LEDGER_DETAIL AS d
-                ON d.FK_BALANCE = bl.OBJECT_ID
-        WHERE bl.FK_BUSINESS        = b.OBJECT_ID
-          AND bl.INSTALMENT_NUMBER  = i.INST_NR
-          AND bl.FK_CURR            = icur.FK_INST_CUR
-          AND ISNULL(bl.IS_OUTWARD, 'N') = 'N'
-          AND d.FK_WORKSHEET IS NOT NULL
-
-        UNION ALL
-
-        SELECT bl.FK_WORKSHEET, bl.OBJECT_ID, NULL, NULL,
-               4, 'BALANCE_WORKSHEET'
-        FROM sics.AC_LEDGER_BALANCE AS bl
-        WHERE bl.FK_BUSINESS        = b.OBJECT_ID
-          AND bl.INSTALMENT_NUMBER  = i.INST_NR
-          AND bl.FK_CURR            = icur.FK_INST_CUR
-          AND ISNULL(bl.IS_OUTWARD, 'N') = 'N'
-          AND bl.FK_WORKSHEET IS NOT NULL
-    ) AS x
-    ORDER BY x.PRIORITY, x.WKST_SEQ_NBR
-) AS lnk
-
-LEFT JOIN ws_bk AS ws
-       ON ws.OBJECT_ID = lnk.FK_WORKSHEET
-
-LEFT JOIN sics.AC_LEDGER_BALANCE AS bal
-       ON bal.OBJECT_ID = lnk.FK_BALANCE
+           COALESCE(NULLIF(LTRIM(RTRIM(pid.IDENTIFIER)), ''), p.IDENTIFIER) AS COMP_BK
+    FROM sics.PARTY AS p
+    OUTER APPLY (
+        SELECT TOP (1) pi.IDENTIFIER
+        FROM sics.PARTY_IDENTIFIER AS pi
+        WHERE pi.FK_PARTY = p.OBJECT_ID
+          AND pi.FRK_PARTY_ID_TYPE = 'FORMERID'
+        ORDER BY pi.OBJECT_ID
+    ) AS pid
+    WHERE p.OBJECT_ID = bal.FK_BASE_COMPANY
+      AND p.SUBCLASS = 4
+      AND EXISTS (
+          SELECT 1
+          FROM sics.BUS_PARTNER_CAT AS cat
+          WHERE cat.FK_PARTNER = p.OBJECT_ID
+            AND cat.FRK_CATEGORY IN ('CE', 'SEC')
+      )
+) AS comp
 
 OUTER APPLY (
-    SELECT TOP (1) dp.PREMIUM_AMOUNT
-    FROM sics.LPC_PREM_COND AS pc
-    INNER JOIN sics.LPC_DEP_PREMIUM AS dp
-            ON dp.FK_CONDITION = pc.OBJECT_ID
-    LEFT JOIN sics.LPC_CUR_LIMIT_PREM AS clp
-           ON clp.OBJECT_ID = dp.FK_CURRENCY
-    WHERE pc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
-      AND (clp.FK_CURRENCY = icur.FK_INST_CUR OR clp.FK_CURRENCY IS NULL)
-    ORDER BY CASE WHEN pc.IS_CURRENT_OF_IP = 'Y' THEN 0 ELSE 1 END,
-             pc.OBJECT_ID
-) AS dep
-
-OUTER APPLY (
-    SELECT TOP (1) de.PCT
-    FROM sics.DEDUCTION_COND AS dc
-    INNER JOIN sics.DEDUCTION_ELEMENT AS de
-            ON de.FK_DED_COND = dc.OBJECT_ID
-    WHERE dc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
-      AND de.FRK_TYPE = N'BRO'
-      AND de.PCT IS NOT NULL
-    ORDER BY de.OBJECT_ID
-) AS ded
-
-OUTER APPLY (
-    SELECT SUM(de.AMT_AMT) AS TAX_AMT
-    FROM sics.DEDUCTION_COND AS dc
-    INNER JOIN sics.DEDUCTION_ELEMENT AS de
-            ON de.FK_DED_COND = dc.OBJECT_ID
-    WHERE dc.FK_COND_CONTAINER = icont.FK_COND_CONTAINER
-      AND de.FRK_TYPE IN (N'IPT', N'IPT1', N'IPT2', N'IPT3')
-) AS tax
-
-ORDER BY POLICY_BK, INS_INSTALMENT_NUM;
+    SELECT TOP (1)
+           COALESCE(pid.IDENTIFIER, bp.IDENTIFIER) AS BROK_BK
+    FROM sics.BUSINESS_PRTNR_REL AS bpr
+    INNER JOIN sics.PARTY AS bp
+            ON bp.OBJECT_ID = bpr.FK_BUS_PARTNER
+           AND bp.SUBCLASS = 4
+    INNER JOIN sics.BUS_PARTNER_CAT AS bpc
+            ON bpc.FK_PARTNER = bp.OBJECT_ID
+           AND bpc.FSK_CATEGORY = 23
+           AND bpc.FRK_CATEGORY IN ('B', 'BOUT')
+    LEFT JOIN sics.PARTY_IDENTIFIER AS pid
+            ON pid.FK_PARTY = bp.OBJECT_ID
+           AND pid.FRK_PARTY_ID_TYPE = 'FORMERID'
+    WHERE bpr.FRK_RELSHIP_TYPE = 'BR'
+      AND bpr.FSK_RELSHIP_TYPE = 55
+      AND bpr.FK_INS_PERIOD = dtl.FK_INS_PER
+    ORDER BY bp.OBJECT_ID, pid.OBJECT_ID
+) AS brk
+where cref_ow.REFERENCE_ID ='C11X10LBX0790'
