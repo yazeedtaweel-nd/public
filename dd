@@ -7,6 +7,16 @@
    COMP_BK: same derivation as DIM_COMPANY.COMP_BK
             COALESCE(NULLIF(TRIM(FORMERID), ''), PARTY.IDENTIFIER)
             for AC_LEDGER_BALANCE.FK_BASE_COMPANY, SUBCLASS = 4, category CE / SEC
+
+   TRANS_SETT_GROSS_AMT candidates (pick one after reviewing results):
+     A. stl_pair.DETAIL_PAIRING_SETTLED_AMT  -- AC_STL_PAIRING.SETTLED_AMT1/2 keyed to this detail, summed.
+                                               Detail-grain, handles partial settlement. CURRENT CHOICE.
+     B. stl_pair.PAIRING_SETTLEMENT_AMT      -- AC_STL_PAIRING.SETTLEMENT_AMT, summed. Name matches "settlement
+                                               amount" exactly but side/currency semantics unconfirmed.
+     C. settlement_grp.LEDGER_BAL_ORG_AMT    -- Parent Settlement Balance Group total (via FK_SETTLEMENT_BAL,
+                                               SUBCLASS=1). Repeats across every member/detail in the group.
+     D. bal.SETTLED_AMT                      -- Old value. Balance-grain; repeats across every detail of the
+                                               same balance. Kept here only for comparison.
 */
 DECLARE @IsOutward CHAR(1) = 'N';
 
@@ -32,7 +42,16 @@ SELECT
     CONVERT(int, CONVERT(char(8), dtl.AC_END_DATE, 112))   AS TRANS_ACCOUNTING_TO_DATE_SRGT,
     CAST(dtl.EXCH_AMT     AS money)                      AS TRANS_BASE_GROSS_AMT,
     CAST(dtl.FUNC_AMT2    AS money)                      AS TRANS_BASE2_GROSS_AMT,
-    CAST(bal.SETTLED_AMT  AS money)                      AS TRANS_SETT_GROSS_AMT,
+
+    -- NEW primary (candidate A): sum of AC_STL_PAIRING settled amounts for this detail
+    CAST(stl_pair.DETAIL_PAIRING_SETTLED_AMT AS money)   AS TRANS_SETT_GROSS_AMT,
+
+    -- Other candidates kept side-by-side for comparison/decision:
+    CAST(stl_pair.PAIRING_SETTLEMENT_AMT     AS money)   AS TRANS_SETT_GROSS_AMT_CAND_B_PAIRING_SETTLEMENT_AMT,
+    CAST(settlement_grp.LEDGER_BAL_ORG_AMT   AS money)   AS TRANS_SETT_GROSS_AMT_CAND_C_GROUP_TOTAL,
+    CAST(bal.SETTLED_AMT                     AS money)   AS TRANS_SETT_GROSS_AMT_CAND_D_BALANCE_SETTLED_AMT_OLD,
+    stl_pair.PAIRING_COUNT                               AS TRANS_SETT_GROSS_AMT_PAIRING_COUNT,
+
     CAST(dtl.DTL_AMT      AS money)                      AS TRANS_ORIG_GROSS_AMT,
 --     bal.*,
 
@@ -74,6 +93,25 @@ LEFT JOIN sics.CNU_USER AS usr
         ON usr.OBJECT_ID = ws.FK_REGISTERED_BY
 LEFT JOIN sics.INSURED_PERIOD AS ip
         ON ip.OBJECT_ID = dtl.FK_INS_PER
+
+-- Candidate C: parent Settlement Balance Group (group total, repeats across members)
+LEFT JOIN sics.AC_LEDGER_BALANCE AS settlement_grp
+        ON settlement_grp.OBJECT_ID = bal.FK_SETTLEMENT_BAL
+       AND settlement_grp.SUBCLASS = 1
+
+-- Candidates A & B: AC_STL_PAIRING rows that reference this detail on either side
+OUTER APPLY (
+    SELECT
+        SUM(CASE
+                WHEN p.FK_DETAIL1 = dtl.OBJECT_ID THEN p.SETTLED_AMT1
+                WHEN p.FK_DETAIL2 = dtl.OBJECT_ID THEN p.SETTLED_AMT2
+            END)                                    AS DETAIL_PAIRING_SETTLED_AMT,
+        SUM(p.SETTLEMENT_AMT)                        AS PAIRING_SETTLEMENT_AMT,
+        COUNT(*)                                     AS PAIRING_COUNT
+    FROM sics.AC_STL_PAIRING AS p
+    WHERE p.FK_DETAIL1 = dtl.OBJECT_ID
+       OR p.FK_DETAIL2 = dtl.OBJECT_ID
+) AS stl_pair
 
 LEFT JOIN sics.SOC_TO_CLAIM_REL AS soc
         ON soc.OBJECT_ID = bal.FK_CLAIM
