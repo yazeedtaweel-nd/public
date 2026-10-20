@@ -1,71 +1,48 @@
-DECLARE @BaseCurrency nvarchar(3) = N'SAR';
-DECLARE @LoadDateKey  int = CONVERT(int, CONVERT(char(8), GETDATE(), 112));
-DECLARE @UseLpcFxRate bit = 0; -- Enable only after confirming FX direction.
-
-WITH source_limit AS (
-    SELECT
-        COALESCE(
-            NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
-            NULLIF(LTRIM(RTRIM(ip.BUS_INS_PER_ID)), N'')
-        ) AS POLICY_BK,
-
-        main_limit.FRK_LIMIT_TYPE AS LMTQ_BK,
-        cond.FK_MAIN_CURRENCY     AS CURR_ORIGIN_BK,
-        @BaseCurrency             AS CURR_BASE_BK,
-
-        CAST(tsi.AMOUNT AS decimal(38, 4))         AS PLI_SI_AMOUNT_ORIGIN,
-        CAST(main_limit.AMOUNT AS decimal(38, 4))  AS PLI_AMOUNT_ORIGIN,
-        fx.EXCH_RATE_LIMIT
-    FROM SICS.LPC_LIM_PREM_COND AS cond
-    INNER JOIN SICS.INSURED_PERIOD AS ip
-        ON ip.OBJECT_ID = cond.FK_INSURED_PERIOD
-    INNER JOIN SICS.LPC_LIMIT AS main_limit
-        ON main_limit.OBJECT_ID = cond.FK_MAIN_LIMIT
-    OUTER APPLY (
-        SELECT TOP (1) l.AMOUNT
-        FROM SICS.LPC_LIMIT AS l
-        WHERE l.FK_CONDITION = cond.OBJECT_ID
-          AND l.FRK_OPTIONAL_FIELD = N'TSI'
-        ORDER BY
-            CASE WHEN l.IS_ORIGINAL = N'Y' THEN 0 ELSE 1 END,
-            l.OBJECT_ID
-    ) AS tsi
-    OUTER APPLY (
-        SELECT TOP (1) clp.EXCH_RATE_LIMIT
-        FROM SICS.LPC_CUR_LIMIT_PREM AS clp
-        WHERE clp.FK_CONDITION = cond.OBJECT_ID
-          AND clp.FK_CURRENCY = @BaseCurrency
-        ORDER BY clp.OBJECT_ID
-    ) AS fx
-    WHERE cond.IS_CURRENT_OF_IP = N'Y'
-      AND COALESCE(
-            NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
-            NULLIF(LTRIM(RTRIM(ip.BUS_INS_PER_ID)), N'')
-          ) IS NOT NULL
-)
 SELECT
-    POLICY_BK,          -- lookup DIM_POLICY.POLICY_BK        -> POLICY_SRGT
-    LMTQ_BK,            -- lookup DIM_LIM_QUAL.LMTQ_BK        -> LMTQ_SRGT
-    CURR_ORIGIN_BK,     -- lookup DIM_CURRENCY.CURR_BK        -> CURR_ORIGIN_SRGT
-    CURR_BASE_BK,       -- lookup DIM_CURRENCY.CURR_BK        -> CURR_BASE_SRGT
-    PLI_SI_AMOUNT_ORIGIN,
+    COALESCE(
+        NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
+        NULLIF(LTRIM(RTRIM(ip.BUS_INS_PER_ID)), N'')
+    ) AS POLICY_BK,
+    lim.FRK_LIMIT_TYPE AS LMTQ_BK,
+    cond.FK_MAIN_CURRENCY AS CURR_ORIGIN_BK,
+    b.FK_FUNCTIONAL_CCY AS CURR_BASE_BK,
     CAST(
         CASE
-            WHEN CURR_ORIGIN_BK = CURR_BASE_BK THEN PLI_SI_AMOUNT_ORIGIN
-            WHEN @UseLpcFxRate = 1 AND EXCH_RATE_LIMIT IS NOT NULL
-                THEN PLI_SI_AMOUNT_ORIGIN * EXCH_RATE_LIMIT
-            ELSE NULL
+            WHEN lim.FRK_OPTIONAL_FIELD = N'TSI' THEN lim.AMOUNT
+        END AS decimal(38, 4)
+    ) AS PLI_SI_AMOUNT_ORIGIN,
+    CAST(
+        CASE
+            WHEN lim.FRK_OPTIONAL_FIELD = N'TSI'
+             AND cond.FK_MAIN_CURRENCY = b.FK_FUNCTIONAL_CCY
+                THEN lim.AMOUNT
+            WHEN lim.FRK_OPTIONAL_FIELD = N'TSI'
+             AND fx.EXCH_RATE_LIMIT IS NOT NULL
+                THEN lim.AMOUNT * fx.EXCH_RATE_LIMIT
         END AS decimal(38, 4)
     ) AS PLI_SI_AMOUNT_BASE,
-    PLI_AMOUNT_ORIGIN,
+    CAST(lim.AMOUNT AS decimal(38, 4)) AS PLI_AMOUNT_ORIGIN,
     CAST(
         CASE
-            WHEN CURR_ORIGIN_BK = CURR_BASE_BK THEN PLI_AMOUNT_ORIGIN
-            WHEN @UseLpcFxRate = 1 AND EXCH_RATE_LIMIT IS NOT NULL
-                THEN PLI_AMOUNT_ORIGIN * EXCH_RATE_LIMIT
-            ELSE NULL
+            WHEN cond.FK_MAIN_CURRENCY = b.FK_FUNCTIONAL_CCY
+                THEN lim.AMOUNT
+            WHEN fx.EXCH_RATE_LIMIT IS NOT NULL
+                THEN lim.AMOUNT * fx.EXCH_RATE_LIMIT
         END AS decimal(38, 4)
     ) AS PLI_AMOUNT_BASE,
-    @LoadDateKey AS CREATED_DATE_SRGT,
-    @LoadDateKey AS UPDATED_DATE_SRGT
-FROM source_limit;
+    CONVERT(int, CONVERT(char(8), GETDATE(), 112)) AS CREATED_DATE_SRGT,
+    CONVERT(int, CONVERT(char(8), GETDATE(), 112)) AS UPDATED_DATE_SRGT
+FROM SICS.LPC_LIMIT AS lim
+INNER JOIN SICS.LPC_LIM_PREM_COND AS cond
+    ON cond.OBJECT_ID = lim.FK_CONDITION
+LEFT JOIN SICS.INSURED_PERIOD AS ip
+    ON ip.OBJECT_ID = cond.FK_INSURED_PERIOD
+LEFT JOIN SICS.BUSINESS AS b
+    ON b.OBJECT_ID = ip.FK_BUSINESS
+OUTER APPLY (
+    SELECT TOP (1) clp.EXCH_RATE_LIMIT
+    FROM SICS.LPC_CUR_LIMIT_PREM AS clp
+    WHERE clp.FK_CONDITION = cond.OBJECT_ID
+      AND clp.FK_CURRENCY = b.FK_FUNCTIONAL_CCY
+    ORDER BY clp.OBJECT_ID
+) AS fx;
