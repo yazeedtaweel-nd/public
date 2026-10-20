@@ -1,37 +1,28 @@
-DECLARE @BaseCurrency      nvarchar(3) = N'SAR';
-DECLARE @LoadDateKey       int =
-    CONVERT(int, CONVERT(char(8), GETDATE(), 112));
-DECLARE @UseLpcFxRate      bit = 0; -- Enable only after confirming FX direction.
+DECLARE @BaseCurrency nvarchar(3) = N'SAR';
+DECLARE @LoadDateKey  int = CONVERT(int, CONVERT(char(8), GETDATE(), 112));
+DECLARE @UseLpcFxRate bit = 0; -- Enable only after confirming FX direction.
 
 WITH source_limit AS (
     SELECT
         COALESCE(
             NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
             NULLIF(LTRIM(RTRIM(ip.BUS_INS_PER_ID)), N'')
-        )                                      AS POLICY_BK,
+        ) AS POLICY_BK,
 
-        main_limit.FRK_LIMIT_TYPE              AS LMTQ_BK,
-        cond.FK_MAIN_CURRENCY                  AS ORIGIN_CCY,
-        @BaseCurrency                          AS BASE_CCY,
+        main_limit.FRK_LIMIT_TYPE AS LMTQ_BK,
+        cond.FK_MAIN_CURRENCY     AS CURR_ORIGIN_BK,
+        @BaseCurrency             AS CURR_BASE_BK,
 
-        CAST(tsi.AMOUNT AS decimal(38,4))       AS PLI_SI_AMOUNT_ORIGIN,
-        CAST(main_limit.AMOUNT AS decimal(38,4))
-                                                 AS PLI_AMOUNT_ORIGIN,
-
-        fx.EXCH_RATE_LIMIT,
-        cond.OBJECT_ID                         AS SOURCE_CONDITION_ID,
-        main_limit.OBJECT_ID                   AS SOURCE_LIMIT_ID
+        CAST(tsi.AMOUNT AS decimal(38, 4))         AS PLI_SI_AMOUNT_ORIGIN,
+        CAST(main_limit.AMOUNT AS decimal(38, 4))  AS PLI_AMOUNT_ORIGIN,
+        fx.EXCH_RATE_LIMIT
     FROM SICS.LPC_LIM_PREM_COND AS cond
     INNER JOIN SICS.INSURED_PERIOD AS ip
         ON ip.OBJECT_ID = cond.FK_INSURED_PERIOD
     INNER JOIN SICS.LPC_LIMIT AS main_limit
         ON main_limit.OBJECT_ID = cond.FK_MAIN_LIMIT
-
-    /* TSI limit belonging to the same Limit/Premium condition. */
     OUTER APPLY (
-        SELECT TOP (1)
-            l.AMOUNT,
-            l.OBJECT_ID
+        SELECT TOP (1) l.AMOUNT
         FROM SICS.LPC_LIMIT AS l
         WHERE l.FK_CONDITION = cond.OBJECT_ID
           AND l.FRK_OPTIONAL_FIELD = N'TSI'
@@ -39,66 +30,42 @@ WITH source_limit AS (
             CASE WHEN l.IS_ORIGINAL = N'Y' THEN 0 ELSE 1 END,
             l.OBJECT_ID
     ) AS tsi
-
-    /* Candidate conversion rate into the configured base currency. */
     OUTER APPLY (
-        SELECT TOP (1)
-            clp.EXCH_RATE_LIMIT
+        SELECT TOP (1) clp.EXCH_RATE_LIMIT
         FROM SICS.LPC_CUR_LIMIT_PREM AS clp
         WHERE clp.FK_CONDITION = cond.OBJECT_ID
           AND clp.FK_CURRENCY = @BaseCurrency
         ORDER BY clp.OBJECT_ID
     ) AS fx
-
     WHERE cond.IS_CURRENT_OF_IP = N'Y'
       AND COALESCE(
             NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
             NULLIF(LTRIM(RTRIM(ip.BUS_INS_PER_ID)), N'')
           ) IS NOT NULL
-),
-calculated AS (
-    SELECT
-        s.*,
-        CAST(
-            CASE
-                WHEN s.ORIGIN_CCY = s.BASE_CCY
-                    THEN s.PLI_SI_AMOUNT_ORIGIN
-                WHEN @UseLpcFxRate = 1
-                 AND s.EXCH_RATE_LIMIT IS NOT NULL
-                    THEN s.PLI_SI_AMOUNT_ORIGIN * s.EXCH_RATE_LIMIT
-                ELSE NULL
-            END AS decimal(38,4)
-        ) AS PLI_SI_AMOUNT_BASE,
-
-        CAST(
-            CASE
-                WHEN s.ORIGIN_CCY = s.BASE_CCY
-                    THEN s.PLI_AMOUNT_ORIGIN
-                WHEN @UseLpcFxRate = 1
-                 AND s.EXCH_RATE_LIMIT IS NOT NULL
-                    THEN s.PLI_AMOUNT_ORIGIN * s.EXCH_RATE_LIMIT
-                ELSE NULL
-            END AS decimal(38,4)
-        ) AS PLI_AMOUNT_BASE
-    FROM source_limit AS s
 )
 SELECT
-    policy.POLICY_SRGT,
-    qualifier.LMTQ_SRGT,
-    origin_ccy.CURR_SRGT                    AS CURR_ORIGIN_SRGT,
-    base_ccy.CURR_SRGT                      AS CURR_BASE_SRGT,
-    src.PLI_SI_AMOUNT_ORIGIN,
-    src.PLI_SI_AMOUNT_BASE,
-    src.PLI_AMOUNT_ORIGIN,
-    src.PLI_AMOUNT_BASE,
-    @LoadDateKey                            AS CREATED_DATE_SRGT,
-    @LoadDateKey                            AS UPDATED_DATE_SRGT
-FROM calculated AS src
-LEFT JOIN SaudiRe_DW.dbo.DIM_POLICY AS policy
-    ON policy.POLICY_BK = src.POLICY_BK
-LEFT JOIN SaudiRe_DW.dbo.DIM_LIM_QUAL AS qualifier
-    ON qualifier.LMTQ_BK = src.LMTQ_BK
-LEFT JOIN SaudiRe_DW.dbo.DIM_CURRENCY AS origin_ccy
-    ON origin_ccy.CURR_BK = src.ORIGIN_CCY
-LEFT JOIN SaudiRe_DW.dbo.DIM_CURRENCY AS base_ccy
-    ON base_ccy.CURR_BK = src.BASE_CCY;
+    POLICY_BK,          -- lookup DIM_POLICY.POLICY_BK        -> POLICY_SRGT
+    LMTQ_BK,            -- lookup DIM_LIM_QUAL.LMTQ_BK        -> LMTQ_SRGT
+    CURR_ORIGIN_BK,     -- lookup DIM_CURRENCY.CURR_BK        -> CURR_ORIGIN_SRGT
+    CURR_BASE_BK,       -- lookup DIM_CURRENCY.CURR_BK        -> CURR_BASE_SRGT
+    PLI_SI_AMOUNT_ORIGIN,
+    CAST(
+        CASE
+            WHEN CURR_ORIGIN_BK = CURR_BASE_BK THEN PLI_SI_AMOUNT_ORIGIN
+            WHEN @UseLpcFxRate = 1 AND EXCH_RATE_LIMIT IS NOT NULL
+                THEN PLI_SI_AMOUNT_ORIGIN * EXCH_RATE_LIMIT
+            ELSE NULL
+        END AS decimal(38, 4)
+    ) AS PLI_SI_AMOUNT_BASE,
+    PLI_AMOUNT_ORIGIN,
+    CAST(
+        CASE
+            WHEN CURR_ORIGIN_BK = CURR_BASE_BK THEN PLI_AMOUNT_ORIGIN
+            WHEN @UseLpcFxRate = 1 AND EXCH_RATE_LIMIT IS NOT NULL
+                THEN PLI_AMOUNT_ORIGIN * EXCH_RATE_LIMIT
+            ELSE NULL
+        END AS decimal(38, 4)
+    ) AS PLI_AMOUNT_BASE,
+    @LoadDateKey AS CREATED_DATE_SRGT,
+    @LoadDateKey AS UPDATED_DATE_SRGT
+FROM source_limit;
