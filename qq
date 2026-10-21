@@ -1,2 +1,5 @@
-Data Source=HO-SI-DMETL;Initial Catalog=SaudiRe_DW;Provider=SQLNCLI11.1;Integrated Security=SSPI;Application Name=SSIS-SICS-SSIS-{C311FD83-895E-49D4-BC17-B643C1F3C22E}HO-SI-DMETL.SaudiRe_DW;Auto Translate=False;
-Data Source=HO-SI-UAT-DB;Initial Catalog=SICS_SHOWCASE;Provider=SQLNCLI11.1;Integrated Security=SSPI;Application Name=SSIS-SICS-SSIS-{49541014-F0FE-4A11-B729-FC0245887A59}HO-SI-UAT-DB.SICS_SHOWCASE;Auto Translate=False;
+Data Source=HO-SI-DMETL;Initial Catalog=SaudiRe_DW;Provider=SQLNCLI11.1;Integrated Security=SSPI;Application Name="SSIS-SICS-SSIS-{C311FD83-895E-49D4-BC17-B643C1F3C22E}HO-SI-DMETL.SaudiRe_DW";Auto Translate=False;
+
+
+
+Data Source=HO-SI-UAT-DB;Initial Catalog=SICS_SHOWCASE;Provider=SQLNCLI11.1;Integrated Security=SSPI;Application Name="SSIS-SICS-SSIS-{49541014-F0FE-4A11-B729-FC0245887A59}HO-SI-UAT-DB.SICS_SHOWCASE";Auto Translate=False;
