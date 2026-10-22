@@ -67,7 +67,7 @@ SELECT
     c.LOSS_NAME                                     AS CLA_DESC,
     CASE
         WHEN ip.IS_DIRECT = 'Y' THEN 'DIRECT'
-        ELSE brk.IDENTIFIER
+        ELSE brk.BROK_BK
     END                                             AS CLA_BROKER,
     CONVERT(NVARCHAR(50), ct.CLAIM_TYPE)            AS CLA_SOURCE,
     CONVERT(NVARCHAR(50), ct.IND)                   AS CLA_TYPE,
@@ -153,11 +153,27 @@ LEFT JOIN (
     GROUP BY FK_SOC_REL
 ) cref ON cref.FK_SOC_REL = scr.OBJECT_ID
 LEFT JOIN (
-    SELECT bpr.FK_INS_PERIOD, MIN(p.IDENTIFIER) AS IDENTIFIER
+    SELECT
+        bpr.FK_INS_PERIOD,
+        MIN(COALESCE(pid.IDENTIFIER, p.IDENTIFIER)) AS BROK_BK
     FROM SICS.BUSINESS_PRTNR_REL bpr
     INNER JOIN SICS.PARTY p
         ON p.OBJECT_ID = bpr.FK_BUS_PARTNER
-    WHERE p.SUBCLASS = 4
+       AND p.SUBCLASS = 4
+    INNER JOIN SICS.BUS_PARTNER_CAT bpc
+        ON bpc.FK_PARTNER = p.OBJECT_ID
+       AND bpc.FSK_CATEGORY = 23
+       AND bpc.FRK_CATEGORY IN ('B', 'BOUT')
+    LEFT JOIN (
+        SELECT
+            FK_PARTY,
+            IDENTIFIER,
+            ROW_NUMBER() OVER (PARTITION BY FK_PARTY ORDER BY OBJECT_ID) AS RN
+        FROM SICS.PARTY_IDENTIFIER
+        WHERE FRK_PARTY_ID_TYPE = 'FORMERID'
+    ) pid
+        ON pid.FK_PARTY = p.OBJECT_ID
+       AND pid.RN = 1
     GROUP BY bpr.FK_INS_PERIOD
 ) brk ON brk.FK_INS_PERIOD = ip.OBJECT_ID
 LEFT JOIN (
