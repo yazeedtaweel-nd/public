@@ -1,23 +1,3 @@
-SELECT
-    rd.SUBCLASS,
-    CASE
-        WHEN rd.EXTERNAL_CODE is not NULL then rd.EXTERNAL_CODE
-        WHEN rd.CODE = 'O' THEN 'OP'
-        WHEN rd.CODE = 'C' THEN 'CL'
-        ELSE rd.CODE
-    END AS CODE,
-    rd.NAME,
-    CASE WHEN rd.CODE = 'C' THEN 2
-    ELSE 1
-END AS TYPE,
-  CAST(CASE WHEN rd.IS_ACTIVE       = 'Y' THEN 1 ELSE 0 END AS BIT) AS SICS_IS_ACTIVE
-FROM SICS.REFERENCE_DATA AS rd
-WHERE rd.SUBCLASS = 517
-ORDER BY rd.CODE;
-
-
-
-
 WITH DIM_CLGRP AS (
     /* same grain/key as the DIM_CLAIM_GROUP extract */
     SELECT
@@ -83,24 +63,24 @@ SELECT
     /* identity / keys */
     c.OBJECT_ID                                     AS CLAIMS_OBJECT_ID,
     scr.OBJECT_ID                                   AS SOC_CLAIM_OBJECT_ID,
-
     COALESCE(cref.REFERENCE_ID, c.CLAIM_IDENTIFIER)                    AS CLA_BK,
     c.LOSS_NAME                                     AS CLA_DESC,
     CASE
         WHEN ip.IS_DIRECT = 'Y' THEN 'DIRECT'
         ELSE brk.IDENTIFIER
     END                                             AS CLA_BROKER,
-
     CONVERT(NVARCHAR(50), ct.CLAIM_TYPE)            AS CLA_SOURCE,
     CONVERT(NVARCHAR(50), ct.IND)                   AS CLA_TYPE,
-
     UPPER(st.NAME)                                  AS CLA_STATUS_CODE,
-    st.CODE    AS CLA_STATUS,
+    CASE
+        WHEN st.EXTERNAL_CODE IS NOT NULL THEN st.EXTERNAL_CODE
+        WHEN st.CODE = 'O' THEN 'OP'
+        WHEN st.CODE = 'C' THEN 'CL'
+        ELSE st.CODE
+    END                                             AS CLA_STATUS,
     u.USER_ID                                  AS CLA_HANDLER,
-
     CONVERT(BIT, CASE WHEN mv.DETAIL_ROWS > 0 THEN 1 ELSE 0 END)
                                                     AS CLA_IS_MOVEMENT,
-
     c.LOSS_START_DT                                 AS CLA_LOSS_DATE,
     COALESCE(sh.OPEN_DATE,   CAST('9999-01-01' AS DATE)) AS CLA_OPEN_DATE,
     COALESCE(sh.REOPEN_DATE, CAST('9999-01-01' AS DATE)) AS CLA_REOPEN_DATE,
@@ -108,22 +88,24 @@ SELECT
                                                     AS CLA_REPORTED_DATE,
     COALESCE(sh.CLOSE_DATE,  CAST('9999-01-01' AS DATE)) AS CLA_CLOSE_DATE,
     scr.LAST_UPDATE_DT                              AS CLA_LAST_TRANSACTION,
-
     /* policy lookup key -> DIM_POLICY.POLICY_BK -> POLICY_SRGT */
     COALESCE(ip.I_PERIOD_FORMER_ID, ip.BUS_INS_PER_ID)       AS POLICY_BK,
     ip.BUS_INS_PER_ID                               AS POLICY_INS_PER_ID,
     b.IDENTIFIER                                    AS POLICY_CONTRACT_NO,
     soc.IDENTIFIER                                  AS SECTION_IDENTIFIER,
-
     /* other dim lookup keys */
     ct.CLAIM_GROUP                                  AS CLGRP_BK,
-    COALESCE(cs.FRK_STATUS, scr.FRK_STATUS_TYPE)    AS CLST_BK,
+    CASE
+        WHEN st.EXTERNAL_CODE IS NOT NULL THEN st.EXTERNAL_CODE
+        WHEN COALESCE(cs.FRK_STATUS, scr.FRK_STATUS_TYPE) = 'O' THEN 'OP'
+        WHEN COALESCE(cs.FRK_STATUS, scr.FRK_STATUS_TYPE) = 'C' THEN 'CL'
+        ELSE COALESCE(cs.FRK_STATUS, scr.FRK_STATUS_TYPE)
+    END                                             AS CLST_BK,
     cs.FRK_SUB_STATUS                               AS CLSS_BK,
     ct.CLAIM_TYPE                                   AS CLTP_BK,
     ct.IND                                          AS CLSTP_BK,
     COALESCE(lt.EXTERNAL_CODE, lt.CODE)             AS LSTP_BK,
     UPPER(lt.NAME)                                  AS LSTP_NAME,
-
     ct.CAT_IND,
     ct.GROUP_BASE_AMT
 FROM SICS.CLAIMS c
@@ -131,7 +113,6 @@ INNER JOIN SICS.SOC_TO_CLAIM_REL scr
     ON scr.FK_CLAIM = c.OBJECT_ID
 INNER JOIN CLM_TYP ct
     ON ct.SOC_CLAIM_OID = scr.OBJECT_ID
-
 LEFT JOIN SICS.CLAIM_STATUS cs
     ON cs.FK_CLAIM = scr.OBJECT_ID
    AND cs.IS_CURRENT = 'Y'
@@ -143,7 +124,6 @@ LEFT JOIN SICS.REFERENCE_DATA lt
    AND lt.SUBCLASS = 523
 LEFT JOIN SICS.CNU_USER u
     ON u.OBJECT_ID = c.FK_RES_CL_HDL
-
 LEFT JOIN SICS.SCOPE_OF_COVER soc
     ON soc.OBJECT_ID = scr.FK_SOC
 LEFT JOIN SICS.LIFE_CYCLE_PHASE lcp1
@@ -155,7 +135,6 @@ LEFT JOIN SICS.INSURED_PERIOD ip
     ON ip.OBJECT_ID = COALESCE(lcp1.FK_INS_PRD, lcp2.FK_INS_PRD)
 LEFT JOIN SICS.BUSINESS b
     ON b.OBJECT_ID = ip.FK_BUSINESS
-
 LEFT JOIN (
     SELECT
         cs2.FK_CLAIM,
@@ -168,13 +147,11 @@ LEFT JOIN (
        AND rd2.SUBCLASS = 517
     GROUP BY cs2.FK_CLAIM
 ) sh ON sh.FK_CLAIM = scr.OBJECT_ID
-
 LEFT JOIN (
     SELECT FK_SOC_REL, MIN(REFERENCE_ID) AS REFERENCE_ID
     FROM SICS.CLAIM_REFS
     GROUP BY FK_SOC_REL
 ) cref ON cref.FK_SOC_REL = scr.OBJECT_ID
-
 LEFT JOIN (
     SELECT bpr.FK_INS_PERIOD, MIN(p.IDENTIFIER) AS IDENTIFIER
     FROM SICS.BUSINESS_PRTNR_REL bpr
@@ -183,7 +160,6 @@ LEFT JOIN (
     WHERE p.SUBCLASS = 4
     GROUP BY bpr.FK_INS_PERIOD
 ) brk ON brk.FK_INS_PERIOD = ip.OBJECT_ID
-
 LEFT JOIN (
     SELECT bal.FK_CLAIM AS SOC_CLAIM_OID, COUNT(*) AS DETAIL_ROWS
     FROM SICS.AC_LEDGER_BALANCE bal
@@ -191,5 +167,4 @@ LEFT JOIN (
         ON d.FK_BALANCE = bal.OBJECT_ID
     GROUP BY bal.FK_CLAIM
 ) mv ON mv.SOC_CLAIM_OID = scr.OBJECT_ID
-
 ORDER BY c.CLAIM_IDENTIFIER, scr.OBJECT_ID
