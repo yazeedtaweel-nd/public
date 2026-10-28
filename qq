@@ -1,12 +1,10 @@
-WITH Duplicates AS (
-    SELECT col1, col2
+SELECT *
+FROM (
+    SELECT *,
+           COUNT(*) OVER (
+               PARTITION BY col1, col2, col3
+           ) AS DuplicateCount
     FROM YourTable
-    GROUP BY col1, col2
-    HAVING COUNT(*) > 1
-)
-SELECT t.*
-FROM YourTable t
-INNER JOIN Duplicates d
-    ON t.col1 = d.col1
-    AND t.col2 = d.col2
-ORDER BY t.col1, t.col2;
+) t
+WHERE DuplicateCount > 1
+ORDER BY col1, col2, col3;
