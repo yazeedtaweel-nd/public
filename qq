@@ -39,7 +39,7 @@ WITH src AS (
 ),
 tgt AS (
     SELECT CONVERT(binary(32), HASHBYTES(''SHA2_256'', ' + @Fingerprint + N')) AS RowHash
-    FROM DestinationDb.dbo.FACT_IW_TRANSACTION AS d
+    FROM [LinkedServer].[DestinationDb].dbo.FACT_IW_TRANSACTION AS d
 ),
 src_c AS (
     SELECT RowHash, COUNT_BIG(*) AS Cnt FROM src GROUP BY RowHash
