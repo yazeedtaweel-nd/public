@@ -1,2 +1,1 @@
-Group,TableName,TargetTable,KeyColumns,ExcludedColumns,ExcludePatterns,Filter
-Party,VW_COUNTRY_SRC,VW_COUNTRY_TGT,CTRY_COUNTRY_CODE,,,
+python python/compare_from_csv.py --tables tables.csv --server YOUR_INSTANCE --database test1 --source-database SaudiRe_DW --target-database SaudiRe_DW --ignore-case --workbook runs/nightly --workers 8 --persist --persist-schema --max-matched-rows 2000
