@@ -1,1 +1,31 @@
-python python/compare_from_csv.py --tables tables.csv --server YOUR_INSTANCE --database test1 --source-database SaudiRe_DW --target-database SaudiRe_DW --ignore-case --workbook runs/nightly --workers 8 --persist --persist-schema --max-matched-rows 2000
+WITH checks AS (
+    SELECT *
+    FROM (VALUES
+        ('INSURED_PERIOD',     'IP_TITLE',                  'Old dictionary only'),
+        ('BUS_STRUCT_REP',     'IP_TITLE',                  'Old dictionary only'),
+        ('AC_LEDGER_BALANCE',  'ACTUAL_SETLMT_DATE',        'Old dictionary only'),
+        ('ENTRY_CODE',         'IS_VAT_CODE',               'Old dictionary only'),
+        ('BUSINESS',           'IS_SPLT_BROKE_BAL_TO_BROKE','Old dictionary only'),
+        ('SCOPE_OF_COVER',     'IS_DFT_AC_FM_ICES',         'Old dictionary only'),
+        ('BUSINESS',           'IS_LOSS_RES_BOOKED',        'New dictionary only'),
+        ('BOAC_PC_FACT',       'OBJECT_ID',                 'New dictionary only'),
+        ('DIMDATE',            'DATE_KEY',                  'New dictionary only'),
+        ('REFERENCE_DATA',     'NAME',                      'Both — check length'),
+        ('ENTRY_CODE',         'CODE',                      'Both — check length'),
+        ('ENTRY_CODE',         'DESCRIPTION',               'Both — check length'),
+        ('ENTRY_CODE',         'NAME',                      'Both — check length'),
+        ('CLAIM_REFS',         'REFERENCE_ID',              'Both — check length')
+    ) v(table_name, column_name, dictionary)
+)
+SELECT
+    k.dictionary,
+    k.table_name,
+    k.column_name,
+    CASE WHEN c.COLUMN_NAME IS NULL THEN 'No' ELSE 'Yes' END AS exists_on_server,
+    c.DATA_TYPE,
+    c.CHARACTER_MAXIMUM_LENGTH AS length
+FROM checks k
+LEFT JOIN INFORMATION_SCHEMA.COLUMNS c
+    ON c.TABLE_NAME = k.table_name
+   AND c.COLUMN_NAME = k.column_name
+ORDER BY k.dictionary, k.table_name, k.column_name;
