@@ -24,18 +24,37 @@ SELECT
     bal.FK_AC_FUNC_CCY                                   AS CURR_BASE_BK,
     COALESCE(bal.FK_LLOYDS_SETL_CUR, bal.FK_CURR)        AS CURR_SETT_BK,
     usr.USER_ID                                          AS USR_BK,
-    CASE
-        WHEN ws.EXTERNAL_ID LIKE 'TW|%'
-            THEN STUFF(ws.EXTERNAL_ID, 1, 3, '')
-        ELSE CONVERT(varchar(8), ws.BOOKING_DATE, 112)
-             + '|' + CONVERT(varchar(20), ws.ID_SERIE_NO)
-    END                                                  AS WRKS_BK
+    ws.WRKS_BK                                           AS WRKS_BK
 
 FROM sics.AC_LEDGER_DETAIL AS dtl
 INNER JOIN sics.AC_LEDGER_BALANCE AS bal
         ON bal.OBJECT_ID = dtl.FK_BALANCE
        AND bal.IS_OUTWARD = @IsOutward
-LEFT JOIN sics.AC_WORKSHEET AS ws
+LEFT JOIN (
+    SELECT
+        OBJECT_ID,
+        ID_SERIE_NO,
+        FK_REGISTERED_BY,
+        CASE
+            WHEN EXTERNAL_ID LIKE 'TW|%'
+                THEN STUFF(EXTERNAL_ID, 1, 3, '')
+            ELSE CONVERT(varchar(8), BOOKING_DATE, 112)
+                 + '|' + CAST(serie_no AS varchar(20))
+        END AS WRKS_BK
+    FROM (
+        SELECT
+            w.OBJECT_ID,
+            w.BOOKING_DATE,
+            w.EXTERNAL_ID,
+            w.ID_SERIE_NO,
+            w.FK_REGISTERED_BY,
+            ROW_NUMBER() OVER (
+                PARTITION BY w.BOOKING_DATE
+                ORDER BY w.ID_SERIE_NO, w.OBJECT_ID
+            ) AS serie_no
+        FROM sics.AC_WORKSHEET AS w
+    ) AS ws_seq
+) AS ws
         ON ws.OBJECT_ID = dtl.FK_WORKSHEET
 LEFT JOIN sics.ENTRY_CODE AS ec
         ON ec.OBJECT_ID = dtl.FK_ENTRY_CODE
@@ -57,7 +76,6 @@ CROSS APPLY (
     )
 ) AS calc (ACCT_FROM_DATE_SRGT, ACCT_TO_DATE_SRGT, POLICY_BK_VALUE)
 
--- IW claim only: same key as DIM_CLAIM (section ref, else claim identifier)
 LEFT JOIN sics.SOC_TO_CLAIM_REL AS soc
         ON soc.OBJECT_ID = bal.FK_CLAIM
 LEFT JOIN sics.CLAIMS AS clm_iw
