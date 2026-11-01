@@ -59,7 +59,7 @@ SELECT
             THEN NULL
         ELSE 'MIXED'
     END                                 AS WRKS_INDICATOR,
-    cast(SUM(b.LEDGER_BAL_ORG_AMT) as money)          AS WRKS_CASH_TOTAL_AMT
+    CAST(SUM(b.LEDGER_BAL_ORG_AMT) AS money) AS WRKS_CASH_TOTAL_AMT
 FROM ws
 LEFT JOIN ws_balance AS b
        ON b.FK_WORKSHEET = ws.OBJECT_ID
@@ -68,6 +68,8 @@ GROUP BY
     ws.BOOKING_DATE,
     ws.WRKS_BK,
     ws.WRKS_NO
+HAVING
+    CAST(SUM(b.LEDGER_BAL_ORG_AMT) AS money) <> 0
 ORDER BY
     ws.BOOKING_DATE,
     ws.WRKS_NO;
