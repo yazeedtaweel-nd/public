@@ -2,8 +2,7 @@ DECLARE @IsOutward CHAR(1) = 'N';
 
 SELECT
     calc.POLICY_BK_VALUE                                 AS POLICY_BK,
-    COALESCE(cref_iw.REFERENCE_ID, clm_iw.CLAIM_IDENTIFIER)
-                                                         AS CLA_CLAIM_BK,
+    COALESCE(cref.REFERENCE_ID, clm_iw.CLAIM_IDENTIFIER) AS CLA_CLAIM_BK,
     brk.BROK_BK                                          AS BROK_BK,
     comp.COMP_BK                                         AS COMP_BK,
 
@@ -80,12 +79,9 @@ LEFT JOIN sics.SOC_TO_CLAIM_REL AS soc
         ON soc.OBJECT_ID = bal.FK_CLAIM
 LEFT JOIN sics.CLAIMS AS clm_iw
         ON clm_iw.OBJECT_ID = soc.FK_CLAIM
-OUTER APPLY (
-    SELECT TOP (1) r.REFERENCE_ID
-    FROM sics.CLAIM_REFS AS r
-    WHERE r.FK_SOC_REL = soc.OBJECT_ID
-    ORDER BY r.REFERENCE_ID
-) AS cref_iw
+LEFT JOIN sics.CLAIM_REFS AS cref
+        ON cref.FK_SOC_REL = soc.OBJECT_ID
+       AND cref.FRK_CLM_REF_TYPE = 'FCLMID'
 
 OUTER APPLY (
     SELECT TOP (1)
