@@ -2,10 +2,8 @@ DECLARE @IsOutward CHAR(1) = 'N';
 
 SELECT
     calc.POLICY_BK_VALUE                                 AS POLICY_BK,
-    COALESCE(
-        COALESCE(cref_ow.REFERENCE_ID, clm_ow.CLAIM_IDENTIFIER),
-        COALESCE(cref_bal.REFERENCE_ID, clm_bal.CLAIM_IDENTIFIER)
-    )                                                    AS CLA_CLAIM_BK,
+    COALESCE(cref_iw.REFERENCE_ID, clm_iw.CLAIM_IDENTIFIER)
+                                                         AS CLA_CLAIM_BK,
     brk.BROK_BK                                          AS BROK_BK,
     comp.COMP_BK                                         AS COMP_BK,
 
@@ -14,7 +12,7 @@ SELECT
     calc.ACCT_FROM_DATE_SRGT                             AS TRANS_PROCESSING_PERIOD_SRGT,
     ec.CODE                                              AS TRST_BK,
     calc.ACCT_FROM_DATE_SRGT                             AS TRANS_ACCOUNTING_FROM_DATE_SRGT,
-    calc.ACCT_TO_DATE_SRGT                                AS TRANS_ACCOUNTING_TO_DATE_SRGT,
+    calc.ACCT_TO_DATE_SRGT                               AS TRANS_ACCOUNTING_TO_DATE_SRGT,
     CAST(dtl.EXCH_AMT     AS money)                      AS TRANS_BASE_GROSS_AMT,
     CAST(dtl.FUNC_AMT2    AS money)                      AS TRANS_BASE2_GROSS_AMT,
     CAST(bal.SETTLED_AMT  AS money)                      AS TRANS_SETT_GROSS_AMT,
@@ -46,7 +44,6 @@ LEFT JOIN sics.CNU_USER AS usr
 LEFT JOIN sics.INSURED_PERIOD AS ip
         ON ip.OBJECT_ID = dtl.FK_INS_PER
 
--- Computed once per row instead of 2x (dates) / 3x (policy BK)
 CROSS APPLY (
     VALUES (
         CONVERT(int, CONVERT(char(8), dtl.AC_START_DATE, 112)),
@@ -60,26 +57,17 @@ CROSS APPLY (
     )
 ) AS calc (ACCT_FROM_DATE_SRGT, ACCT_TO_DATE_SRGT, POLICY_BK_VALUE)
 
+-- IW claim only: same key as DIM_CLAIM (section ref, else claim identifier)
 LEFT JOIN sics.SOC_TO_CLAIM_REL AS soc
         ON soc.OBJECT_ID = bal.FK_CLAIM
-LEFT JOIN sics.CLAIMS AS clm_bal
-        ON clm_bal.OBJECT_ID = soc.FK_CLAIM
+LEFT JOIN sics.CLAIMS AS clm_iw
+        ON clm_iw.OBJECT_ID = soc.FK_CLAIM
 OUTER APPLY (
     SELECT TOP (1) r.REFERENCE_ID
     FROM sics.CLAIM_REFS AS r
     WHERE r.FK_SOC_REL = soc.OBJECT_ID
     ORDER BY r.REFERENCE_ID
-) AS cref_bal
-LEFT JOIN sics.CLAIMS AS clm_ow
-        ON clm_ow.OBJECT_ID = dtl.FK_CLAIM_TO_SOC
-OUTER APPLY (
-    SELECT TOP (1) r.REFERENCE_ID
-    FROM sics.SOC_TO_CLAIM_REL AS scr
-    INNER JOIN sics.CLAIM_REFS AS r
-            ON r.FK_SOC_REL = scr.OBJECT_ID
-    WHERE scr.FK_CLAIM = clm_ow.OBJECT_ID
-    ORDER BY r.REFERENCE_ID
-) AS cref_ow
+) AS cref_iw
 
 OUTER APPLY (
     SELECT TOP (1)
@@ -120,4 +108,4 @@ OUTER APPLY (
       AND bpr.FSK_RELSHIP_TYPE = 55
       AND bpr.FK_INS_PERIOD = dtl.FK_INS_PER
     ORDER BY bp.OBJECT_ID, pid.OBJECT_ID
-) AS brk
+) AS brk;
