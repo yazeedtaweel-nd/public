@@ -35,19 +35,20 @@ LEFT JOIN (
         OBJECT_ID,
         ID_SERIE_NO,
         FK_REGISTERED_BY,
-        BOOKING_DATE as aa,
+        BOOKING_DATE AS aa,
         CASE
-        WHEN EXTERNAL_ID LIKE 'TW|%'
-            THEN STUFF(EXTERNAL_ID, 1, 3, '')
-        ELSE CONVERT(varchar(8), BOOKING_DATE, 112)
-             + '|' + CONVERT(varchar(20), ID_SERIE_NO)
-    END                                                  AS WRKS_BK
+            WHEN EXTERNAL_ID LIKE 'TW|%'
+                THEN STUFF(EXTERNAL_ID, 1, 3, '')
+            ELSE CONVERT(varchar(8), BOOKING_DATE, 112)
+                 + '|' + CONVERT(varchar(20), ID_SERIE_NO)
+        END AS WRKS_BK
     FROM (
         SELECT
             w.OBJECT_ID,
             w.EXTERNAL_ID,
             w.ID_SERIE_NO,
             w.FK_REGISTERED_BY,
+            w.BOOKING_DATE,
             ROW_NUMBER() OVER (
                 PARTITION BY w.BOOKING_DATE
                 ORDER BY w.ID_SERIE_NO, w.OBJECT_ID
@@ -107,7 +108,7 @@ OUTER APPLY (
 
 OUTER APPLY (
     SELECT TOP (1)
-           COALESCE(COALESCE(pid.IDENTIFIER, bp.IDENTIFIER),'DIRECT') AS BROK_BK
+           COALESCE(COALESCE(pid.IDENTIFIER, bp.IDENTIFIER), 'DIRECT') AS BROK_BK
     FROM sics.BUSINESS_PRTNR_REL AS bpr
     INNER JOIN sics.PARTY AS bp
             ON bp.OBJECT_ID = bpr.FK_BUS_PARTNER
@@ -124,4 +125,4 @@ OUTER APPLY (
       AND bpr.FK_INS_PERIOD = dtl.FK_INS_PER
     ORDER BY bp.OBJECT_ID, pid.OBJECT_ID
 ) AS brk
-where WRKS_BK = '20161225|372'
+WHERE ws.WRKS_BK = '20161225|372';
