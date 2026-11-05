@@ -1,47 +1,19 @@
-
-DECLARE @BusinessId nvarchar(50) = 'OPT10563-7';
+DECLARE @BusinessId nvarchar(50) = N'PUT_CONTRACT_ID_HERE';
 
 SELECT
-    b.IDENTIFIER                                              AS BusinessId,
-    ip.BUS_INS_PER_ID                                         AS InsuredPeriodId,
-    rel.FRK_RELSHIP_TYPE                                      AS RelationshipTypeCode,
-    rd.NAME                                                   AS RelationshipTypeName,
-    p.IDENTIFIER                                              AS ThirdPartyId,
-    COALESCE(n.NAME, p.CURR_NAME)                             AS ThirdPartyName,
-    p.IS_INSURED,
-    CASE
-        WHEN rel.OBJECT_ID = b.FK_INSURED_REL THEN 'BUSINESS.FK_INSURED_REL'
-        WHEN rel.FK_BUSINESS = b.OBJECT_ID    THEN 'BUSINESS_PRTNR_REL.FK_BUSINESS'
-        ELSE 'INSURED_PERIOD'
-    END                                                       AS LinkPath
+    b.IDENTIFIER              AS ContractId,
+    ip.BUS_INS_PER_ID         AS InsuredPeriodId,
+    occ.CODE                  AS OccupationCode,
+    occ.NAME                  AS OccupationName
 FROM SICS.BUSINESS AS b
-INNER JOIN SICS.BUSINESS_PRTNR_REL AS rel
-    ON rel.OBJECT_ID = b.FK_INSURED_REL
-    OR rel.FK_BUSINESS = b.OBJECT_ID
-    OR rel.FK_INS_PERIOD IN (
-           SELECT ip2.OBJECT_ID
-           FROM SICS.INSURED_PERIOD AS ip2
-           WHERE ip2.FK_BUSINESS = b.OBJECT_ID
-       )
-INNER JOIN SICS.PARTY AS p
-    ON p.OBJECT_ID = rel.FK_BUS_PARTNER
-   AND p.IS_INSURED = 'Y'          -- Third Party (Insured) flag
-LEFT JOIN SICS.INSURED_PERIOD AS ip
-    ON ip.OBJECT_ID = rel.FK_INS_PERIOD
-LEFT JOIN SICS.REFERENCE_DATA AS rd
-    ON rd.CODE = rel.FRK_RELSHIP_TYPE
-   AND rd.SUBCLASS = rel.FSK_RELSHIP_TYPE   -- subclass 55 = relationship type
-LEFT JOIN (
-    SELECT
-        FK_ORGANISATION,
-        NAME,
-        ROW_NUMBER() OVER (PARTITION BY FK_ORGANISATION ORDER BY OBJECT_ID) AS RN
-    FROM SICS.ORGANISATION_NAME
-) AS n
-    ON n.FK_ORGANISATION = p.OBJECT_ID
-   AND n.RN = 1
+INNER JOIN SICS.BUS_STRUCT_REP AS bsr
+    ON bsr.FK_BUSINESS = b.OBJECT_ID
+INNER JOIN SICS.INSURED_PERIOD AS ip
+    ON ip.OBJECT_ID = bsr.FK_INS_PERIOD
+INNER JOIN SICS.BUS_CLASSIFIC AS bc
+    ON bc.OBJECT_ID = bsr.FK_SOC_CLASSIFIC
+INNER JOIN SICS.REFERENCE_DATA AS occ
+    ON occ.CODE = bc.FRK_REFIC52
+   AND occ.SUBCLASS = 52
 WHERE b.IDENTIFIER = @BusinessId
-  AND (
-        rel.OBJECT_ID = b.FK_INSURED_REL
-        OR rd.NAME = N'Insured'
-      );
+ORDER BY ip.BUS_INS_PER_ID, occ.CODE;
