@@ -1,63 +1,46 @@
 DECLARE @BusinessId nvarchar(50) = N'PUT_CONTRACT_ID_HERE';
-WITH periods AS (
-    SELECT
-        b.IDENTIFIER,
-        ip.OBJECT_ID AS IP_OID,
-        ip.IS_LATEST,
-        ip.I_PERIOD_FORMER_ID,
-        ip.BUS_INS_PER_ID,
-        CAST(
-            COALESCE(
-                NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
-                CASE
-                    WHEN LEN(LTRIM(RTRIM(ip.BUS_INS_PER_ID))) >= 32
-                     AND LTRIM(RTRIM(ip.BUS_INS_PER_ID)) NOT LIKE N'%[^0-9A-Fa-f]%'
-                    THEN NULL
-                    ELSE NULLIF(LTRIM(RTRIM(ip.BUS_INS_PER_ID)), N'')
-                END
-            ) AS nvarchar(50)
-        ) AS PERIOD_ID,
-        CAST(
-            COALESCE(
-                NULLIF(LTRIM(RTRIM(ip.I_PERIOD_FORMER_ID)), N''),
-                NULLIF(LTRIM(RTRIM(ip.BUS_INS_PER_ID)), N''),
-                ip.OBJECT_ID
-            ) AS nvarchar(50)
-        ) AS POLICY_BK,
-        MIN(bsr.INSRD_PERIOD_START) AS PERIOD_START,
-        MAX(bsr.INSRD_PERIOD_END) AS PERIOD_END
-    FROM SICS.BUSINESS AS b
-    INNER JOIN SICS.INSURED_PERIOD AS ip
-        ON ip.FK_BUSINESS = b.OBJECT_ID
-    INNER JOIN SICS.BUS_STRUCT_REP AS bsr
-        ON bsr.FK_INS_PERIOD = ip.OBJECT_ID
-    WHERE b.IDENTIFIER = @BusinessId
-    GROUP BY
-        b.IDENTIFIER,
-        ip.OBJECT_ID,
-        ip.IS_LATEST,
-        ip.I_PERIOD_FORMER_ID,
-        ip.BUS_INS_PER_ID
-)
+
 SELECT
-    IDENTIFIER,
-    IP_OID,
-    I_PERIOD_FORMER_ID,
-    BUS_INS_PER_ID,
-    PERIOD_ID,
-    POLICY_BK,
-    PERIOD_START,
-    PERIOD_END,
-    IS_LATEST,
+    b.IDENTIFIER                                              AS BusinessId,
+    ip.BUS_INS_PER_ID                                         AS InsuredPeriodId,
+    rel.FRK_RELSHIP_TYPE                                      AS RelationshipTypeCode,
+    rd.NAME                                                   AS RelationshipTypeName,
+    p.IDENTIFIER                                              AS ThirdPartyId,
+    COALESCE(n.NAME, p.CURR_NAME)                             AS ThirdPartyName,
+    p.IS_INSURED,
     CASE
-        WHEN LEAD(IP_OID) OVER (ORDER BY PERIOD_START, IP_OID) IS NOT NULL
-        THEN N'Y' ELSE N'N'
-    END AS POLICY_IS_RENEWED,
-    CASE
-        WHEN LAG(IP_OID) OVER (ORDER BY PERIOD_START, IP_OID) IS NOT NULL
-        THEN N'Y' ELSE N'N'
-    END AS POLICY_IS_RENEWAL,
-    LAG(PERIOD_ID) OVER (ORDER BY PERIOD_START, IP_OID) AS POLICY_RENEWED_FROM,
-    LEAD(PERIOD_ID) OVER (ORDER BY PERIOD_START, IP_OID) AS POLICY_RENEWED_BY
-FROM periods
-ORDER BY PERIOD_START, IP_OID;
+        WHEN rel.OBJECT_ID = b.FK_INSURED_REL THEN 'BUSINESS.FK_INSURED_REL'
+        WHEN rel.FK_BUSINESS = b.OBJECT_ID    THEN 'BUSINESS_PRTNR_REL.FK_BUSINESS'
+        ELSE 'INSURED_PERIOD'
+    END                                                       AS LinkPath
+FROM dbo.BUSINESS AS b
+INNER JOIN dbo.BUSINESS_PRTNR_REL AS rel
+    ON rel.OBJECT_ID = b.FK_INSURED_REL
+    OR rel.FK_BUSINESS = b.OBJECT_ID
+    OR rel.FK_INS_PERIOD IN (
+           SELECT ip2.OBJECT_ID
+           FROM dbo.INSURED_PERIOD AS ip2
+           WHERE ip2.FK_BUSINESS = b.OBJECT_ID
+       )
+INNER JOIN dbo.PARTY AS p
+    ON p.OBJECT_ID = rel.FK_BUS_PARTNER
+   AND p.IS_INSURED = 'Y'          -- Third Party (Insured) flag
+LEFT JOIN dbo.INSURED_PERIOD AS ip
+    ON ip.OBJECT_ID = rel.FK_INS_PERIOD
+LEFT JOIN dbo.REFERENCE_DATA AS rd
+    ON rd.CODE = rel.FRK_RELSHIP_TYPE
+   AND rd.SUBCLASS = rel.FSK_RELSHIP_TYPE   -- subclass 55 = relationship type
+LEFT JOIN (
+    SELECT
+        FK_ORGANISATION,
+        NAME,
+        ROW_NUMBER() OVER (PARTITION BY FK_ORGANISATION ORDER BY OBJECT_ID) AS RN
+    FROM dbo.ORGANISATION_NAME
+) AS n
+    ON n.FK_ORGANISATION = p.OBJECT_ID
+   AND n.RN = 1
+WHERE b.IDENTIFIER = @BusinessId
+  AND (
+        rel.OBJECT_ID = b.FK_INSURED_REL
+        OR rd.NAME = N'Insured'
+      );
