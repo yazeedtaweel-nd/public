@@ -3,17 +3,30 @@ DECLARE @BusinessId nvarchar(50) = N'PUT_CONTRACT_ID_HERE';
 SELECT
     b.IDENTIFIER              AS ContractId,
     ip.BUS_INS_PER_ID         AS InsuredPeriodId,
-    occ.CODE                  AS OccupationCode,
-    occ.NAME                  AS OccupationName
+    ip.I_PERIOD_FORMER_ID     AS InsuredPeriodFormerId,
+    soc.OBJECT_ID             AS ScopeOfCoverObjectId,
+    bc.OBJECT_ID              AS BusClassificObjectId,
+    crd.FRK_REF_DATA          AS OccupationCode,
+    crd.FSK_REF_DATA          AS OccupationSubclass,
+    COALESCE(crd.REF_NAME, occ.NAME) AS OccupationName,
+    occ.CODE                  AS RefDataCode,
+    occ.NAME                  AS RefDataName
 FROM SICS.BUSINESS AS b
-INNER JOIN SICS.BUS_STRUCT_REP AS bsr
-    ON bsr.FK_BUSINESS = b.OBJECT_ID
 INNER JOIN SICS.INSURED_PERIOD AS ip
-    ON ip.OBJECT_ID = bsr.FK_INS_PERIOD
+    ON ip.FK_BUSINESS = b.OBJECT_ID
+INNER JOIN SICS.LIFE_CYCLE_PHASE AS lcp
+    ON lcp.FK_INS_PRD = ip.OBJECT_ID
+INNER JOIN SICS.SCOPE_OF_COVER AS soc
+    ON soc.FK_LIFECYCLEP = lcp.OBJECT_ID
 INNER JOIN SICS.BUS_CLASSIFIC AS bc
-    ON bc.OBJECT_ID = bsr.FK_SOC_CLASSIFIC
-INNER JOIN SICS.REFERENCE_DATA AS occ
-    ON occ.CODE = bc.FRK_REFIC52
-   AND occ.SUBCLASS = 52
+    ON bc.FK_SOC = soc.OBJECT_ID
+INNER JOIN SICS.CLASSIF_REF_DATA AS crd
+    ON crd.FK_CLASSIFICATION = bc.OBJECT_ID
+   AND crd.FSK_REF_DATA = 52
+LEFT JOIN SICS.REFERENCE_DATA AS occ
+    ON occ.CODE = crd.FRK_REF_DATA
+   AND occ.SUBCLASS = crd.FSK_REF_DATA
 WHERE b.IDENTIFIER = @BusinessId
-ORDER BY ip.BUS_INS_PER_ID, occ.CODE;
+ORDER BY
+    ip.BUS_INS_PER_ID,
+    crd.FRK_REF_DATA;
